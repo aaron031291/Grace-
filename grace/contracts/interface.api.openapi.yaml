@@ -1,0 +1,429 @@
+openapi: 3.0.3
+info:
+  title: Grace Interface Kernel API
+  description: Real-time, trusted UX for tasks, telemetry, governance prompts, memory search, and results
+  version: 1.0.0
+  contact:
+    name: Grace Team
+  license:
+    name: MIT
+
+servers:
+  - url: /api/ui/v1
+    description: Interface Kernel API
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health_check
+      responses:
+        '200':
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /session/start:
+    post:
+      summary: Start new UI session
+      operationId: start_session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user, client]
+              properties:
+                user:
+                  $ref: '#/components/schemas/UserIdentity'
+                client:
+                  $ref: '#/components/schemas/ClientInfo'
+      responses:
+        '201':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UISession'
+
+  /action:
+    post:
+      summary: Dispatch UI action
+      operationId: dispatch_action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UIAction'
+      responses:
+        '202':
+          description: Action accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action_id:
+                    type: string
+
+  /taskcards/{card_id}:
+    get:
+      summary: Get TaskCard by ID
+      operationId: get_taskcard
+      parameters:
+        - name: card_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "card_[a-z0-9]{8,}"
+      responses:
+        '200':
+          description: TaskCard details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCard'
+
+  /taskcards:
+    post:
+      summary: Create new TaskCard
+      operationId: create_taskcard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, kind, owner]
+              properties:
+                title:
+                  type: string
+                kind:
+                  type: string
+                  enum: [analysis, build, ingest, govern, intel, memory, mlt, debug]
+                owner:
+                  type: string
+                context:
+                  type: object
+      responses:
+        '201':
+          description: TaskCard created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card_id:
+                    type: string
+
+  /consent:
+    post:
+      summary: Manage user consent
+      operationId: manage_consent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, user_id, scope]
+              properties:
+                action:
+                  type: string
+                  enum: [grant, revoke]
+                user_id:
+                  type: string
+                scope:
+                  type: string
+                  enum: [autonomy, pii_use, external_share, canary_participation]
+                consent_id:
+                  type: string
+                expires_days:
+                  type: integer
+                evidence_uri:
+                  type: string
+      responses:
+        '201':
+          description: Consent updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  consent_id:
+                    type: string
+
+  /notifications:
+    get:
+      summary: Get user notifications
+      operationId: get_notifications
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: User notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /snapshot/export:
+    post:
+      summary: Export interface snapshot
+      operationId: export_snapshot
+      responses:
+        '200':
+          description: Snapshot exported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_id:
+                    type: string
+                  uri:
+                    type: string
+
+  /rollback:
+    post:
+      summary: Rollback to snapshot
+      operationId: rollback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_snapshot]
+              properties:
+                to_snapshot:
+                  type: string
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  target:
+                    type: string
+                  snapshot_id:
+                    type: string
+                  at:
+                    type: string
+                    format: date-time
+
+components:
+  schemas:
+    UserIdentity:
+      type: object
+      required: [user_id, roles]
+      properties:
+        user_id:
+          type: string
+          pattern: "usr_[a-z0-9_-]{4,}"
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [owner, admin, dev, analyst, viewer]
+        labels:
+          type: array
+          items:
+            type: string
+            enum: [internal, restricted, external]
+        locale:
+          type: string
+          default: "en-GB"
+        a11y:
+          type: object
+          properties:
+            high_contrast:
+              type: boolean
+            reduce_motion:
+              type: boolean
+
+    ClientInfo:
+      type: object
+      properties:
+        agent:
+          type: string
+        ip:
+          type: string
+        device:
+          type: string
+
+    UISession:
+      type: object
+      required: [session_id, user, created_at, client]
+      properties:
+        session_id:
+          type: string
+          pattern: "ses_[a-z0-9]{8,}"
+        user:
+          $ref: '#/components/schemas/UserIdentity'
+        client:
+          $ref: '#/components/schemas/ClientInfo'
+        created_at:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        permissions:
+          type: array
+          items:
+            type: string
+
+    UIAction:
+      type: object
+      required: [action_id, session_id, type, payload, at]
+      properties:
+        action_id:
+          type: string
+        session_id:
+          type: string
+        type:
+          type: string
+          enum:
+            - task.create
+            - task.update
+            - task.run
+            - task.pause
+            - task.cancel
+            - memory.search
+            - intel.request
+            - ingress.register_source
+            - governance.request_approval
+            - consent.grant
+            - consent.revoke
+            - settings.update
+            - snapshot.export
+            - snapshot.rollback
+        payload:
+          type: object
+        at:
+          type: string
+          format: date-time
+
+    TaskCard:
+      type: object
+      required: [card_id, title, kind, owner, state, created_at]
+      properties:
+        card_id:
+          type: string
+          pattern: "card_[a-z0-9]{8,}"
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [analysis, build, ingest, govern, intel, memory, mlt, debug]
+        owner:
+          type: string
+        state:
+          type: string
+          enum: [open, running, paused, waiting_approval, done, failed]
+        context:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        thread:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreadMessage'
+        metrics:
+          $ref: '#/components/schemas/TaskMetrics'
+        approvals:
+          type: array
+          items:
+            type: string
+
+    ThreadMessage:
+      type: object
+      required: [msg_id, author, role, at, content]
+      properties:
+        msg_id:
+          type: string
+        role:
+          type: string
+          enum: [user, grace, specialist, governance]
+        author:
+          type: string
+        at:
+          type: string
+          format: date-time
+        content:
+          type: object
+
+    TaskMetrics:
+      type: object
+      properties:
+        latency_ms:
+          type: number
+        steps:
+          type: integer
+
+    Notification:
+      type: object
+      required: [notif_id, level, message, created_at]
+      properties:
+        notif_id:
+          type: string
+        level:
+          type: string
+          enum: [info, success, warning, error]
+        message:
+          type: string
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              action:
+                type: string
+        read:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+
+security: []

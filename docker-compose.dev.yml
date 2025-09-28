@@ -1,0 +1,72 @@
+version: '3.8'
+
+# Development overrides for docker-compose.yml
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  grace_orchestrator:
+    volumes:
+      # Mount source code for hot reloading
+      - ./grace:/app/grace:ro
+      - ./grace_service:/app/grace_service:ro
+      - ./scripts:/app/scripts:ro
+      # Development logs
+      - ./logs:/app/logs
+    environment:
+      # Development environment
+      - GRACE_DEBUG=true
+      - GRACE_LOG_LEVEL=DEBUG
+      - DEV_MODE=true
+      - HOT_RELOAD=true
+      # Allow mock services for development
+      - ENABLE_MOCK_SERVICES=true
+      - MOCK_AI_RESPONSES=false
+    command: >
+      sh -c "
+        echo 'Starting Grace in development mode...' &&
+        python -m pip install --user -e . &&
+        python -m uvicorn grace_service.app:app 
+          --host 0.0.0.0 
+          --port 8080 
+          --reload 
+          --log-level debug
+      "
+    # Override healthcheck for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Development database with exposed port for direct access
+  postgres:
+    ports:
+      - "5433:5432"  # Avoid conflict with local postgres
+    environment:
+      - POSTGRES_DB=grace_governance_dev
+    volumes:
+      # Use named volume for dev to persist data between restarts
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./init_db:/docker-entrypoint-initdb.d
+
+  # Development Redis with persistence disabled for faster restart
+  redis:
+    command: redis-server --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6380:6379"  # Avoid conflict with local redis
+
+  # Development ChromaDB
+  chromadb:
+    ports:
+      - "8001:8000"  # Avoid conflict with local chroma
+    volumes:
+      - chroma_dev_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+      - ANONYMIZED_TELEMETRY=false
+
+volumes:
+  postgres_dev_data:
+  chroma_dev_data:

@@ -15,8 +15,12 @@ ingest_router = APIRouter()
 
 
 def get_ingress_kernel():
-    """Dependency injection placeholder."""
-    pass
+    """Dependency to get ingress kernel."""
+    from ..app import app_state
+    kernel = app_state.get("ingress_kernel")
+    if not kernel:
+        raise HTTPException(status_code=503, detail="Ingress kernel not initialized")
+    return kernel
 
 
 @ingest_router.post("/data", response_model=IngestResponse)

@@ -14,9 +14,12 @@ governance_router = APIRouter()
 
 
 def get_governance_kernel():
-    """Dependency injection placeholder - will be replaced by actual dependency."""
-    # This will be injected by the main app
-    pass
+    """Dependency to get governance kernel."""
+    from ..app import app_state
+    kernel = app_state.get("governance_kernel")
+    if not kernel:
+        raise HTTPException(status_code=503, detail="Governance kernel not initialized")
+    return kernel
 
 
 @governance_router.post("/validate", response_model=GovernanceValidateResponse)

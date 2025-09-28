@@ -13,8 +13,9 @@ events_router = APIRouter()
 
 
 def get_websocket_manager():
-    """Dependency injection placeholder."""
-    pass
+    """Dependency to get websocket manager."""
+    from ..app import app_state
+    return app_state.get("websocket_manager")
 
 
 @events_router.get("/stream/status")

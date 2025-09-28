@@ -24,12 +24,22 @@ from .websocket_manager import WebSocketManager
 # Import Grace kernels
 try:
     from grace.governance.grace_governance_kernel import GraceGovernanceKernel
-    from grace.ingress_kernel.ingress_kernel import IngressKernel
-    from grace.orchestration.orchestration_service import OrchestrationService
     from grace.config.environment import get_grace_config
+    # Optional imports - gracefully handle missing components
+    try:
+        from grace.ingress_kernel.ingress_kernel import IngressKernel
+    except ImportError:
+        IngressKernel = None
+    try:
+        from grace.orchestration.orchestration_service import OrchestrationService
+    except ImportError:
+        OrchestrationService = None
 except ImportError as e:
     logging.error(f"Failed to import Grace components: {e}")
-    raise
+    logging.warning("Some components may not be available")
+    GraceGovernanceKernel = None
+    IngressKernel = None 
+    OrchestrationService = None
 
 # Configure structured logging
 structlog.configure(
@@ -73,21 +83,36 @@ async def lifespan(app: FastAPI):
         # Initialize WebSocket manager
         app_state["websocket_manager"] = WebSocketManager()
         
-        # Initialize Grace kernels
-        logger.info("Initializing Grace Governance Kernel...")
-        app_state["governance_kernel"] = GraceGovernanceKernel(config=app_state["config"])
-        await app_state["governance_kernel"].initialize()
-        await app_state["governance_kernel"].start()
+        # Initialize Grace kernels with error handling
+        if GraceGovernanceKernel:
+            try:
+                logger.info("Initializing Grace Governance Kernel...")
+                app_state["governance_kernel"] = GraceGovernanceKernel(config=app_state["config"])
+                await app_state["governance_kernel"].initialize()
+                await app_state["governance_kernel"].start()
+            except Exception as e:
+                logger.error(f"Failed to initialize governance kernel: {e}")
+                app_state["governance_kernel"] = None
         
-        logger.info("Initializing Grace Ingress Kernel...")
-        app_state["ingress_kernel"] = IngressKernel(
-            storage_path=app_state["config"].get("storage_path", "/tmp/grace_ingress")
-        )
-        await app_state["ingress_kernel"].start()
+        if IngressKernel:
+            try:
+                logger.info("Initializing Grace Ingress Kernel...")
+                app_state["ingress_kernel"] = IngressKernel(
+                    storage_path=app_state["config"].get("storage_path", "/tmp/grace_ingress")
+                )
+                await app_state["ingress_kernel"].start()
+            except Exception as e:
+                logger.error(f"Failed to initialize ingress kernel: {e}")
+                app_state["ingress_kernel"] = None
         
-        logger.info("Initializing Orchestration Service...")
-        app_state["orchestration_service"] = OrchestrationService()
-        await app_state["orchestration_service"].start()
+        if OrchestrationService:
+            try:
+                logger.info("Initializing Orchestration Service...")
+                app_state["orchestration_service"] = OrchestrationService()
+                await app_state["orchestration_service"].start()
+            except Exception as e:
+                logger.error(f"Failed to initialize orchestration service: {e}")
+                app_state["orchestration_service"] = None
         
         logger.info("Grace Service started successfully")
         

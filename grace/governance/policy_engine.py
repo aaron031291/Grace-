@@ -5,7 +5,6 @@ import logging
 # Support both contract systems for compatibility
 try:
     from ..contracts.governed_request import GovernedRequest
-    from ..governance_kernel.types import PolicyResult, PolicyType
     PYDANTIC_CONTRACTS = True
 except ImportError:
     # Fallback for core contracts

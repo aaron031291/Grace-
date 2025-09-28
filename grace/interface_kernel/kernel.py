@@ -260,7 +260,7 @@ class InterfaceKernel:
 def create_app():
     """Create and configure the FastAPI application."""
     from ..mtl_kernel.kernel import MTLKernel
-    from ..governance_kernel.kernel import GovernanceKernel
+    from ..governance.grace_governance_kernel import GraceGovernanceKernel as GovernanceKernel
     from ..intelligence_kernel.kernel import IntelligenceKernel
     
     # Initialize kernels

@@ -1,0 +1,656 @@
+openapi: 3.0.3
+info:
+  title: Grace Intelligence Kernel API
+  description: |
+    ML/DL task routing, planning, and inference service for the Grace Intelligence Kernel.
+    
+    The Intelligence Kernel is the brain that routes tasks → specialists → models, fuses outputs, 
+    reasons about uncertainty, and collaborates with Governance, MLT, Memory, and Ingress kernels.
+    
+    ## Features
+    - **Plan → Select → Execute → Explain** across 21-specialist quorum
+    - **Policy safety** with governance gates and traceability
+    - **Online inference** with low-latency serving
+    - **Canary/shadow deployment** with auto-promotion and rollback
+    - **Uncertainty quantification** and calibration
+    - **Explainable AI** on demand
+    
+  version: 1.0.0
+  contact:
+    name: Grace Intelligence Team
+    email: intelligence@grace.ai
+  license:
+    name: Grace Internal License
+    
+servers:
+  - url: https://api.grace.ai/intel/v1
+    description: Production server
+  - url: https://staging-api.grace.ai/intel/v1  
+    description: Staging server
+  - url: http://localhost:8000/api/intel/v1
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health status and component availability
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+                
+  /request:
+    post:
+      summary: Submit task request
+      description: Submit a task request for intelligent processing
+      operationId: submitTaskRequest
+      tags:
+        - Inference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+            examples:
+              classification_example:
+                summary: Classification Task
+                value:
+                  task: classification
+                  input:
+                    X: 
+                      feature1: 0.5
+                      feature2: 1.2
+                      feature3: -0.3
+                    modality: tabular
+                  context:
+                    user_ctx:
+                      user_id: "user_123"
+                      role: "analyst"
+                    latency_budget_ms: 500
+                    explanation: true
+                    env: "prod"
+                  constraints:
+                    min_calibration: 0.95
+              nlp_example:
+                summary: NLP Task
+                value:
+                  task: nlp
+                  input:
+                    X: "Analyze sentiment of this customer feedback"
+                    modality: text
+                  context:
+                    latency_budget_ms: 200
+                    cost_budget_units: 0.05
+                    canary_allowed: true
+                    env: "staging"
+      responses:
+        '202':
+          description: Request accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InferenceRequestResponse'
+        '400':
+          description: Invalid request format
+        '429':
+          description: Rate limit exceeded
+        '500':
+          description: Internal server error
+          
+  /result/{req_id}:
+    get:
+      summary: Get inference result
+      description: Retrieve the result of a submitted task request
+      operationId: getInferenceResult
+      tags:
+        - Inference
+      parameters:
+        - name: req_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^req_[a-z0-9_-]{6,}$'
+          description: Request ID returned from submit request
+          example: "req_20240928_143022_1234"
+      responses:
+        '200':
+          description: Inference result available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InferenceResult'
+        '202':
+          description: Request still processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  req_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [processing]
+        '404':
+          description: Request not found
+        '500':
+          description: Internal server error
+
+  /plan/preview:
+    post:
+      summary: Preview execution plan
+      description: Preview the execution plan for a task without executing it
+      operationId: previewPlan
+      tags:
+        - Planning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+      responses:
+        '200':
+          description: Execution plan preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Invalid request format
+        '500':
+          description: Internal server error
+
+  /canary/promote:
+    post:
+      summary: Promote canary deployment  
+      description: Promote a canary deployment to full production
+      operationId: promoteCanary
+      tags:
+        - Deployment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - deployment_id
+              properties:
+                deployment_id:
+                  type: string
+                  description: Canary deployment ID
+                force:
+                  type: boolean
+                  default: false
+                  description: Force promotion even if metrics don't meet threshold
+      responses:
+        '202':
+          description: Promotion initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deployment_id:
+                    type: string
+                  status:
+                    type: string
+                  promotion_id:
+                    type: string
+
+  /snapshot/export:
+    post:
+      summary: Export system snapshot
+      description: Export current Intelligence Kernel state as a snapshot
+      operationId: exportSnapshot
+      tags:
+        - Operations
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  description: Optional snapshot description
+                include_history:
+                  type: boolean
+                  default: false
+                  description: Include performance history
+      responses:
+        '200':
+          description: Snapshot exported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_id:
+                    type: string
+                    example: "intel_2024-09-28T11:28:00Z"
+                  uri:
+                    type: string  
+                    example: "/snapshots/intel_2024-09-28T11:28:00Z"
+                  hash:
+                    type: string
+                    example: "sha256:a1b2c3d4..."
+                  size_bytes:
+                    type: integer
+        '500':
+          description: Snapshot export failed
+
+  /rollback:
+    post:
+      summary: Rollback to snapshot
+      description: Rollback Intelligence Kernel to a previous snapshot
+      operationId: rollbackToSnapshot  
+      tags:
+        - Operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - to_snapshot
+              properties:
+                to_snapshot:
+                  type: string
+                  description: Snapshot ID to rollback to
+                  example: "intel_2024-09-28T10:00:00Z"
+                verify_hash:
+                  type: boolean
+                  default: true
+                  description: Verify snapshot hash before rollback
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [initiated, completed]
+                  snapshot_id:
+                    type: string
+                  rollback_id:
+                    type: string
+        '404':
+          description: Snapshot not found
+        '400':
+          description: Invalid rollback request
+        '500':
+          description: Rollback failed
+
+  /metrics:
+    get:
+      summary: Get performance metrics
+      description: Retrieve performance metrics and timeseries data
+      operationId: getMetrics
+      tags:
+        - Monitoring
+      parameters:
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Get metrics since this timestamp
+        - name: segment
+          in: query
+          required: false  
+          schema:
+            type: string
+          description: Filter by segment
+        - name: env
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [dev, staging, prod]
+          description: Filter by environment
+        - name: metric_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [latency, success_rate, confidence, calibration, fairness]
+          description: Specific metric type to retrieve
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timeseries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        value:
+                          type: number
+                        metric_name:
+                          type: string
+                  summary:
+                    type: object
+                    properties:
+                      total_requests:
+                        type: integer
+                      success_rate:
+                        type: number
+                      avg_latency_ms:
+                        type: number
+                      p95_latency_ms:
+                        type: number
+                      avg_confidence:
+                        type: number
+                        
+components:
+  schemas:
+    TaskRequest:
+      type: object
+      required: [task, input, context]
+      properties:
+        req_id:
+          type: string
+          pattern: '^req_[a-z0-9_-]{6,}$'
+          description: Auto-generated if not provided
+        task:
+          type: string
+          enum: [classification, regression, clustering, dimred, rl, ranking, nlp, vision, timeseries]
+          description: Type of ML/AI task to perform
+        input:
+          type: object
+          properties:
+            X:
+              oneOf:
+                - type: object
+                - type: array
+                - type: string
+              description: Input data (tabular, text, image, etc.)
+            y_true:
+              oneOf:
+                - type: object
+                - type: array
+              description: Optional ground truth for evaluation
+            modality:
+              type: string
+              enum: [tabular, text, image, audio, video, graph]
+              description: Data modality
+        context:
+          type: object
+          properties:
+            user_ctx:
+              type: object
+              description: User context and RBAC labels
+            latency_budget_ms:
+              type: integer
+              minimum: 10
+              maximum: 10000
+              description: Maximum acceptable latency in milliseconds
+            cost_budget_units:
+              type: number
+              minimum: 0
+              description: Maximum acceptable cost
+            explanation:
+              type: boolean
+              default: false
+              description: Whether explanations are required
+            canary_allowed:
+              type: boolean
+              default: true
+              description: Whether canary deployments are allowed
+            segment:
+              type: string
+              description: Request segment for routing
+            env:
+              type: string
+              enum: [dev, staging, prod]
+              description: Environment
+        constraints:
+          type: object
+          properties:
+            models_allowlist:
+              type: array
+              items:
+                type: string
+              description: List of allowed model patterns
+            models_denylist:
+              type: array
+              items:
+                type: string  
+              description: List of denied model patterns
+            min_calibration:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Minimum required calibration score
+            fairness_delta_max:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Maximum allowed fairness delta
+        timestamp:
+          type: string
+          format: date-time
+          description: Request timestamp
+          
+    InferenceResult:
+      type: object
+      required: [req_id, outputs, metrics, lineage, governance, timing]
+      properties:
+        req_id:
+          type: string
+        status:
+          type: string
+          enum: [completed, error, rejected]
+        outputs:
+          type: object
+          properties:
+            y_hat:
+              oneOf:
+                - type: string
+                - type: number
+                - type: object
+                - type: array
+              description: Prediction output
+            proba:
+              type: array
+              items:
+                type: number
+              description: Probability estimates (for classification)
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Prediction confidence
+            top_k:
+              type: array
+              items:
+                type: object
+              description: Top K predictions
+            actions:
+              type: array  
+              items:
+                type: string
+              description: Recommended actions (for RL)
+        metrics:
+          type: object
+          description: Runtime performance metrics
+        explanations:
+          type: object
+          description: Model explanations (if requested)
+        uncertainties:
+          type: object
+          properties:
+            prediction_variance:
+              type: number
+            confidence_uncertainty:
+              type: number
+            calibration_error:
+              type: number
+        lineage:
+          type: object
+          properties:
+            plan_id:
+              type: string
+            models:
+              type: array
+              items:
+                type: string
+            ensemble:
+              type: string
+            feature_view:
+              type: string
+        governance:
+          type: object
+          properties:
+            approved:
+              type: boolean
+            policy_version:
+              type: string
+            redactions:
+              type: array
+              items:
+                type: string
+        timing:
+          type: object
+          properties:
+            total_ms:
+              type: number
+            per_stage:
+              type: object
+              additionalProperties:
+                type: number
+                
+    Plan:
+      type: object
+      required: [plan_id, req_id, route, policy]
+      properties:
+        plan_id:
+          type: string
+        req_id:
+          type: string
+        route:
+          type: object
+          properties:
+            specialists:
+              type: array
+              items:
+                type: string
+            models:
+              type: array
+              items:
+                type: string
+            ensemble:
+              type: string
+              enum: [stack, vote, blend, none]
+            canary_pct:
+              type: integer
+              minimum: 0
+              maximum: 100
+            shadow:
+              type: boolean
+        policy:
+          type: object
+          properties:
+            min_confidence:
+              type: number
+            min_calibration:
+              type: number
+            fairness_delta_max:
+              type: number
+            log_level:
+              type: string
+              enum: [summary, full]
+              
+    HealthResponse:
+      type: object
+      required: [status, version, timestamp, components]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+        components:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [healthy, degraded, unhealthy]
+          example:
+            router: healthy
+            planner: healthy
+            inference_engine: healthy
+            governance_bridge: healthy
+            
+    InferenceRequestResponse:
+      type: object  
+      required: [req_id, status]
+      properties:
+        req_id:
+          type: string
+          pattern: '^req_[a-z0-9_-]{6,}$'
+        status:
+          type: string
+          enum: [accepted]
+        estimated_completion_ms:
+          type: integer
+          description: Estimated completion time
+        queue_position:
+          type: integer
+          description: Position in processing queue
+
+  securitySchemes:
+    GraceAPIKey:
+      type: apiKey
+      in: header
+      name: X-Grace-API-Key
+    
+    GraceBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - GraceAPIKey: []
+  - GraceBearerAuth: []
+
+tags:
+  - name: Health
+    description: Health check and system status
+  - name: Inference
+    description: Task submission and result retrieval
+  - name: Planning
+    description: Execution planning and preview
+  - name: Deployment
+    description: Canary and shadow deployment management
+  - name: Operations
+    description: System operations and maintenance
+  - name: Monitoring
+    description: Metrics and performance monitoring

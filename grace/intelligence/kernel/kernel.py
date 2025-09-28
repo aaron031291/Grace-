@@ -1,7 +1,7 @@
 """Intelligence kernel - main orchestration for specialist-based consensus."""
 from typing import Dict, List, Optional
 
-from ..contracts.quorum_feed import QuorumResult, QuorumFeedItem
+from ...contracts.quorum_feed import QuorumResult, QuorumFeedItem
 from .specialists.registry import SpecialistRegistry
 from .specialists.doc_quality import DocQualitySpecialist
 from .specialists.policy_fit import PolicyFitSpecialist

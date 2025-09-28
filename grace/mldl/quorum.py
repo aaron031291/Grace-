@@ -11,7 +11,7 @@ from enum import Enum
 from dataclasses import dataclass, asdict
 
 from ..core.contracts import Experience, generate_correlation_id
-
+from ..core.utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 

@@ -13,6 +13,8 @@ from enum import Enum
 from ..intelligence.grace_intelligence import GraceIntelligence, ReasoningContext, ReasoningResult
 from .ide.grace_ide import GraceIDE
 from .multimodal_interface import MultimodalInterface
+from .enum_utils import safe_enum_parse, create_enum_mapper
+from .job_queue import job_queue, JobPriority
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,7 @@ class OrbNotification:
     action_required: bool = False
     actions: List[Dict[str, str]] = field(default_factory=list)
     auto_dismiss_seconds: Optional[int] = None
+    read_at: Optional[str] = None  # Track when notification was read
 
 
 @dataclass
@@ -238,6 +241,21 @@ class GraceUnifiedOrbInterface:
 
         # Panel templates
         self.panel_templates = self._initialize_panel_templates()
+
+        # Create safe enum mappers for robust parsing
+        self.panel_type_mapper = create_enum_mapper({
+            "trading_panel": PanelType.TRADING,
+            "sales_panel": PanelType.SALES,
+            "chart_panel": PanelType.ANALYTICS,
+            "analytics_panel": PanelType.ANALYTICS,
+            "memory_explorer_panel": PanelType.MEMORY,
+            "governance_panel": PanelType.GOVERNANCE,
+            "task_panel": PanelType.TASK_MANAGER,
+            "knowledge_panel": PanelType.KNOWLEDGE_BASE,
+            "collab_panel": PanelType.COLLABORATION
+        }, PanelType, PanelType.ANALYTICS)
+        
+        self.notification_priority_mapper = create_enum_mapper({}, NotificationPriority, NotificationPriority.MEDIUM)
 
         logger.info("Grace Unified Orb Interface initialized")
 
@@ -536,7 +554,7 @@ class GraceUnifiedOrbInterface:
     # -----------------------------
     async def upload_document(self, user_id: str, file_path: str, file_type: str,
                               metadata: Optional[Dict[str, Any]] = None) -> str:
-        """Upload and process a document into memory."""
+        """Upload and process a document into memory with background processing."""
         if file_type.lower() not in self.supported_file_types:
             raise ValueError(f"Unsupported file type: {file_type}")
 
@@ -555,11 +573,25 @@ class GraceUnifiedOrbInterface:
             metadata=metadata or {}
         )
 
-        # Ingest via Intelligence (batch hook)
-        await self.grace_intelligence.ingest_batch_document(file_path, file_type)
-
+        # Store fragment immediately
         self.memory_fragments[fragment_id] = fragment
-        logger.info(f"Uploaded document {file_path} as fragment {fragment_id}")
+        
+        # Queue background ingest processing (idempotent)
+        job_id = await job_queue.enqueue(
+            job_type="document_ingest",
+            payload={
+                "file_path": file_path,
+                "file_type": file_type,
+                "user_id": user_id,
+                "fragment_id": fragment_id
+            },
+            priority=JobPriority.MEDIUM
+        )
+        
+        # Store job ID in fragment metadata for tracking
+        fragment.metadata["background_job_id"] = job_id
+        
+        logger.info(f"Uploaded document {file_path} as fragment {fragment_id}, queued job {job_id}")
         return fragment_id
 
     async def search_memory(self, session_id: str, query: str,
@@ -679,8 +711,12 @@ class GraceUnifiedOrbInterface:
         return notif_id
 
     def get_notifications(self, user_id: str, unread_only: bool = True) -> List[OrbNotification]:
-        # (unread tracking not implemented; returning all for the user)
+        # Filter notifications by user and read status
         items = [n for n in self.notifications.values() if n.user_id == user_id]
+        
+        if unread_only:
+            items = [n for n in items if n.read_at is None]
+        
         items.sort(key=lambda n: (n.priority.value, n.timestamp), reverse=True)
         return items
 
@@ -691,6 +727,20 @@ class GraceUnifiedOrbInterface:
         if notif.user_id != user_id:
             return False
         del self.notifications[notification_id]
+        return True
+    
+    async def mark_notification_read(self, notification_id: str, user_id: str) -> bool:
+        """Mark a notification as read without dismissing it."""
+        if notification_id not in self.notifications:
+            return False
+        notif = self.notifications[notification_id]
+        if notif.user_id != user_id:
+            return False
+        
+        if notif.read_at is None:  # Only update if not already read
+            notif.read_at = datetime.utcnow().isoformat()
+            logger.info(f"Marked notification {notification_id} as read for user {user_id}")
+        
         return True
 
     # -----------------------------
@@ -718,13 +768,8 @@ class GraceUnifiedOrbInterface:
         if "panels" in ui_instructions:
             for panel_config in ui_instructions["panels"]:
                 panel_type_str = panel_config.get("type", "analytics")
-                # Basic mapping; extend as needed
-                panel_type = {
-                    "trading_panel": PanelType.TRADING,
-                    "sales_panel": PanelType.SALES,
-                    "chart_panel": PanelType.ANALYTICS,
-                    "analytics_panel": PanelType.ANALYTICS
-                }.get(panel_type_str, PanelType.ANALYTICS)
+                # Use safe enum mapping with fallback
+                panel_type = self.panel_type_mapper(panel_type_str)
 
                 await self.create_panel(
                     session_id=session_id,

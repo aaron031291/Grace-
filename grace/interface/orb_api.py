@@ -6,12 +6,16 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .orb_interface import GraceUnifiedOrbInterface, PanelType, NotificationPriority
 from .ide.grace_ide import BlockType  # referenced by IDE endpoints
+from .enum_utils import safe_enum_parse
+from .security import TokenManager, FileValidator, virus_scan_hook
+from .pagination import PaginationParams, paginate_list, filter_and_paginate
+from .job_queue import job_queue
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,8 @@ class MemorySearchRequest(BaseModel):
     session_id: str
     query: str
     filters: Optional[Dict[str, Any]] = None
+    page: int = 1
+    limit: int = 20
 
 
 class GovernanceTaskRequest(BaseModel):
@@ -174,10 +180,12 @@ class BackgroundTaskRequest(BaseModel):
 
 
 # ---------------------------
-# Global orb interface instance
+# Global instances
 # ---------------------------
 
 orb_interface = GraceUnifiedOrbInterface()
+token_manager = TokenManager()
+file_validator = FileValidator(max_file_size_mb=50)
 
 # ---------------------------
 # FastAPI app
@@ -240,6 +248,21 @@ async def health_check():
         "timestamp": datetime.utcnow().isoformat(),
         "version": "1.0.0"
     }
+
+
+@app.post("/api/orb/v1/auth/token")
+async def generate_websocket_token(user_id: str, session_id: str, tenant_id: Optional[str] = None):
+    """Generate a secure token for WebSocket authentication."""
+    if not user_id or not session_id:
+        raise HTTPException(status_code=400, detail="user_id and session_id are required")
+    
+    token = token_manager.generate_token(user_id, session_id, tenant_id)
+    return {
+        "token": token,
+        "expires_in_minutes": token_manager.token_expiry_minutes,
+        "websocket_url": f"/ws/{session_id}?token={token}"
+    }
+
 
 # ---------------------------
 # Session Management
@@ -326,11 +349,11 @@ async def get_chat_history(session_id: str, limit: Optional[int] = None):
 async def create_panel(request: PanelCreateRequest):
     """Create a new panel."""
     try:
-        # Flexible enum parsing: allow value ("memory_explorer_panel") or name ("MEMORY_EXPLORER_PANEL")
-        try:
-            panel_type = PanelType(request.panel_type.lower())
-        except ValueError:
-            panel_type = PanelType[request.panel_type.upper()]
+        # Use safe enum parsing instead of manual try/except
+        panel_type = safe_enum_parse(PanelType, request.panel_type, PanelType.ANALYTICS)
+        
+        if panel_type is None:
+            raise HTTPException(status_code=400, detail=f"Unknown panel_type '{request.panel_type}'")
 
         panel_id = await orb_interface.create_panel(
             request.session_id,
@@ -340,8 +363,6 @@ async def create_panel(request: PanelCreateRequest):
             request.position
         )
         return {"panel_id": panel_id, "status": "created"}
-    except KeyError:
-        raise HTTPException(status_code=400, detail=f"Unknown panel_type '{request.panel_type}'")
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))
@@ -398,51 +419,88 @@ async def get_panels(session_id: str):
 
 @app.post("/api/orb/v1/memory/upload")
 async def upload_document(file: UploadFile = File(...), user_id: str = "default"):
-    """Upload a document to memory."""
+    """Upload a document to memory with security validation."""
     try:
+        # Validate file size
+        content = await file.read()
+        if not file_validator.validate_file_size(len(content)):
+            raise HTTPException(
+                status_code=413, 
+                detail=f"File too large. Maximum size: {file_validator.max_file_size_bytes // (1024*1024)}MB"
+            )
+        
+        # Validate file type
+        if not file_validator.validate_file_type(file.filename, file.content_type):
+            raise HTTPException(status_code=415, detail="Unsupported file type")
+        
+        # Generate safe filename
+        safe_filename = file_validator.get_safe_filename(file.filename or "unknown")
+        
         import tempfile
         import os
 
-        # safer suffix handling if filename has no dot
-        suffix = ""
-        if "." in (file.filename or ""):
-            suffix = f".{file.filename.rsplit('.', 1)[-1]}"
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-            content = await file.read()
+        # Create temporary file with safe name
+        suffix = f".{safe_filename.rsplit('.', 1)[-1]}" if '.' in safe_filename else ""
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="grace_upload_") as temp_file:
             temp_file.write(content)
             temp_file_path = temp_file.name
 
         try:
-            file_type = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin"
+            # Virus scan if needed
+            if file_validator.should_scan_for_viruses(safe_filename):
+                is_safe = await virus_scan_hook(temp_file_path, safe_filename)
+                if not is_safe:
+                    raise HTTPException(status_code=422, detail="File failed security scan")
+            
+            file_type = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else "bin"
             fragment_id = await orb_interface.upload_document(
                 user_id=user_id,
                 file_path=temp_file_path,
                 file_type=file_type,
-                metadata={"original_filename": file.filename, "size": len(content)}
+                metadata={
+                    "original_filename": file.filename,
+                    "safe_filename": safe_filename,
+                    "size": len(content),
+                    "content_type": file.content_type,
+                    "upload_timestamp": datetime.utcnow().isoformat()
+                }
             )
             return {
                 "fragment_id": fragment_id,
-                "filename": file.filename,
+                "filename": safe_filename,
                 "file_type": file_type,
                 "size": len(content),
                 "status": "uploaded"
             }
         finally:
-            os.unlink(temp_file_path)
+            # Always cleanup temp file
+            try:
+                os.unlink(temp_file_path)
+            except OSError:
+                pass  # File already cleaned up
+                
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/orb/v1/memory/search")
 async def search_memory(request: MemorySearchRequest):
-    """Search memory fragments."""
+    """Search memory fragments with pagination."""
     try:
+        pagination = PaginationParams(page=request.page, limit=request.limit)
+        
         results = await orb_interface.search_memory(
             request.session_id,
             request.query,
             request.filters
         )
+        
+        # Apply pagination
+        paginated_results = paginate_list(results, pagination)
+        
         return {
             "query": request.query,
             "results": [
@@ -455,8 +513,16 @@ async def search_memory(request: MemorySearchRequest):
                     "timestamp": fragment.timestamp,
                     "tags": fragment.tags
                 }
-                for fragment in results
-            ]
+                for fragment in paginated_results.items
+            ],
+            "pagination": {
+                "total": paginated_results.total,
+                "page": paginated_results.page,
+                "limit": paginated_results.limit,
+                "total_pages": paginated_results.total_pages,
+                "has_next": paginated_results.has_next,
+                "has_prev": paginated_results.has_prev
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -466,6 +532,91 @@ async def search_memory(request: MemorySearchRequest):
 async def get_memory_stats():
     """Get memory usage statistics."""
     return orb_interface.get_memory_stats()
+
+# ---------------------------
+# Job Management
+# ---------------------------
+
+@app.get("/api/orb/v1/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    """Get job status and details."""
+    job = await job_queue.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    return {
+        "job_id": job.job_id,
+        "job_type": job.job_type,
+        "status": job.status.value,
+        "priority": job.priority.value,
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+        "error": job.error,
+        "result": job.result,
+        "retry_count": job.retry_count,
+        "max_retries": job.max_retries
+    }
+
+
+@app.get("/api/orb/v1/jobs")
+async def list_jobs(
+    job_type: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100)
+):
+    """List jobs with filtering and pagination."""
+    from .job_queue import JobStatus
+    
+    # Parse status filter if provided
+    status_filter = None
+    if status:
+        try:
+            status_filter = JobStatus(status.lower())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    
+    # Get jobs from queue
+    jobs = job_queue.list_jobs(job_type=job_type, status=status_filter, limit=limit * page)
+    
+    # Apply pagination
+    pagination = PaginationParams(page=page, limit=limit)
+    paginated_jobs = paginate_list(jobs, pagination)
+    
+    return {
+        "jobs": [
+            {
+                "job_id": job.job_id,
+                "job_type": job.job_type,
+                "status": job.status.value,
+                "priority": job.priority.value,
+                "created_at": job.created_at,
+                "started_at": job.started_at,
+                "completed_at": job.completed_at,
+                "error": job.error if job.error else None,
+                "retry_count": job.retry_count
+            }
+            for job in paginated_jobs.items
+        ],
+        "pagination": {
+            "total": paginated_jobs.total,
+            "page": paginated_jobs.page,
+            "limit": paginated_jobs.limit,
+            "total_pages": paginated_jobs.total_pages,
+            "has_next": paginated_jobs.has_next,
+            "has_prev": paginated_jobs.has_prev
+        }
+    }
+
+
+@app.post("/api/orb/v1/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a job."""
+    success = await job_queue.cancel_job(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found or cannot be cancelled")
+    return {"status": "cancelled"}
 
 # ---------------------------
 # Governance
@@ -488,9 +639,21 @@ async def create_governance_task(request: GovernanceTaskRequest):
 
 
 @app.get("/api/orb/v1/governance/tasks/{user_id}")
-async def get_governance_tasks(user_id: str, status_filter: Optional[str] = None):
-    """Get governance tasks for user."""
+async def get_governance_tasks(
+    user_id: str, 
+    status_filter: Optional[str] = None,
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page (max 100)")
+):
+    """Get governance tasks for user with pagination."""
+    pagination = PaginationParams(page=page, limit=limit)
+    
+    # Get all tasks for user (modify orb_interface method if needed)
     tasks = orb_interface.get_governance_tasks(user_id, status_filter)
+    
+    # Paginate results
+    result = paginate_list(tasks, pagination)
+    
     return {
         "user_id": user_id,
         "tasks": [
@@ -502,10 +665,20 @@ async def get_governance_tasks(user_id: str, status_filter: Optional[str] = None
                 "priority": task.priority,
                 "status": task.status,
                 "requester_id": task.requester_id,
-                "assignee_id": task.assignee_id
+                "assignee_id": task.assignee_id,
+                "created_at": task.created_at,
+                "updated_at": task.updated_at
             }
-            for task in tasks
-        ]
+            for task in result.items
+        ],
+        "pagination": {
+            "total": result.total,
+            "page": result.page,
+            "limit": result.limit,
+            "total_pages": result.total_pages,
+            "has_next": result.has_next,
+            "has_prev": result.has_prev
+        }
     }
 
 
@@ -525,7 +698,7 @@ async def update_governance_task_status(task_id: str, status: str, user_id: str)
 async def create_notification(request: NotificationRequest):
     """Create a notification."""
     try:
-        priority = NotificationPriority(request.priority.lower())
+        priority = safe_enum_parse(NotificationPriority, request.priority, NotificationPriority.MEDIUM)
         notification_id = await orb_interface.create_notification(
             request.user_id,
             request.title,
@@ -541,9 +714,29 @@ async def create_notification(request: NotificationRequest):
 
 
 @app.get("/api/orb/v1/notifications/{user_id}")
-async def get_notifications(user_id: str, unread_only: bool = True):
-    """Get notifications for user."""
-    notifications = orb_interface.get_notifications(user_id, unread_only)
+async def get_notifications(
+    user_id: str, 
+    unread_only: bool = True,
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page (max 100)")
+):
+    """Get notifications for user with pagination."""
+    pagination = PaginationParams(page=page, limit=limit)
+    
+    # Get all notifications for user
+    all_notifications = orb_interface.get_notifications(user_id, unread_only=False)
+    
+    # Apply filtering and pagination
+    filter_fn = lambda n: n.read_at is None if unread_only else True
+    sort_fn = lambda n: (-n.priority.value, n.timestamp)  # Priority desc, then timestamp desc
+    
+    result = filter_and_paginate(
+        all_notifications,
+        filter_fn=filter_fn,
+        sort_fn=sort_fn,
+        pagination=pagination
+    )
+    
     return {
         "user_id": user_id,
         "notifications": [
@@ -554,11 +747,29 @@ async def get_notifications(user_id: str, unread_only: bool = True):
                 "priority": notif.priority.value,
                 "timestamp": notif.timestamp,
                 "action_required": notif.action_required,
-                "actions": notif.actions
+                "actions": notif.actions,
+                "read_at": notif.read_at
             }
-            for notif in notifications
-        ]
+            for notif in result.items
+        ],
+        "pagination": {
+            "total": result.total,
+            "page": result.page,
+            "limit": result.limit,
+            "total_pages": result.total_pages,
+            "has_next": result.has_next,
+            "has_prev": result.has_prev
+        }
     }
+
+
+@app.put("/api/orb/v1/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, user_id: str):
+    """Mark a notification as read."""
+    success = await orb_interface.mark_notification_read(notification_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"status": "marked_read"}
 
 
 @app.delete("/api/orb/v1/notifications/{notification_id}")
@@ -800,10 +1011,31 @@ async def get_ide_stats():
 # ---------------------------
 
 @app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    """WebSocket endpoint for real-time communication."""
+async def websocket_endpoint(websocket: WebSocket, session_id: str, token: Optional[str] = Query(None)):
+    """WebSocket endpoint for real-time communication with token authentication."""
+    
+    # Validate token before accepting connection
+    if not token:
+        await websocket.close(code=1008, reason="Missing authentication token")
+        return
+    
+    token_data = token_manager.validate_token(token)
+    if not token_data:
+        await websocket.close(code=1008, reason="Invalid or expired token")
+        return
+    
+    # Verify session_id matches the token
+    if token_data["session_id"] != session_id:
+        await websocket.close(code=1008, reason="Token session mismatch")
+        return
+    
+    user_id = token_data["user_id"]
+    tenant_id = token_data["tenant_id"]
+    
     await websocket.accept()
     ws_connections[session_id] = websocket
+    
+    logger.info(f"WebSocket connected for user {user_id}, session {session_id}, tenant {tenant_id}")
 
     try:
         while True:
@@ -841,6 +1073,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         ws_connections.pop(session_id, None)
+        logger.info(f"WebSocket disconnected for user {user_id}, session {session_id}")
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
         ws_connections.pop(session_id, None)

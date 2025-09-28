@@ -1,0 +1,256 @@
+# Resilience Event Schemas and Definitions
+
+# Event Types:
+events:
+  - name: RES_SIGNAL
+    description: "Signal from detector indicating potential issue"
+    payload:
+      service_id:
+        type: string
+        required: true
+        description: "Service identifier"
+      detector:
+        type: string
+        required: true
+        description: "Name of the detector that generated the signal"
+      value:
+        type: number
+        required: true
+        description: "Detected metric value"
+      threshold:
+        type: number
+        required: true
+        description: "Threshold that was crossed"
+      ts:
+        type: string
+        format: date-time
+        required: true
+        description: "Timestamp of detection"
+
+  - name: RES_INCIDENT_OPENED
+    description: "New incident has been opened"
+    payload:
+      incident:
+        $ref: "../contracts/resilience.policy.schema.json#/definitions/Incident"
+
+  - name: RES_ACTION_APPLIED
+    description: "Recovery action has been applied to an incident"
+    payload:
+      incident_id:
+        type: string
+        required: true
+        description: "Incident identifier"
+      action:
+        type: string
+        required: true
+        description: "Action that was applied"
+      result:
+        type: string
+        required: true
+        description: "Result of the action"
+      notes:
+        type: string
+        required: false
+        description: "Optional notes about the action"
+
+  - name: RES_INCIDENT_RESOLVED
+    description: "Incident has been resolved"
+    payload:
+      incident_id:
+        type: string
+        required: true
+        description: "Incident identifier"
+      resolved_at:
+        type: string
+        format: date-time
+        required: true
+        description: "When the incident was resolved"
+
+  - name: RES_DEGRADATION_ENTERED
+    description: "Service has entered degradation mode"
+    payload:
+      service_id:
+        type: string
+        required: true
+        description: "Service identifier"
+      mode_id:
+        type: string
+        required: true
+        description: "Degradation mode identifier"
+
+  - name: RES_DEGRADATION_EXITED
+    description: "Service has exited degradation mode"
+    payload:
+      service_id:
+        type: string
+        required: true
+        description: "Service identifier"
+      mode_id:
+        type: string
+        required: true
+        description: "Degradation mode identifier"
+
+  - name: RES_CIRCUIT_STATE
+    description: "Circuit breaker state has changed"
+    payload:
+      service_id:
+        type: string
+        required: true
+        description: "Service identifier"
+      dependency:
+        type: string
+        required: true
+        description: "Dependency identifier"
+      state:
+        type: string
+        enum: ["closed", "open", "half_open"]
+        required: true
+        description: "New circuit breaker state"
+
+  - name: RES_CHAOS_STARTED
+    description: "Chaos experiment has been started"
+    payload:
+      experiment_id:
+        type: string
+        required: true
+        description: "Unique experiment identifier"
+      target:
+        type: string
+        required: true
+        description: "Target of the chaos experiment"
+      blast_radius_pct:
+        type: number
+        minimum: 0
+        maximum: 100
+        required: true
+        description: "Percentage of traffic affected"
+
+  - name: RES_CHAOS_RESULT
+    description: "Chaos experiment has completed"
+    payload:
+      experiment_id:
+        type: string
+        required: true
+        description: "Unique experiment identifier"
+      outcome:
+        type: string
+        enum: ["pass", "fail"]
+        required: true
+        description: "Experiment outcome"
+      findings:
+        type: object
+        required: true
+        description: "Detailed experiment findings"
+
+  - name: RES_SNAPSHOT_CREATED
+    description: "Resilience state snapshot has been created"
+    payload:
+      snapshot_id:
+        type: string
+        required: true
+        description: "Unique snapshot identifier"
+      uri:
+        type: string
+        required: true
+        description: "URI where snapshot is stored"
+
+  - name: ROLLBACK_REQUESTED
+    description: "Rollback has been requested"
+    payload:
+      target:
+        type: string
+        enum: ["resilience"]
+        required: true
+        description: "Target system for rollback"
+      to_snapshot:
+        type: string
+        required: true
+        description: "Snapshot ID to rollback to"
+
+  - name: ROLLBACK_COMPLETED
+    description: "Rollback has been completed"
+    payload:
+      target:
+        type: string
+        enum: ["resilience"]
+        required: true
+        description: "Target system that was rolled back"
+      snapshot_id:
+        type: string
+        required: true
+        description: "Snapshot ID that was restored"
+      at:
+        type: string
+        format: date-time
+        required: true
+        description: "When rollback completed"
+
+  - name: RES_EXPERIENCE
+    description: "Resilience experience data for meta-learning"
+    payload:
+      schema_version:
+        type: string
+        const: "1.0.0"
+        required: true
+        description: "Schema version"
+      experience:
+        $ref: "#/definitions/ResilienceExperience"
+
+# Experience Data Structure for Meta-Learning
+definitions:
+  ResilienceExperience:
+    type: object
+    required: ["exp_id", "service_id", "stage", "metrics", "timestamp"]
+    properties:
+      exp_id:
+        type: string
+        description: "Unique experience identifier"
+      service_id:
+        type: string
+        description: "Service identifier"
+      stage:
+        enum: ["detect", "decide", "act", "verify", "chaos"]
+        description: "Resilience process stage"
+      metrics:
+        type: object
+        properties:
+          mttr_s:
+            type: number
+            minimum: 0
+            description: "Mean Time To Recovery in seconds"
+          mtta_s:
+            type: number
+            minimum: 0
+            description: "Mean Time To Acknowledge in seconds"
+          incident_rate_per_week:
+            type: number
+            minimum: 0
+            description: "Number of incidents per week"
+          breaker_open_rate:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: "Percentage of time circuit breakers are open"
+          retry_success_pct:
+            type: number
+            minimum: 0
+            maximum: 100
+            description: "Percentage of retries that succeed"
+          degradation_time_pct:
+            type: number
+            minimum: 0
+            maximum: 100
+            description: "Percentage of time in degraded mode"
+          slo_breaches:
+            type: integer
+            minimum: 0
+            description: "Number of SLO breaches"
+          budget_burn_pct:
+            type: number
+            minimum: 0
+            maximum: 100
+            description: "Percentage of error budget consumed"
+      timestamp:
+        type: string
+        format: date-time
+        description: "When the experience occurred"

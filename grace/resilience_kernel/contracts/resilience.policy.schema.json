@@ -1,0 +1,311 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Resilience Policy Schema",
+  "description": "Schema for runtime resilience policies in Grace Resilience Kernel",
+  
+  "definitions": {
+    "ResiliencePolicy": {
+      "type": "object",
+      "required": ["service_id"],
+      "properties": {
+        "service_id": {
+          "type": "string",
+          "description": "Unique identifier for the service"
+        },
+        "retries": {
+          "type": "object",
+          "properties": {
+            "max": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10,
+              "description": "Maximum number of retry attempts"
+            },
+            "backoff": {
+              "enum": ["exp", "lin"],
+              "description": "Backoff strategy: exponential or linear"
+            },
+            "base_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Base delay in milliseconds"
+            },
+            "jitter_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Random jitter in milliseconds"
+            }
+          },
+          "additionalProperties": false
+        },
+        "circuit_breaker": {
+          "type": "object",
+          "properties": {
+            "failure_rate_threshold_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Failure rate threshold percentage to open circuit"
+            },
+            "request_volume_threshold": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Minimum request volume before considering failure rate"
+            },
+            "sleep_window_ms": {
+              "type": "integer",
+              "minimum": 1000,
+              "description": "Time to wait before attempting half-open state"
+            },
+            "half_open_max_calls": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum calls allowed in half-open state"
+            }
+          },
+          "additionalProperties": false
+        },
+        "rate_limit": {
+          "type": "object",
+          "properties": {
+            "rps": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Requests per second limit"
+            },
+            "burst": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Burst capacity"
+            }
+          },
+          "additionalProperties": false
+        },
+        "bulkhead": {
+          "type": "object",
+          "properties": {
+            "max_concurrent": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum concurrent requests"
+            },
+            "queue_len": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Queue length for waiting requests"
+            }
+          },
+          "additionalProperties": false
+        },
+        "degradation_modes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["mode_id"],
+            "properties": {
+              "mode_id": {
+                "type": "string",
+                "description": "Unique identifier for degradation mode"
+              },
+              "triggers": {
+                "type": "array",
+                "items": {
+                  "enum": ["high_latency", "high_error", "drift", "dependency_down", "low_budget"]
+                },
+                "description": "Conditions that trigger this degradation mode"
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Actions to take when entering this mode"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    
+    "DependencyGraph": {
+      "type": "object",
+      "required": ["service_id", "nodes", "edges"],
+      "properties": {
+        "service_id": {
+          "type": "string",
+          "description": "Service this dependency graph belongs to"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique node identifier"
+              },
+              "kind": {
+                "type": "string",
+                "description": "Type of dependency (service, database, cache, etc.)"
+              },
+              "critical": {
+                "type": "boolean",
+                "description": "Whether this dependency is critical for service operation"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to"],
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "Source node ID"
+              },
+              "to": {
+                "type": "string", 
+                "description": "Target node ID"
+              },
+              "sla_ms": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Expected response time SLA in milliseconds"
+              },
+              "fallback": {
+                "type": ["string", "null"],
+                "description": "Fallback strategy when dependency fails"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Incident": {
+      "type": "object",
+      "required": ["incident_id", "service_id", "severity", "signals", "started_at"],
+      "properties": {
+        "incident_id": {
+          "type": "string",
+          "description": "Unique incident identifier"
+        },
+        "service_id": {
+          "type": "string",
+          "description": "Affected service identifier"
+        },
+        "severity": {
+          "enum": ["sev1", "sev2", "sev3"],
+          "description": "Incident severity level"
+        },
+        "signals": {
+          "type": "object",
+          "description": "Detector outputs that triggered the incident"
+        },
+        "hypothesis": {
+          "type": "string",
+          "description": "Initial hypothesis about the incident cause"
+        },
+        "status": {
+          "enum": ["open", "mitigating", "recovering", "resolved", "archived"],
+          "description": "Current incident status"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the incident started"
+        },
+        "resolved_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the incident was resolved"
+        },
+        "playbook_id": {
+          "type": "string",
+          "description": "ID of the playbook being executed"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Playbook": {
+      "type": "object",
+      "required": ["playbook_id", "title", "steps"],
+      "properties": {
+        "playbook_id": {
+          "type": "string",
+          "description": "Unique playbook identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable playbook title"
+        },
+        "guardrails": {
+          "type": "object",
+          "properties": {
+            "max_impact_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Maximum allowed impact percentage"
+            },
+            "timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum execution time in seconds"
+            }
+          },
+          "additionalProperties": false
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "if": {
+                "type": "string",
+                "description": "Condition expression for step execution"
+              },
+              "do": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "restart", "reprovision", "reload_snapshot", "warm_cache",
+                    "flip_shadow", "rollback", "shed_load", "degrade_mode",
+                    "open_breaker", "close_breaker"
+                  ]
+                },
+                "description": "Actions to perform"
+              },
+              "verify": {
+                "type": "array",
+                "items": {
+                  "enum": ["latency_ok", "error_ok", "avail_ok", "drift_ok"]
+                },
+                "description": "Verification steps to confirm success"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "type": "object",
+  "oneOf": [
+    {"$ref": "#/definitions/ResiliencePolicy"},
+    {"$ref": "#/definitions/DependencyGraph"},
+    {"$ref": "#/definitions/Incident"},
+    {"$ref": "#/definitions/Playbook"}
+  ]
+}

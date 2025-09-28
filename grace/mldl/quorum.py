@@ -181,6 +181,275 @@ class SpecialistModel:
         return statistics.mean(recent_scores) if recent_scores else 0.5
 
 
+class EliteNLPSpecialistModel(SpecialistModel):
+    """Elite-level NLP Text specialist with advanced language understanding."""
+    
+    def __init__(self):
+        super().__init__("elite_nlp_processor", SpecialistType.NLP_TEXT, confidence_threshold=0.7)
+        
+        # Initialize elite NLP capabilities
+        try:
+            from .specialists.elite_nlp_specialist import EliteNLPSpecialist
+            self.elite_nlp = EliteNLPSpecialist()
+            self.elite_capabilities = True
+            logger.info("Elite NLP capabilities loaded for quorum specialist")
+        except ImportError:
+            self.elite_nlp = None
+            self.elite_capabilities = False
+            logger.warning("Elite NLP capabilities not available, using basic processing")
+    
+    async def _generate_prediction(self, inputs: Dict[str, Any]) -> Tuple[Any, float]:
+        """Generate elite NLP prediction."""
+        
+        if "text" not in inputs:
+            return {"error": "Text input is required for NLP analysis"}, 0.1
+        
+        text = inputs["text"]
+        task_type = inputs.get("task_type", "analyze")
+        context = inputs.get("context", {})
+        
+        # Use elite NLP if available
+        if self.elite_capabilities and self.elite_nlp:
+            return await self._elite_nlp_predict(text, task_type, context)
+        else:
+            return await self._basic_nlp_predict(text, task_type, context)
+    
+    async def _elite_nlp_predict(self, text: str, task_type: str, context: Dict[str, Any]) -> Tuple[Any, float]:
+        """Perform prediction using elite NLP capabilities."""
+        
+        try:
+            if task_type == "sentiment_analysis":
+                analysis = await self.elite_nlp.analyze_text(text, context)
+                prediction = {
+                    "sentiment": analysis.sentiment["label"],
+                    "polarity": analysis.sentiment.get("polarity", 0.0),
+                    "confidence": analysis.sentiment["confidence"],
+                    "subjectivity": analysis.sentiment.get("subjectivity", 0.5)
+                }
+                return prediction, analysis.sentiment["confidence"]
+                
+            elif task_type == "entity_extraction":
+                analysis = await self.elite_nlp.analyze_text(text, context)
+                prediction = {
+                    "entities": analysis.entities,
+                    "entity_types": list(set(entity["label"] for entity in analysis.entities)),
+                    "entity_count": len(analysis.entities)
+                }
+                return prediction, 0.9
+                
+            elif task_type == "intent_classification":
+                analysis = await self.elite_nlp.analyze_text(text, context)
+                prediction = {
+                    "intent": analysis.intent["intent"],
+                    "intent_type": analysis.intent["intent_type"],
+                    "confidence": analysis.intent["confidence"],
+                    "urgency": analysis.intent.get("urgency", "normal"),
+                    "action_required": analysis.intent.get("action_required", False)
+                }
+                return prediction, analysis.intent["confidence"]
+                
+            elif task_type == "toxicity_detection":
+                toxicity_result = await self.elite_nlp.detect_toxicity(text)
+                prediction = {
+                    "is_toxic": toxicity_result["is_toxic"],
+                    "toxicity_score": toxicity_result["toxicity_score"],
+                    "categories": toxicity_result["categories"],
+                    "safe_for_governance": not toxicity_result["is_toxic"]
+                }
+                return prediction, toxicity_result["confidence"]
+                
+            elif task_type == "text_summarization":
+                analysis = await self.elite_nlp.analyze_text(text, context)
+                prediction = {
+                    "summary": analysis.summary,
+                    "key_topics": [topic["topic"] for topic in analysis.topics[:5]],
+                    "readability_score": analysis.readability.get("score", 0.5)
+                }
+                return prediction, analysis.confidence
+                
+            else:
+                # Comprehensive analysis for governance decisions
+                analysis = await self.elite_nlp.analyze_text(text, context)
+                
+                # Calculate governance suitability score
+                governance_score = self._calculate_governance_score(analysis)
+                
+                prediction = {
+                    "comprehensive_analysis": analysis.to_dict(),
+                    "governance_recommendation": "approve" if governance_score > 0.7 else "review" if governance_score > 0.4 else "reject",
+                    "governance_score": governance_score,
+                    "risk_factors": self._identify_risk_factors(analysis),
+                    "constitutional_alignment": self._assess_constitutional_alignment(analysis)
+                }
+                
+                return prediction, analysis.confidence
+                
+        except Exception as e:
+            logger.error(f"Elite NLP prediction error: {e}")
+            return {"error": str(e), "status": "failed"}, 0.1
+    
+    async def _basic_nlp_predict(self, text: str, task_type: str, context: Dict[str, Any]) -> Tuple[Any, float]:
+        """Fallback basic NLP prediction."""
+        
+        # Simple keyword-based analysis
+        positive_words = ["good", "great", "excellent", "positive", "approve", "accept", "support", "helpful"]
+        negative_words = ["bad", "terrible", "awful", "negative", "reject", "deny", "harmful", "toxic"]
+        
+        text_lower = text.lower()
+        positive_count = sum(1 for word in positive_words if word in text_lower)
+        negative_count = sum(1 for word in negative_words if word in text_lower)
+        
+        if task_type == "sentiment_analysis":
+            if positive_count > negative_count:
+                sentiment = "positive"
+                confidence = min(0.8, 0.5 + (positive_count - negative_count) * 0.1)
+            elif negative_count > positive_count:
+                sentiment = "negative"
+                confidence = min(0.8, 0.5 + (negative_count - positive_count) * 0.1)
+            else:
+                sentiment = "neutral"
+                confidence = 0.5
+            
+            prediction = {
+                "sentiment": sentiment,
+                "polarity": (positive_count - negative_count) / max(1, positive_count + negative_count),
+                "confidence": confidence
+            }
+            
+            return prediction, confidence
+            
+        elif task_type == "toxicity_detection":
+            toxic_keywords = ["hate", "kill", "stupid", "idiot", "toxic", "harmful"]
+            toxic_count = sum(1 for word in toxic_keywords if word in text_lower)
+            
+            is_toxic = toxic_count > 0
+            toxicity_score = min(1.0, toxic_count / 5.0)
+            
+            prediction = {
+                "is_toxic": is_toxic,
+                "toxicity_score": toxicity_score,
+                "categories": [word for word in toxic_keywords if word in text_lower],
+                "safe_for_governance": not is_toxic
+            }
+            
+            return prediction, 0.7 if toxic_count > 0 else 0.5
+            
+        else:
+            # Basic governance assessment
+            governance_score = 0.5
+            if positive_count > negative_count:
+                governance_score += 0.2
+            if any(word in text_lower for word in ["transparency", "fairness", "accountability"]):
+                governance_score += 0.2
+            if any(word in text_lower for word in ["harm", "bias", "unfair"]):
+                governance_score -= 0.3
+            
+            governance_score = max(0.0, min(1.0, governance_score))
+            
+            prediction = {
+                "governance_recommendation": "approve" if governance_score > 0.7 else "review" if governance_score > 0.4 else "reject",
+                "governance_score": governance_score,
+                "word_count": len(text.split()),
+                "basic_sentiment": "positive" if positive_count > negative_count else "negative" if negative_count > positive_count else "neutral"
+            }
+            
+            return prediction, governance_score
+    
+    def _calculate_governance_score(self, analysis) -> float:
+        """Calculate governance suitability score based on comprehensive analysis."""
+        score = 0.5  # Base score
+        
+        # Sentiment factor
+        sentiment = analysis.sentiment.get("label", "neutral")
+        if sentiment == "positive":
+            score += 0.1
+        elif sentiment == "negative":
+            score -= 0.1
+        
+        # Intent factor
+        intent_type = analysis.intent.get("intent_type", "informational")
+        if intent_type == "transactional" and analysis.intent.get("action_required", False):
+            score += 0.15  # Action requests are valuable
+        
+        # Readability factor
+        readability_score = analysis.readability.get("score", 0.5)
+        score += (readability_score - 0.5) * 0.2  # Better readability improves score
+        
+        # Entity factor (more entities suggest richer content)
+        entity_count = len(analysis.entities)
+        if entity_count > 0:
+            score += min(0.15, entity_count * 0.03)
+        
+        # Linguistic quality factor
+        if analysis.linguistic_features.get("lexical_diversity", 0) > 0.7:
+            score += 0.1  # Rich vocabulary
+        
+        return max(0.0, min(1.0, score))
+    
+    def _identify_risk_factors(self, analysis) -> List[str]:
+        """Identify potential risk factors in the content."""
+        risks = []
+        
+        # Sentiment risks
+        if analysis.sentiment.get("label") == "negative" and analysis.sentiment.get("confidence", 0) > 0.8:
+            risks.append("strong_negative_sentiment")
+        
+        # Intent risks
+        if analysis.intent.get("urgency") == "high":
+            risks.append("urgent_request")
+        
+        # Readability risks
+        if analysis.readability.get("grade_level", 8) > 16:
+            risks.append("high_complexity")
+        
+        # Entity risks (too many people mentioned might indicate gossip/politics)
+        person_entities = [e for e in analysis.entities if e.get("label") == "PERSON"]
+        if len(person_entities) > 5:
+            risks.append("multiple_person_references")
+        
+        return risks
+    
+    def _assess_constitutional_alignment(self, analysis) -> Dict[str, float]:
+        """Assess alignment with constitutional principles."""
+        alignment = {
+            "transparency": 0.5,
+            "fairness": 0.5,
+            "accountability": 0.5,
+            "consistency": 0.5,
+            "harm_prevention": 0.5
+        }
+        
+        # Check for constitutional keywords in the content
+        transparency_keywords = ["transparent", "open", "clear", "disclosure", "visible"]
+        fairness_keywords = ["fair", "equal", "just", "impartial", "unbiased"]
+        accountability_keywords = ["responsible", "accountable", "answerable", "liable"]
+        
+        # Simple keyword matching for constitutional alignment
+        text_content = ' '.join([analysis.text, analysis.summary])
+        text_lower = text_content.lower()
+        
+        if any(keyword in text_lower for keyword in transparency_keywords):
+            alignment["transparency"] += 0.3
+        if any(keyword in text_lower for keyword in fairness_keywords):
+            alignment["fairness"] += 0.3
+        if any(keyword in text_lower for keyword in accountability_keywords):
+            alignment["accountability"] += 0.3
+        
+        # Consistency based on linguistic features
+        if analysis.linguistic_features.get("lexical_diversity", 0) > 0.6:
+            alignment["consistency"] += 0.2
+        
+        # Harm prevention based on sentiment and toxicity implications
+        if analysis.sentiment.get("label") == "positive":
+            alignment["harm_prevention"] += 0.2
+        
+        # Normalize scores
+        for key in alignment:
+            alignment[key] = max(0.0, min(1.0, alignment[key]))
+        
+        return alignment
+
+
 class MLDLQuorum:
     """
     21-specialist quorum system for expert consensus.
@@ -203,12 +472,12 @@ class MLDLQuorum:
         self._initialize_specialists()
     
     def _initialize_specialists(self):
-        """Initialize all 21 specialist models."""
+        """Initialize all 21 specialist models with elite NLP capabilities."""
         specialists_config = [
             # Core ML specialists
             ("tabular_classifier", SpecialistType.TABULAR_CLASSIFICATION, 0.9),
             ("tabular_regressor", SpecialistType.TABULAR_REGRESSION, 0.9),
-            ("nlp_processor", SpecialistType.NLP_TEXT, 0.85),
+            ("elite_nlp_processor", SpecialistType.NLP_TEXT, 0.95),  # Enhanced with elite capabilities
             ("vision_analyzer", SpecialistType.VISION_CNN, 0.8),
             ("time_series_forecaster", SpecialistType.TIME_SERIES, 0.85),
             ("recommender_system", SpecialistType.RECOMMENDERS, 0.7),
@@ -232,7 +501,12 @@ class MLDLQuorum:
         ]
         
         for specialist_id, specialist_type, weight in specialists_config:
-            specialist = SpecialistModel(specialist_id, specialist_type)
+            # Use elite NLP specialist for NLP tasks
+            if specialist_type == SpecialistType.NLP_TEXT:
+                specialist = EliteNLPSpecialistModel()
+            else:
+                specialist = SpecialistModel(specialist_id, specialist_type)
+            
             self.specialists[specialist_id] = specialist
             self.specialist_weights[specialist_id] = weight
     

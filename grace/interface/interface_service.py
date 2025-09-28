@@ -1,4 +1,4 @@
-"""Main Interface Service implementation matching problem statement specification."""
+"""Main Interface Service implementation with elite-level NLP capabilities."""
 import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -16,11 +16,19 @@ from .notifications import NotificationService
 from .snapshots import SnapshotManager
 from .bridges import GovernanceBridge, MemoryBridge, MLTBridge
 
+# Elite NLP imports
+try:
+    from ..mldl.specialists.elite_nlp_specialist import EliteNLPSpecialist
+    from ..mtl_kernel.enhanced_w5h_indexer import EnhancedW5HIndexer
+    ELITE_NLP_AVAILABLE = True
+except ImportError:
+    ELITE_NLP_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
 class InterfaceService:
-    """Main interface service bootstrap (HTTP + WS) as specified in problem statement."""
+    """Main interface service bootstrap (HTTP + WS) with elite-level NLP capabilities."""
     
     def __init__(self):
         # Core services
@@ -36,8 +44,21 @@ class InterfaceService:
         self.memory_bridge = MemoryBridge()
         self.mlt_bridge = MLTBridge()
         
+        # Elite NLP services
+        if ELITE_NLP_AVAILABLE:
+            self.nlp_specialist = EliteNLPSpecialist()
+            self.enhanced_indexer = EnhancedW5HIndexer()
+            logger.info("Elite NLP capabilities initialized")
+        else:
+            self.nlp_specialist = None
+            self.enhanced_indexer = None
+            logger.warning("Elite NLP capabilities not available - using basic processing")
+        
         # WebSocket connections
         self.ws_connections: Dict[str, WebSocket] = {}
+        
+        # Conversation tracking for advanced NLP
+        self.active_conversations = {}
         
         # FastAPI app
         self.app = self._create_fastapi_app()
@@ -45,7 +66,7 @@ class InterfaceService:
         # Setup default notification dispatchers
         self.notification_service.setup_default_dispatchers()
         
-        logger.info("Interface Service initialized")
+        logger.info("Interface Service initialized with elite NLP capabilities")
     
     def _create_fastapi_app(self) -> FastAPI:
         """Create and configure FastAPI application."""
@@ -238,6 +259,123 @@ class InterfaceService:
         @app.websocket("/ws/approvals")
         async def websocket_approvals(websocket: WebSocket):
             await self._handle_websocket_approvals(websocket)
+        
+        # Elite NLP endpoints
+        if ELITE_NLP_AVAILABLE:
+            @app.post("/api/ui/v1/nlp/analyze")
+            async def analyze_text(analysis_request: dict):
+                """Perform elite-level NLP analysis on text."""
+                try:
+                    text = analysis_request.get("text", "")
+                    context = analysis_request.get("context", {})
+                    
+                    if not text:
+                        raise HTTPException(status_code=400, detail="Text is required")
+                    
+                    # Perform comprehensive NLP analysis
+                    analysis = await self.nlp_specialist.analyze_text(text, context)
+                    
+                    return {
+                        "analysis_id": str(uuid.uuid4()),
+                        "analysis": analysis.to_dict(),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"NLP analysis failed: {str(e)}")
+            
+            @app.post("/api/ui/v1/nlp/conversation")
+            async def manage_conversation(conversation_request: dict):
+                """Manage conversation context with advanced NLP understanding."""
+                try:
+                    conversation_id = conversation_request.get("conversation_id", str(uuid.uuid4()))
+                    user_input = conversation_request.get("user_input", "")
+                    user_profile = conversation_request.get("user_profile", {})
+                    domain = conversation_request.get("domain")
+                    
+                    if not user_input:
+                        raise HTTPException(status_code=400, detail="User input is required")
+                    
+                    # Manage conversation context
+                    context = await self.nlp_specialist.manage_conversation_context(
+                        conversation_id, user_input, user_profile, domain
+                    )
+                    
+                    # Perform intent-aware response
+                    response = await self._generate_intelligent_response(user_input, context)
+                    
+                    return {
+                        "conversation_id": conversation_id,
+                        "context": context.to_dict(),
+                        "response": response,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Conversation management failed: {str(e)}")
+            
+            @app.post("/api/ui/v1/nlp/extract")
+            async def extract_w5h(extraction_request: dict):
+                """Extract Who/What/When/Where/Why/How using enhanced NLP."""
+                try:
+                    text = extraction_request.get("text", "")
+                    context = extraction_request.get("context", {})
+                    
+                    if not text:
+                        raise HTTPException(status_code=400, detail="Text is required")
+                    
+                    # Extract W5H using enhanced indexer
+                    w5h_index = self.enhanced_indexer.extract(text, context)
+                    
+                    # Perform intent analysis
+                    intent_analysis = self.enhanced_indexer.analyze_intent(text)
+                    
+                    return {
+                        "extraction_id": str(uuid.uuid4()),
+                        "w5h_index": w5h_index.__dict__,
+                        "intent_analysis": intent_analysis,
+                        "text_length": len(text),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"W5H extraction failed: {str(e)}")
+            
+            @app.post("/api/ui/v1/nlp/toxicity")
+            async def detect_toxicity(toxicity_request: dict):
+                """Detect toxicity and harmful content."""
+                try:
+                    text = toxicity_request.get("text", "")
+                    
+                    if not text:
+                        raise HTTPException(status_code=400, detail="Text is required")
+                    
+                    # Detect toxicity
+                    toxicity_result = await self.nlp_specialist.detect_toxicity(text)
+                    
+                    return {
+                        "analysis_id": str(uuid.uuid4()),
+                        "toxicity": toxicity_result,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Toxicity detection failed: {str(e)}")
+            
+            @app.get("/api/ui/v1/nlp/stats")
+            async def get_nlp_stats():
+                """Get NLP performance statistics."""
+                try:
+                    stats = {
+                        "specialist_stats": self.nlp_specialist.get_performance_stats(),
+                        "indexer_stats": self.enhanced_indexer.get_stats(),
+                        "active_conversations": len(self.active_conversations)
+                    }
+                    
+                    return stats
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to get NLP stats: {str(e)}")
     
     def _check_action_permission(self, session: UISession, action: UIAction) -> bool:
         """Check if session user can perform action."""
@@ -354,8 +492,20 @@ class InterfaceService:
         return self.session_manager.create(user, client)
     
     async def dispatch_action(self, action: dict) -> str:
-        """Dispatch a UI action."""
+        """Dispatch a UI action with enhanced NLP understanding."""
         action_type = action.get("type", "")
+        
+        # Use NLP to understand action intent if available
+        if ELITE_NLP_AVAILABLE and self.nlp_specialist:
+            action_text = f"{action_type} {action.get('payload', {})}"
+            intent_analysis = await self.nlp_specialist.analyze_text(action_text)
+            
+            # Add intent information to action metadata
+            action["intent_analysis"] = intent_analysis.to_dict()
+            
+            # Use intent to improve routing
+            if intent_analysis.intent.get('urgency') == 'high':
+                logger.info(f"High urgency action detected: {action_type}")
         
         if action_type.startswith("task."):
             return await self._handle_task_action(action)
@@ -394,15 +544,38 @@ class InterfaceService:
         return "Task action handled"
     
     async def _handle_memory_action(self, action: dict) -> str:
-        """Handle memory-related actions."""
+        """Handle memory-related actions with enhanced NLP processing."""
         if action["type"] == "memory.search":
+            query = action["payload"]["query"]
+            user_id = action["payload"]["user_id"]
+            filters = action["payload"].get("filters")
+            
+            # Enhance query with NLP understanding
+            if ELITE_NLP_AVAILABLE and self.enhanced_indexer:
+                # Extract W5H elements to improve search
+                w5h_index = self.enhanced_indexer.extract(query)
+                
+                # Add semantic filters based on extracted elements
+                if not filters:
+                    filters = {}
+                
+                # Add entity-based filters
+                if w5h_index.who:
+                    filters["entities"] = w5h_index.who[:3]  # Top 3 entities
+                
+                if w5h_index.what:
+                    filters["topics"] = w5h_index.what[:3]  # Top 3 topics
+                
+                if w5h_index.when:
+                    filters["temporal"] = w5h_index.when[:2]  # Top 2 temporal refs
+            
             result = await self.memory_bridge.search_memory(
-                query=action["payload"]["query"],
-                user_id=action["payload"]["user_id"],
-                filters=action["payload"].get("filters")
+                query=query,
+                user_id=user_id,
+                filters=filters
             )
             result_count = result.get('result_count', 0)
-            return f"Memory search completed: {result_count} results"
+            return f"Enhanced memory search completed: {result_count} results"
         
         return "Memory action handled"
     
@@ -464,8 +637,8 @@ class InterfaceService:
             self.memory_bridge.set_intelligence_kernel(intelligence_kernel)
     
     def get_stats(self) -> dict:
-        """Get comprehensive interface service statistics."""
-        return {
+        """Get comprehensive interface service statistics with NLP metrics."""
+        base_stats = {
             "sessions": self.session_manager.get_stats(),
             "taskcards": self.taskcard_manager.get_stats(),
             "consent": self.consent_service.get_stats(),
@@ -478,3 +651,86 @@ class InterfaceService:
             },
             "websockets": len(self.ws_connections)
         }
+        
+        # Add NLP statistics if available
+        if ELITE_NLP_AVAILABLE and self.nlp_specialist and self.enhanced_indexer:
+            base_stats["nlp"] = {
+                "specialist_stats": self.nlp_specialist.get_performance_stats(),
+                "indexer_stats": self.enhanced_indexer.get_stats(),
+                "active_conversations": len(self.active_conversations)
+            }
+        
+        return base_stats
+    
+    async def _generate_intelligent_response(self, user_input: str, context) -> Dict[str, Any]:
+        """Generate intelligent response based on NLP analysis and context."""
+        response = {
+            "text": "I understand your request.",
+            "confidence": 0.7,
+            "suggested_actions": [],
+            "follow_up_questions": []
+        }
+        
+        if not ELITE_NLP_AVAILABLE or not self.nlp_specialist:
+            return response
+        
+        try:
+            # Analyze the current input
+            analysis = await self.nlp_specialist.analyze_text(user_input, {"domain": context.domain})
+            
+            # Generate response based on intent
+            intent_type = analysis.intent.get("intent_type", "informational")
+            intent = analysis.intent.get("intent", "unknown")
+            
+            if intent_type == "informational":
+                if intent == "question":
+                    response["text"] = "I'll help you find that information. Let me search our knowledge base."
+                    response["suggested_actions"] = [
+                        {"action": "memory.search", "label": "Search Knowledge Base"},
+                        {"action": "governance.request_info", "label": "Request Official Information"}
+                    ]
+                else:
+                    response["text"] = "Thank you for the information. I've processed and understood your input."
+                    
+            elif intent_type == "transactional":
+                if intent == "action_request":
+                    response["text"] = "I understand you'd like me to perform an action. Let me help you with that."
+                    response["suggested_actions"] = [
+                        {"action": "task.create", "label": "Create Task"},
+                        {"action": "governance.request_approval", "label": "Request Approval"}
+                    ]
+                    
+                    # Check urgency
+                    if analysis.intent.get("urgency") == "high":
+                        response["text"] += " I notice this seems urgent, so I'll prioritize this request."
+                        response["confidence"] = 0.9
+            
+            # Add sentiment-aware responses
+            sentiment = analysis.sentiment.get("label", "neutral")
+            if sentiment == "negative":
+                response["text"] = "I sense some frustration. " + response["text"] + " How can I make this easier for you?"
+                response["follow_up_questions"] = ["What specific challenges are you facing?"]
+            elif sentiment == "positive":
+                response["text"] = "Great! " + response["text"]
+            
+            # Add follow-up questions based on extracted entities
+            if analysis.entities:
+                entity_types = [entity["label"] for entity in analysis.entities]
+                if "PERSON" in entity_types:
+                    response["follow_up_questions"].append("Would you like me to notify the mentioned people?")
+                if "DATE" in entity_types:
+                    response["follow_up_questions"].append("Should I set a reminder for the mentioned date?")
+            
+            # Set confidence based on analysis quality
+            response["confidence"] = analysis.confidence
+            
+        except Exception as e:
+            logger.error(f"Error generating intelligent response: {e}")
+            response["text"] = "I'm processing your request. How can I assist you further?"
+        
+        return response
+    
+    async def cleanup_conversations(self):
+        """Clean up old conversation contexts."""
+        if ELITE_NLP_AVAILABLE and self.nlp_specialist:
+            self.nlp_specialist.cleanup_old_conversations()

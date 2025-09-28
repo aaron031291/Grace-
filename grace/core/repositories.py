@@ -76,6 +76,10 @@ class SQLAlchemyRepository(BaseRepository[T]):
         if 'created_at' in update_data:
             del update_data['created_at']
             
+        # If no data to update after filtering, return current object
+        if not update_data:
+            return await self.get_by_id(id)
+            
         stmt = update(self.model_class).where(
             self.model_class.id == id
         ).values(update_data)

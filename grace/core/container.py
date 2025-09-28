@@ -4,6 +4,7 @@ Provides repository instances for use in FastAPI dependencies.
 """
 from typing import Dict, Any, Type
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
 
 from grace.core.repositories import (
     UserRepository, 
@@ -63,7 +64,11 @@ class RepositoryContainer:
             self._repositories['background_tasks'] = BackgroundTaskRepository(self.session)
         return self._repositories['background_tasks']
 
+from grace.core.database import get_async_session
+
 # FastAPI dependency to provide repository container
-async def get_repository_container(session: AsyncSession) -> RepositoryContainer:
+async def get_repository_container(
+    session: AsyncSession = Depends(get_async_session)
+) -> RepositoryContainer:
     """Dependency that provides repository container."""
     return RepositoryContainer(session)

@@ -2,7 +2,7 @@
 from typing import Dict, List, Optional
 import statistics
 
-from ...contracts.quorum_feed import QuorumFeedItem, QuorumResult
+from ....contracts.quorum_feed import QuorumFeedItem, QuorumResult
 from .specialist import BaseSpecialist
 
 

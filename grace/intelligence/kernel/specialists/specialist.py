@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import statistics
 from datetime import datetime
 
-from ...contracts.quorum_feed import QuorumFeedItem
+from ....contracts.quorum_feed import QuorumFeedItem
 
 
 class BaseSpecialist:

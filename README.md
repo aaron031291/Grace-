@@ -61,11 +61,28 @@ Grace implements a comprehensive governance architecture with the following comp
 
 ## Quick Start
 
-### Installation
+### Automated Setup (Recommended)
 ```bash
 git clone https://github.com/aaron031291/Grace-.git
 cd Grace-
-pip install -r requirements.txt  # Optional system monitoring dependencies
+./scripts/setup.sh
+```
+
+The setup script will automatically:
+- Install Python and Git if needed (Linux/macOS)
+- Create a virtual environment
+- Install all dependencies
+- Configure Git settings
+- Set up development tools
+
+### Manual Installation
+```bash
+git clone https://github.com/aaron031291/Grace-.git
+cd Grace-
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.template .env  # Edit with your configuration
 ```
 
 ### Basic Usage
@@ -93,10 +110,30 @@ async def main():
 asyncio.run(main())
 ```
 
-### Run Test Suite
+## Development Workflow
+
+Grace provides automated Git workflow tools to streamline development across environments:
+
+### Git Workflow Helper
 ```bash
-python test_governance_kernel.py
+# Linux/macOS
+./scripts/git-workflow.sh <command>
+
+# Windows PowerShell
+.\scripts\git-workflow.ps1 <command>
 ```
+
+Common commands:
+- `setup` - Configure Git settings
+- `new-branch feature/my-feature` - Create new feature branch
+- `workflow fix governance "fix validation bug"` - Complete workflow (test, commit, push)
+- `sync` - Sync with main branch
+- `status` - Show repository status
+- `test` - Run tests
+
+### For Detailed Setup Instructions
+See [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md) for comprehensive development environment setup across all platforms.
+
 
 ## Architecture Diagrams
 

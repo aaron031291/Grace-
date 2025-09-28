@@ -9,7 +9,7 @@ import logging
 from enum import Enum
 from dataclasses import dataclass, asdict
 
-from ..core.contracts import EventType
+from ..contracts.message_envelope import GraceMessageEnvelope, EventTypes
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class TriggerMesh:
     """
     
     def __init__(self, event_bus, memory_core=None):
-        self.event_bus = event_bus
+        self.event_bus = event_bus  # Should be GraceEventBus instance
         self.memory_core = memory_core
         self.routing_rules: List[RoutingRule] = []
         self.component_registry: Dict[str, Dict[str, Any]] = {}
@@ -81,7 +81,7 @@ class TriggerMesh:
         default_rules = [
             # Governance validation flow
             RoutingRule(
-                event_pattern="GOVERNANCE_VALIDATION",
+                event_pattern=EventTypes.GOVERNANCE_VALIDATION,
                 target_components=["governance_engine"],
                 priority=RoutingPriority.HIGH,
                 mode=RoutingMode.UNICAST,
@@ -92,7 +92,7 @@ class TriggerMesh:
             
             # Governance decisions - broadcast to interested parties
             RoutingRule(
-                event_pattern="GOVERNANCE_APPROVED|GOVERNANCE_REJECTED",
+                event_pattern=f"{EventTypes.GOVERNANCE_APPROVED}|{EventTypes.GOVERNANCE_REJECTED}",
                 target_components=["audit_logger", "notification_service", "memory_core"],
                 priority=RoutingPriority.HIGH,
                 mode=RoutingMode.MULTICAST,
@@ -103,7 +103,7 @@ class TriggerMesh:
             
             # Parliament reviews
             RoutingRule(
-                event_pattern="GOVERNANCE_NEEDS_REVIEW",
+                event_pattern=EventTypes.GOVERNANCE_NEEDS_REVIEW,
                 target_components=["parliament", "notification_service"],
                 priority=RoutingPriority.NORMAL,
                 mode=RoutingMode.MULTICAST,
@@ -114,7 +114,7 @@ class TriggerMesh:
             
             # Critical system events
             RoutingRule(
-                event_pattern="GOVERNANCE_ROLLBACK|ANOMALY_DETECTED",
+                event_pattern=f"{EventTypes.GOVERNANCE_ROLLBACK}|{EventTypes.ANOMALY_DETECTED}",
                 target_components=["governance_engine", "avn_core", "alert_system"],
                 priority=RoutingPriority.CRITICAL,
                 mode=RoutingMode.BROADCAST,
@@ -489,11 +489,25 @@ class TriggerMesh:
                 "delivery_id": f"del_{datetime.now().strftime('%H%M%S')}_{component_id}"
             }
             
-            # Use event bus for delivery
-            await asyncio.wait_for(
-                self.event_bus.publish(event_type, payload, correlation_id),
-                timeout=timeout_ms / 1000.0
-            )
+            # Use event bus for delivery (assuming GraceEventBus)
+            if hasattr(self.event_bus, 'publish_gme'):
+                # Create GME and publish
+                gme = GraceMessageEnvelope.create_event(
+                    event_type=event_type,
+                    payload=payload,
+                    source="trigger_mesh",
+                    correlation_id=correlation_id
+                )
+                await asyncio.wait_for(
+                    self.event_bus.publish_gme(gme),
+                    timeout=timeout_ms / 1000.0
+                )
+            else:
+                # Fallback to legacy publish method
+                await asyncio.wait_for(
+                    self.event_bus.publish(event_type, payload, correlation_id),
+                    timeout=timeout_ms / 1000.0
+                )
             
             return True
             

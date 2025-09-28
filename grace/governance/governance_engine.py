@@ -9,7 +9,7 @@ from datetime import datetime
 import json
 import logging
 
-from core.contracts import (
+from ..core.contracts import (
     UnifiedDecision, GovernanceSnapshot, Experience, EventType,
     generate_snapshot_id, generate_correlation_id
 )

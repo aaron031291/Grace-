@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Resilience Policy Schema",
+  "description": "Runtime resilience policy definition with guards and degradation modes",
+  "type": "object",
+  "required": ["service_id"],
+  "properties": {
+    "service_id": {
+      "type": "string",
+      "description": "Unique service identifier"
+    },
+    "retries": {
+      "type": "object",
+      "properties": {
+        "max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum retry attempts"
+        },
+        "backoff": {
+          "enum": ["exp", "lin"],
+          "description": "Backoff strategy (exponential or linear)"
+        },
+        "base_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Base retry delay in milliseconds"
+        },
+        "jitter_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Jitter variance in milliseconds"
+        }
+      }
+    },
+    "circuit_breaker": {
+      "type": "object",
+      "properties": {
+        "failure_rate_threshold_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Failure rate threshold percentage to open circuit"
+        },
+        "request_volume_threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum requests before circuit can open"
+        },
+        "sleep_window_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Time circuit stays open before half-open"
+        },
+        "half_open_max_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max calls allowed in half-open state"
+        }
+      }
+    },
+    "rate_limit": {
+      "type": "object",
+      "properties": {
+        "rps": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Requests per second limit"
+        },
+        "burst": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Burst capacity"
+        }
+      }
+    },
+    "bulkhead": {
+      "type": "object",
+      "properties": {
+        "max_concurrent": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum concurrent operations"
+        },
+        "queue_len": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Queue length for waiting operations"
+        }
+      }
+    },
+    "degradation_modes": {
+      "type": "array",
+      "description": "Ordered fallback degradation modes",
+      "items": {
+        "type": "object",
+        "properties": {
+          "mode_id": {
+            "type": "string",
+            "description": "Unique mode identifier (e.g., 'lite_explanations', 'cached_only')"
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "enum": ["high_latency", "high_error", "drift", "dependency_down", "low_budget"]
+            },
+            "description": "Conditions that trigger this degradation mode"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Actions to take when entering this mode"
+          }
+        }
+      }
+    }
+  }
+}

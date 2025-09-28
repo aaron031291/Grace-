@@ -1,0 +1,92 @@
+events:
+  - name: UI_SESSION_STARTED
+    description: "User session started in interface"
+    payload:
+      session:
+        $ref: "interface.session.schema.json#/definitions/UISession"
+
+  - name: UI_ACTION
+    description: "User action performed in interface"
+    payload:
+      action:
+        $ref: "interface.taskcard.schema.json#/definitions/UIAction"
+
+  - name: UI_TASKCARD_UPDATED
+    description: "Task card state or content updated"
+    payload:
+      card:
+        $ref: "interface.taskcard.schema.json#/definitions/TaskCard"
+
+  - name: UI_NOTIFICATION
+    description: "Notification sent to user"
+    payload:
+      notification:
+        $ref: "interface.taskcard.schema.json#/definitions/Notification"
+      user_id:
+        type: string
+
+  - name: UI_POLICY_VIOLATION
+    description: "Policy violation detected in interface"
+    payload:
+      action_id:
+        type: string
+      reasons:
+        type: array
+        items:
+          type: string
+      severity:
+        type: string
+        enum: ["warn", "error"]
+
+  - name: UI_EXPERIENCE
+    description: "UX telemetry data for meta-learning"
+    payload:
+      schema_version:
+        type: string
+        const: "1.0.0"
+      experience:
+        type: object
+        required: ["exp_id", "stage", "metrics", "timestamp"]
+        properties:
+          exp_id:
+            type: string
+          stage:
+            type: string
+            enum: ["latency", "interaction", "approval_flow", "error", "a11y", "i18n"]
+          metrics:
+            type: object
+            properties:
+              p95_interaction_ms: {type: number}
+              task_completion_rate: {type: number}
+              approval_cycle_time_s: {type: number}
+              drop_off_rate: {type: number}
+              a11y_violations: {type: integer}
+              ws_disconnects_per_hr: {type: number}
+              error_rate: {type: number}
+              satisfaction_csat: {type: number}
+          segment:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+
+  - name: ROLLBACK_REQUESTED
+    description: "Interface rollback requested"
+    payload:
+      target:
+        type: string
+        const: "interface"
+      to_snapshot:
+        type: string
+
+  - name: ROLLBACK_COMPLETED
+    description: "Interface rollback completed"
+    payload:
+      target:
+        type: string
+        const: "interface"
+      snapshot_id:
+        type: string
+      at:
+        type: string
+        format: date-time

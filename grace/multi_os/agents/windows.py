@@ -8,8 +8,7 @@ import os
 import shutil
 from typing import Dict, Any, List, Optional
 import sys
-sys.path.append('/home/runner/work/Grace-/Grace-/multi_os')
-from adapters.base import ProcessAdapter, FSAdapter, NetAdapter, PkgAdapter, SnapshotAdapter
+from ..adapters.base import ProcessAdapter, FSAdapter, NetAdapter, PkgAdapter, SnapshotAdapter
 
 
 logger = logging.getLogger(__name__)

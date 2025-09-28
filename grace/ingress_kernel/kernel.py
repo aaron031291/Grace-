@@ -41,7 +41,8 @@ class IngressKernel:
                  event_bus=None,
                  governance_bridge=None,
                  mlt_bridge=None,
-                 storage_path: str = "/tmp/ingress_storage"):
+                 storage_path: str = "/tmp/ingress_storage",
+                 snapshot_manager=None):
         """
         Initialize Ingress Kernel.
         
@@ -50,10 +51,12 @@ class IngressKernel:
             governance_bridge: Bridge to governance system
             mlt_bridge: Bridge to MLT system
             storage_path: Base path for data storage
+            snapshot_manager: Optional unified snapshot manager
         """
         self.event_bus = event_bus
         self.governance_bridge = governance_bridge
         self.mlt_bridge = mlt_bridge
+        self.snapshot_manager = snapshot_manager
         
         # Storage setup
         self.storage_path = Path(storage_path)
@@ -228,30 +231,61 @@ class IngressKernel:
             "health_checks": self.health_status
         }
     
-    async def export_snapshot(self) -> IngressSnapshot:
-        """Export system snapshot for rollback."""
-        snapshot = IngressSnapshot(
-            snapshot_id=f"ing_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}",
-            active_sources=list(self.sources.keys()),
-            registry_hash=self._compute_registry_hash(),
-            parser_versions={"html": "1.3.0", "pdf": "2.1.4", "asr.en": "2.4.1"},
-            dedupe_threshold=self.config["dedupe"]["threshold"],
-            pii_policy_defaults="mask",
-            offsets={src_id: f"current_{datetime.utcnow().isoformat()}" 
-                    for src_id in self.sources.keys()},
-            watermarks={src_id: datetime.utcnow() 
+    async def export_snapshot(self) -> Dict[str, Any]:
+        """Export system snapshot for rollback using unified snapshot manager."""
+        # Create snapshot payload with current system state
+        snapshot_payload = {
+            "snapshot_id": f"ing_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "active_sources": list(self.sources.keys()),
+            "registry_hash": self._compute_registry_hash(),
+            "parser_versions": {"html": "1.3.0", "pdf": "2.1.4", "asr.en": "2.4.1"},
+            "dedupe_threshold": self.config["dedupe"]["threshold"],
+            "pii_policy_defaults": "mask",
+            "offsets": {src_id: f"current_{datetime.utcnow().isoformat()}" 
                        for src_id in self.sources.keys()},
-            gold_views_version="1.2.0",
-            hash=""
-        )
+            "watermarks": {src_id: datetime.utcnow().isoformat()
+                          for src_id in self.sources.keys()},
+            "gold_views_version": "1.2.0",
+            "version": "1.0.0",
+            "config": self.config,
+            "runtime_info": {
+                "uptime_seconds": (datetime.utcnow() - self.start_time).total_seconds() if hasattr(self, 'start_time') else 0,
+                "active_sources_count": len(self.sources),
+                "events_processed": getattr(self, 'events_processed', 0)
+            }
+        }
         
         # Calculate hash
-        snapshot_dict = snapshot.dict()
-        snapshot_dict.pop('hash')  # Remove hash field for calculation
-        snapshot_json = json.dumps(snapshot_dict, sort_keys=True, default=str)
-        snapshot.hash = hashlib.sha256(snapshot_json.encode()).hexdigest()
+        snapshot_dict = snapshot_payload.copy()
+        snapshot_dict.pop('snapshot_id', None)
+        hash_content = json.dumps(snapshot_dict, sort_keys=True, default=str)
+        snapshot_payload["hash"] = hashlib.sha256(hash_content.encode()).hexdigest()
         
-        return snapshot
+        # If we have a snapshot manager, use it
+        if hasattr(self, 'snapshot_manager') and self.snapshot_manager:
+            return await self.snapshot_manager.export_snapshot(
+                component_type="ingress",
+                payload=snapshot_payload,
+                description=f"Ingress kernel snapshot at {datetime.utcnow().isoformat()}",
+                created_by="ingress_kernel"
+            )
+        else:
+            # Fallback to original behavior
+            from ..ingress_kernel.snapshots import IngressSnapshot
+            snapshot = IngressSnapshot(
+                snapshot_id=snapshot_payload["snapshot_id"],
+                active_sources=snapshot_payload["active_sources"],
+                registry_hash=snapshot_payload["registry_hash"],
+                parser_versions=snapshot_payload["parser_versions"],
+                dedupe_threshold=snapshot_payload["dedupe_threshold"],
+                pii_policy_defaults=snapshot_payload["pii_policy_defaults"],
+                offsets=snapshot_payload["offsets"],
+                watermarks={k: datetime.fromisoformat(v) if isinstance(v, str) else v 
+                           for k, v in snapshot_payload["watermarks"].items()},
+                gold_views_version=snapshot_payload["gold_views_version"],
+                hash=snapshot_payload["hash"]
+            )
+            return snapshot.dict()
     
     def _compute_content_hash(self, payload: Any) -> str:
         """Compute hash of content for deduplication."""

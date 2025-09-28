@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15
+    container_name: grace_postgres
+    environment:
+      POSTGRES_DB: grace_governance
+      POSTGRES_USER: grace_user
+      POSTGRES_PASSWORD: grace_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db:/docker-entrypoint-initdb.d
+    networks:
+      - grace_network
+
+  # Redis for caching and event coordination  
+  redis:
+    image: redis:7-alpine
+    container_name: grace_redis
+    command: redis-server --appendonly yes --requirepass grace_redis_pass
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - grace_network
+
+  # ChromaDB for vector storage and similarity search
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: grace_chroma
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - grace_network
+
+  # Grace Core Services (optional - can run locally too)
+  grace_orchestrator:
+    build: .
+    container_name: grace_orchestrator
+    depends_on:
+      - postgres
+      - redis
+      - chromadb
+    environment:
+      - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace_governance
+      - REDIS_URL=redis://:grace_redis_pass@redis:6379
+      - CHROMA_URL=http://chromadb:8000
+    ports:
+      - "8080:8080"  # API endpoint
+    volumes:
+      - ./grace:/app/grace
+      - ./logs:/app/logs
+    networks:
+      - grace_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:  
+  chroma_data:
+
+networks:
+  grace_network:
+    driver: bridge

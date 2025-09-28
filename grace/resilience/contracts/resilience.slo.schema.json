@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SLO Policy Schema",
+  "description": "Service Level Objective policy definition",
+  "type": "object",
+  "required": ["service_id", "slos", "error_budget_days"],
+  "properties": {
+    "service_id": {
+      "type": "string",
+      "description": "Unique service identifier"
+    },
+    "slos": {
+      "type": "array",
+      "description": "Service Level Objectives",
+      "items": {
+        "type": "object",
+        "required": ["sli", "objective", "window"],
+        "properties": {
+          "sli": {
+            "enum": ["latency_p95_ms", "availability_pct", "error_rate_pct", "drift_psi"],
+            "description": "Service Level Indicator type"
+          },
+          "objective": {
+            "type": "number",
+            "description": "Target objective value (e.g., latency ≤ 800ms, availability ≥ 99.9)"
+          },
+          "window": {
+            "type": "string",
+            "pattern": "^\\d+[dh]$",
+            "description": "Time window for SLO evaluation (e.g., '7d', '30d')"
+          }
+        }
+      }
+    },
+    "error_budget_days": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Error budget allowance per period (e.g., 0.5 per 30d)"
+    }
+  }
+}

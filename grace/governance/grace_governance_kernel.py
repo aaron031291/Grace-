@@ -8,11 +8,12 @@ from typing import Dict, Any, Optional
 # Core infrastructure
 from core import EventBus, MemoryCore
 
-# Governance components
-from layer_01_governance import (
-    VerificationEngine, UnifiedLogic, GovernanceEngine, 
-    Parliament, TrustCoreKernel
-)
+# Governance components (now in same directory)
+from .verification_engine import VerificationEngine
+from .unified_logic import UnifiedLogic
+from .governance_engine import GovernanceEngine
+from .parliament import Parliament
+from .trust_core_kernel import TrustCoreKernel
 
 # Supporting infrastructure
 from layer_04_audit_logs import ImmutableLogs

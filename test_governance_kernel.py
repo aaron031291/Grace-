@@ -8,7 +8,7 @@ import os
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from grace_governance_kernel import GraceGovernanceKernel
+from grace.governance.grace_governance_kernel import GraceGovernanceKernel
 
 
 async def test_governance_kernel():

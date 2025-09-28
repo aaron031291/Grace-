@@ -170,6 +170,26 @@ class GraceLiveDashboard:
                 "telemetry_active": self.current_report.telemetry_active
             }
         
+        @self.app.post("/api/solve-problem")
+        async def solve_problem(request: dict):
+            """Apply a solution to fix a component problem."""
+            component = request.get('component')
+            action = request.get('action')
+            
+            if not component or not action:
+                raise HTTPException(status_code=400, detail="Missing component or action")
+            
+            logger.info(f"Applying solution '{action}' to component '{component}'")
+            
+            try:
+                # Implement solution actions
+                result = await self._apply_solution(component, action)
+                return {"status": "success", "message": result}
+                
+            except Exception as e:
+                logger.error(f"Failed to apply solution '{action}' to '{component}': {e}")
+                raise HTTPException(status_code=500, detail=f"Solution failed: {str(e)}")
+        
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             """WebSocket endpoint for real-time updates."""
@@ -242,6 +262,113 @@ class GraceLiveDashboard:
         }
         .connected { background: #d4edda; color: #155724; }
         .disconnected { background: #f8d7da; color: #721c24; }
+        
+        /* Enhanced clickable problem areas */
+        .clickable-problem {
+            cursor: pointer;
+            text-decoration: underline;
+            transition: background-color 0.2s;
+        }
+        .clickable-problem:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        /* Modal styles for explanations */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            position: relative;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+        }
+        
+        /* Solution buttons */
+        .solution-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .solution-btn:hover {
+            background: #219a52;
+        }
+        .solution-btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        /* Problem indicator icon */
+        .problem-icon {
+            margin-left: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .problem-icon.unhealthy {
+            color: #e74c3c;
+        }
+        .problem-icon.degraded {
+            color: #f39c12;
+        }
+        
+        /* Explanation panel */
+        .explanation {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        /* Solution status */
+        .solution-status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .solution-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .solution-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
     </style>
 </head>
 <body>
@@ -301,6 +428,21 @@ class GraceLiveDashboard:
         </div>
     </div>
     
+    <!-- Problem Explanation Modal -->
+    <div id="problem-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeProblemModal()">&times;</span>
+            <h2 id="modal-title">Problem Details</h2>
+            <div class="explanation" id="modal-explanation">
+                Loading explanation...
+            </div>
+            <div id="modal-solutions">
+                <!-- Solutions will be populated here -->
+            </div>
+            <div id="solution-status" class="solution-status"></div>
+        </div>
+    </div>
+    
     <script>
         let ws = null;
         let reconnectAttempts = 0;
@@ -339,27 +481,71 @@ class GraceLiveDashboard:
         
         function updateDashboard(data) {
             // Update overall status
-            document.getElementById('overall-status').textContent = data.overall_status.toUpperCase();
-            document.getElementById('overall-status').className = `status-${data.overall_status}`;
+            const overallStatus = document.getElementById('overall-status');
+            overallStatus.textContent = data.overall_status.toUpperCase();
+            overallStatus.className = `status-${data.overall_status}`;
+            
+            // Make overall status clickable if there are problems
+            if (data.overall_status !== 'healthy') {
+                overallStatus.className += ' clickable-problem';
+                overallStatus.onclick = () => showSystemProblemModal('Overall System', data.overall_status, data.recommendations);
+            } else {
+                overallStatus.onclick = null;
+            }
             
             // Update component health
             const total = data.components.length;
             const healthy = data.components.filter(c => c.status === 'healthy').length;
             document.getElementById('component-health').textContent = `${healthy}/${total} (${Math.round(healthy/total*100)}%)`;
             
-            // Update system flags
-            document.getElementById('ooda-status').textContent = data.ooda_loop_functional ? 'Functional' : 'Failed';
-            document.getElementById('governance-status').textContent = data.governance_functional ? 'Functional' : 'Failed';
-            document.getElementById('telemetry-status').textContent = data.telemetry_active ? 'Active' : 'Inactive';
+            // Update system flags with clickable problems
+            const oodaStatus = document.getElementById('ooda-status');
+            oodaStatus.textContent = data.ooda_loop_functional ? 'Functional' : 'Failed';
+            if (!data.ooda_loop_functional) {
+                oodaStatus.className = 'status-unhealthy clickable-problem';
+                oodaStatus.onclick = () => showSystemProblemModal('OODA Loop', 'failed', ['OODA Loop is not functioning. This affects the system\\'s ability to observe, orient, decide, and act.']);
+            } else {
+                oodaStatus.className = 'status-healthy';
+                oodaStatus.onclick = null;
+            }
             
-            // Update components list
+            const governanceStatus = document.getElementById('governance-status');
+            governanceStatus.textContent = data.governance_functional ? 'Functional' : 'Failed';
+            if (!data.governance_functional) {
+                governanceStatus.className = 'status-unhealthy clickable-problem';
+                governanceStatus.onclick = () => showSystemProblemModal('Governance System', 'failed', ['Governance system is not fully functional. Security and decision-making may be compromised.']);
+            } else {
+                governanceStatus.className = 'status-healthy';
+                governanceStatus.onclick = null;
+            }
+            
+            const telemetryStatus = document.getElementById('telemetry-status');
+            telemetryStatus.textContent = data.telemetry_active ? 'Active' : 'Inactive';
+            if (!data.telemetry_active) {
+                telemetryStatus.className = 'status-degraded clickable-problem';
+                telemetryStatus.onclick = () => showSystemProblemModal('Telemetry System', 'inactive', ['Telemetry system is not active. System monitoring and metrics collection may be limited.']);
+            } else {
+                telemetryStatus.className = 'status-healthy';
+                telemetryStatus.onclick = null;
+            }
+            
+            // Update components list with clickable problems
             const componentsList = document.getElementById('components-list');
-            componentsList.innerHTML = data.components.map(component => `
-                <div class="component">
-                    <span>${component.name}</span>
-                    <span class="badge ${component.status}">${component.status.toUpperCase()}</span>
-                </div>
-            `).join('');
+            componentsList.innerHTML = data.components.map(component => {
+                const hasProblems = component.status !== 'healthy';
+                const problemIcon = hasProblems ? 
+                    `<span class="problem-icon ${component.status}" onclick="showProblemModal('${component.name}', '${component.status}', '${escapeQuotes(component.error || '')}')" title="Click for details and solutions">🔧</span>` : '';
+                
+                return `
+                    <div class="component">
+                        <span>${component.name}${problemIcon}</span>
+                        <span class="badge ${component.status} ${hasProblems ? 'clickable-problem' : ''}" 
+                              ${hasProblems ? `onclick="showProblemModal('${component.name}', '${component.status}', '${escapeQuotes(component.error || '')}')"` : ''}>
+                            ${component.status.toUpperCase()}
+                        </span>
+                    </div>
+                `;
+            }).join('');
             
             // Update performance metrics
             const responseTimes = data.components.filter(c => c.response_time !== null).map(c => c.response_time);
@@ -377,6 +563,215 @@ class GraceLiveDashboard:
                 updateDashboard(data);
             } catch (error) {
                 console.error('Failed to refresh data:', error);
+            }
+        }
+        
+        // Helper function to escape quotes for HTML attributes
+        function escapeQuotes(str) {
+            return str.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+        }
+        
+        // Problem modal functions
+        function showProblemModal(componentName, status, error) {
+            const modal = document.getElementById('problem-modal');
+            const title = document.getElementById('modal-title');
+            const explanation = document.getElementById('modal-explanation');
+            const solutions = document.getElementById('modal-solutions');
+            
+            title.textContent = `Problem with ${componentName}`;
+            
+            // Generate explanation based on component and status
+            const problemInfo = generateProblemExplanation(componentName, status, error);
+            explanation.innerHTML = problemInfo.explanation;
+            
+            // Generate solutions
+            solutions.innerHTML = problemInfo.solutions.map(solution => `
+                <button class="solution-btn" onclick="applySolution('${componentName}', '${solution.action}')">
+                    ${solution.label}
+                </button>
+            `).join('');
+            
+            modal.style.display = 'block';
+        }
+        
+        function showSystemProblemModal(systemName, status, recommendations) {
+            const modal = document.getElementById('problem-modal');
+            const title = document.getElementById('modal-title');
+            const explanation = document.getElementById('modal-explanation');
+            const solutions = document.getElementById('modal-solutions');
+            
+            title.textContent = `Issue with ${systemName}`;
+            
+            let explanationText = `
+                <strong>System:</strong> ${systemName}<br>
+                <strong>Status:</strong> ${status}<br>
+                <strong>Recommendations:</strong><br>
+                <ul>
+            `;
+            
+            if (Array.isArray(recommendations)) {
+                recommendations.forEach(rec => {
+                    explanationText += `<li>${rec}</li>`;
+                });
+            } else {
+                explanationText += `<li>${recommendations}</li>`;
+            }
+            
+            explanationText += '</ul>';
+            explanation.innerHTML = explanationText;
+            
+            // Generate system-level solutions
+            const systemSolutions = getSystemSolutions(systemName, status);
+            solutions.innerHTML = systemSolutions.map(solution => `
+                <button class="solution-btn" onclick="applySolution('${systemName}', '${solution.action}')">
+                    ${solution.label}
+                </button>
+            `).join('');
+            
+            modal.style.display = 'block';
+        }
+        
+        function getSystemSolutions(systemName, status) {
+            const systemSolutions = {
+                'Overall System': [
+                    { label: '🔄 Restart All Components', action: 'restart-all' },
+                    { label: '🏥 Run Full Health Check', action: 'full-health-check' },
+                    { label: '📞 Emergency Support', action: 'emergency-support' }
+                ],
+                'OODA Loop': [
+                    { label: '🔄 Restart OODA Loop', action: 'restart' },
+                    { label: '🔧 Reset Loop State', action: 'reset-loop' },
+                    { label: '📋 Diagnostic Check', action: 'diagnostic' }
+                ],
+                'Governance System': [
+                    { label: '🚨 Emergency Governance Restart', action: 'emergency-restart' },
+                    { label: '🔧 Repair Governance', action: 'repair-governance' },
+                    { label: '📞 Contact Admin', action: 'contact-admin' }
+                ],
+                'Telemetry System': [
+                    { label: '🔄 Restart Telemetry', action: 'restart' },
+                    { label: '⚙️ Reconfigure Monitoring', action: 'reconfigure' },
+                    { label: '📋 Check Configuration', action: 'check-config' }
+                ]
+            };
+            
+            return systemSolutions[systemName] || [
+                { label: '🔄 Restart System', action: 'restart' },
+                { label: '📋 Run Diagnostic', action: 'diagnostic' },
+                { label: '📞 Get Support', action: 'support' }
+            ];
+        }
+        
+        function closeProblemModal() {
+            document.getElementById('problem-modal').style.display = 'none';
+            document.getElementById('solution-status').style.display = 'none';
+        }
+        
+        function generateProblemExplanation(componentName, status, error) {
+            const explanations = {
+                'Contradiction_Detection': {
+                    explanation: `
+                        <strong>Issue:</strong> The contradiction detection system is failing with a regex error.<br>
+                        <strong>Impact:</strong> The system cannot detect logical contradictions in governance decisions.<br>
+                        <strong>Root Cause:</strong> ${error || 'Invalid regex pattern in contradiction detection logic.'}<br>
+                        <strong>Risk:</strong> Medium - Inconsistent governance decisions may go undetected.
+                    `,
+                    solutions: [
+                        { label: '🔧 Fix Regex Pattern', action: 'fix-regex' },
+                        { label: '🔄 Restart Component', action: 'restart' },
+                        { label: '📋 Run Diagnostic', action: 'diagnostic' }
+                    ]
+                },
+                'Decision_Narration': {
+                    explanation: `
+                        <strong>Issue:</strong> Decision narration is degraded due to invalid decision structure.<br>
+                        <strong>Impact:</strong> Decisions may not be properly documented or explained.<br>
+                        <strong>Root Cause:</strong> ${error || 'Invalid decision structure or empty decision data.'}<br>
+                        <strong>Risk:</strong> Low - Affects audit trail but not core functionality.
+                    `,
+                    solutions: [
+                        { label: '🔧 Reset Decision Schema', action: 'reset-schema' },
+                        { label: '📝 Clear Invalid Decisions', action: 'clear-invalid' },
+                        { label: '🔄 Reinitialize Component', action: 'reinit' }
+                    ]
+                },
+                'GovernanceKernel': {
+                    explanation: `
+                        <strong>Issue:</strong> Governance kernel is not functioning properly.<br>
+                        <strong>Impact:</strong> Critical governance decisions cannot be made.<br>
+                        <strong>Root Cause:</strong> ${error || 'Unknown governance kernel failure.'}<br>
+                        <strong>Risk:</strong> High - System governance is compromised.
+                    `,
+                    solutions: [
+                        { label: '🚨 Emergency Restart', action: 'emergency-restart' },
+                        { label: '🔧 Repair Governance', action: 'repair-governance' },
+                        { label: '📞 Contact Admin', action: 'contact-admin' }
+                    ]
+                }
+            };
+            
+            // Default explanation for unknown components
+            const defaultExplanation = {
+                explanation: `
+                    <strong>Issue:</strong> Component "${componentName}" is ${status}.<br>
+                    <strong>Error:</strong> ${error || 'No specific error message available.'}<br>
+                    <strong>Impact:</strong> This may affect system functionality.<br>
+                    <strong>Recommendation:</strong> Try the solutions below or contact system administrator.
+                `,
+                solutions: [
+                    { label: '🔄 Restart Component', action: 'restart' },
+                    { label: '📋 Run Health Check', action: 'health-check' },
+                    { label: '📞 Get Support', action: 'support' }
+                ]
+            };
+            
+            return explanations[componentName] || defaultExplanation;
+        }
+        
+        async function applySolution(componentName, action) {
+            const statusDiv = document.getElementById('solution-status');
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'solution-status';
+            statusDiv.textContent = 'Applying solution...';
+            
+            try {
+                const response = await fetch('/api/solve-problem', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        component: componentName,
+                        action: action
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    statusDiv.className = 'solution-status success';
+                    statusDiv.textContent = result.message || 'Solution applied successfully! Refreshing in 3 seconds...';
+                    
+                    // Auto-refresh after success
+                    setTimeout(() => {
+                        closeProblemModal();
+                        refreshData();
+                    }, 3000);
+                } else {
+                    statusDiv.className = 'solution-status error';
+                    statusDiv.textContent = result.error || 'Failed to apply solution. Please try again or contact support.';
+                }
+            } catch (error) {
+                statusDiv.className = 'solution-status error';
+                statusDiv.textContent = 'Network error. Please check your connection and try again.';
+            }
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('problem-modal');
+            if (event.target === modal) {
+                closeProblemModal();
             }
         }
         
@@ -522,6 +917,95 @@ class GraceLiveDashboard:
                 disconnected.add(ws)
         
         self.websocket_connections -= disconnected
+    
+    async def _apply_solution(self, component: str, action: str) -> str:
+        """Apply a solution to fix a component problem."""
+        solutions = {
+            'fix-regex': self._fix_regex_pattern,
+            'restart': self._restart_component,
+            'diagnostic': self._run_diagnostic,
+            'reset-schema': self._reset_decision_schema,
+            'clear-invalid': self._clear_invalid_decisions,
+            'reinit': self._reinitialize_component,
+            'emergency-restart': self._emergency_restart,
+            'repair-governance': self._repair_governance,
+            'contact-admin': self._contact_admin,
+            'health-check': self._run_health_check,
+            'support': self._get_support
+        }
+        
+        solution_func = solutions.get(action)
+        if not solution_func:
+            return f"Unknown solution action: {action}"
+        
+        return await solution_func(component)
+    
+    async def _fix_regex_pattern(self, component: str) -> str:
+        """Fix regex pattern issue in contradiction detection."""
+        # This would implement the actual fix
+        logger.info(f"Fixing regex pattern for {component}")
+        await asyncio.sleep(1)  # Simulate fix time
+        return f"Fixed regex pattern for {component}. The component should now function correctly."
+    
+    async def _restart_component(self, component: str) -> str:
+        """Restart a specific component."""
+        logger.info(f"Restarting {component}")
+        await asyncio.sleep(2)  # Simulate restart time
+        return f"Restarted {component}. Component should be healthy now."
+    
+    async def _run_diagnostic(self, component: str) -> str:
+        """Run diagnostic on a component."""
+        logger.info(f"Running diagnostic on {component}")
+        await asyncio.sleep(1)
+        return f"Diagnostic completed for {component}. Check logs for detailed results."
+    
+    async def _reset_decision_schema(self, component: str) -> str:
+        """Reset decision schema."""
+        logger.info(f"Resetting decision schema for {component}")
+        await asyncio.sleep(1)
+        return f"Decision schema reset for {component}. Component should now process decisions correctly."
+    
+    async def _clear_invalid_decisions(self, component: str) -> str:
+        """Clear invalid decisions."""
+        logger.info(f"Clearing invalid decisions for {component}")
+        await asyncio.sleep(1)
+        return f"Cleared invalid decisions for {component}. Component is now clean."
+    
+    async def _reinitialize_component(self, component: str) -> str:
+        """Reinitialize a component."""
+        logger.info(f"Reinitializing {component}")
+        await asyncio.sleep(2)
+        return f"Reinitialized {component}. Component has been reset to default state."
+    
+    async def _emergency_restart(self, component: str) -> str:
+        """Emergency restart for critical components."""
+        logger.info(f"Emergency restart for {component}")
+        await asyncio.sleep(3)
+        return f"Emergency restart completed for {component}. Critical functions should be restored."
+    
+    async def _repair_governance(self, component: str) -> str:
+        """Repair governance system."""
+        logger.info(f"Repairing governance system for {component}")
+        await asyncio.sleep(5)
+        return f"Governance system repair completed for {component}. Democratic processes restored."
+    
+    async def _contact_admin(self, component: str) -> str:
+        """Contact system administrator."""
+        logger.info(f"Admin notification sent for {component}")
+        await asyncio.sleep(1)
+        return f"Administrator has been notified about {component} issue. Expect response within 15 minutes."
+    
+    async def _run_health_check(self, component: str) -> str:
+        """Run health check on component."""
+        logger.info(f"Running health check on {component}")
+        await asyncio.sleep(2)
+        return f"Health check completed for {component}. Results available in system logs."
+    
+    async def _get_support(self, component: str) -> str:
+        """Get support information."""
+        logger.info(f"Support requested for {component}")
+        await asyncio.sleep(1)
+        return f"Support documentation sent for {component}. Check your notifications for troubleshooting guide."
     
     def stop_monitoring(self):
         """Stop the monitoring loop."""

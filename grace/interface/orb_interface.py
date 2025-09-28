@@ -13,6 +13,7 @@ import asyncio
 # Import components
 from ..intelligence.grace_intelligence import GraceIntelligence, ReasoningContext, ReasoningResult
 from .ide.grace_ide import GraceIDE
+from .multimodal_interface import MultimodalInterface
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ class PanelType(Enum):
     TASK_MANAGER = "task_manager"
     IDE = "ide"
     DASHBOARD = "dashboard"
+    SCREEN_SHARE = "screen_share"
+    RECORDING = "recording"
+    VOICE_CONTROL = "voice_control"
 
 
 class NotificationPriority(Enum):
@@ -139,6 +143,7 @@ class GraceUnifiedOrbInterface:
         # Core components
         self.grace_intelligence = GraceIntelligence()
         self.grace_ide = GraceIDE()
+        self.multimodal_interface = MultimodalInterface(self)
         
         # Session management
         self.active_sessions: Dict[str, OrbSession] = {}
@@ -153,7 +158,8 @@ class GraceUnifiedOrbInterface:
         self.supported_file_types = [
             "pdf", "doc", "docx", "txt", "csv", "json", "xml",
             "py", "js", "html", "css", "md",
-            "jpg", "png", "gif", "mp4", "mp3", "wav"
+            "jpg", "png", "gif", "mp4", "mp3", "wav",
+            "screen_recording", "audio_recording", "video_recording"
         ]
         
         # Panel templates
@@ -193,6 +199,24 @@ class GraceUnifiedOrbInterface:
                 "default_size": {"width": 500, "height": 400},
                 "components": ["pending_approvals", "audit_trail", "policies"],
                 "refresh_interval": 15
+            },
+            "screen_share_panel": {
+                "title": "Screen Share",
+                "default_size": {"width": 800, "height": 600},
+                "components": ["video_stream", "controls", "participants"],
+                "refresh_interval": 0
+            },
+            "recording_panel": {
+                "title": "Recording Studio",
+                "default_size": {"width": 600, "height": 450},
+                "components": ["recording_controls", "preview", "settings"],
+                "refresh_interval": 0
+            },
+            "voice_control_panel": {
+                "title": "Voice Control",
+                "default_size": {"width": 400, "height": 300},
+                "components": ["voice_settings", "speech_recognition", "tts_controls"],
+                "refresh_interval": 0
             }
         }
 
@@ -778,5 +802,53 @@ class GraceUnifiedOrbInterface:
                 "version": self.grace_intelligence.version,
                 "domain_pods": len(self.grace_intelligence.domain_pods),
                 "models_available": len(self.grace_intelligence.model_registry)
-            }
+            },
+            "multimodal": self.multimodal_interface.get_stats()
         }
+
+    # Multimodal Interface Methods
+    
+    async def start_screen_share(self, user_id: str, quality_settings: Optional[Dict[str, Any]] = None) -> str:
+        """Start screen sharing session."""
+        return await self.multimodal_interface.start_screen_share(user_id, quality_settings)
+    
+    async def stop_screen_share(self, session_id: str) -> bool:
+        """Stop screen sharing session."""
+        return await self.multimodal_interface.stop_screen_share(session_id)
+    
+    async def start_recording(self, user_id: str, media_type: str, 
+                            metadata: Optional[Dict[str, Any]] = None) -> str:
+        """Start recording (audio, video, or screen)."""
+        from .multimodal_interface import MediaType
+        
+        # Convert string to MediaType enum
+        media_type_enum = MediaType(media_type.lower())
+        return await self.multimodal_interface.start_recording(user_id, media_type_enum, metadata)
+    
+    async def stop_recording(self, session_id: str) -> Dict[str, Any]:
+        """Stop recording and return session info."""
+        return await self.multimodal_interface.stop_recording(session_id)
+    
+    async def set_voice_settings(self, user_id: str, settings: Dict[str, Any]):
+        """Set voice input/output settings for user."""
+        await self.multimodal_interface.set_voice_settings(user_id, settings)
+    
+    async def toggle_voice(self, user_id: str, enable: bool) -> bool:
+        """Toggle voice input/output for user."""
+        return await self.multimodal_interface.toggle_voice(user_id, enable)
+    
+    async def queue_background_task(self, task_type: str, metadata: Dict[str, Any]) -> str:
+        """Queue a background processing task."""
+        return await self.multimodal_interface.queue_background_task(task_type, metadata)
+    
+    def get_active_media_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get active media sessions."""
+        return self.multimodal_interface.get_active_sessions(user_id)
+    
+    def get_background_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get status of background task."""
+        return self.multimodal_interface.get_background_task_status(task_id)
+    
+    def get_voice_settings(self, user_id: str) -> Dict[str, Any]:
+        """Get voice settings for user."""
+        return self.multimodal_interface.get_voice_settings(user_id)

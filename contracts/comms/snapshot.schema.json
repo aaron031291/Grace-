@@ -1,0 +1,131 @@
+{
+  "$id": "grace://comms/snapshot.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Comms Snapshot",
+  "description": "Versioned snapshot of communication system configuration for rollback",
+  "type": "object",
+  "required": ["snapshot_id","topics","lanes","qos","registry_hash","created_at","hash"],
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^snapshot_[a-z0-9]{12}$",
+      "description": "Unique identifier for this snapshot"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of the communication system"
+    },
+    "topics": {
+      "type": "object",
+      "description": "Resolved topic routing at snapshot time",
+      "patternProperties": {
+        "^[A-Z_]+$": {
+          "type": "object",
+          "properties": {
+            "lane": { "type": "string" },
+            "topic": { "type": "string" },
+            "partitions": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["lane", "topic"]
+        }
+      }
+    },
+    "lanes": {
+      "type": "object",
+      "description": "Lane configuration and capacities",
+      "properties": {
+        "lane.P0": { "$ref": "#/$defs/lane_config" },
+        "lane.P1": { "$ref": "#/$defs/lane_config" },
+        "lane.P2": { "$ref": "#/$defs/lane_config" },
+        "lane.P3": { "$ref": "#/$defs/lane_config" }
+      }
+    },
+    "qos": {
+      "type": "object",
+      "description": "Quality of service settings",
+      "properties": {
+        "priorities": {
+          "type": "object",
+          "patternProperties": {
+            "^P[0-3]$": {
+              "type": "object",
+              "properties": {
+                "deadline_ms": { "type": "integer", "minimum": 1 },
+                "retries": {
+                  "type": "object",
+                  "properties": {
+                    "max": { "type": "integer", "minimum": 0 },
+                    "strategy": { "enum": ["exp","lin","none"] },
+                    "base_ms": { "type": "integer", "minimum": 1 },
+                    "jitter_ms": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "qos_classes": {
+          "type": "object",
+          "properties": {
+            "realtime": { "$ref": "#/$defs/qos_class_config" },
+            "standard": { "$ref": "#/$defs/qos_class_config" },
+            "bulk": { "$ref": "#/$defs/qos_class_config" }
+          }
+        }
+      }
+    },
+    "registry_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Hash of schema registry state at snapshot time"
+    },
+    "transport_config": {
+      "type": "object",
+      "description": "Transport-specific configurations"
+    },
+    "security_config": {
+      "type": "object",
+      "description": "Security and authentication settings"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this snapshot was created"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "System or user that created the snapshot"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this snapshot"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Integrity hash of the entire snapshot"
+    }
+  },
+  "$defs": {
+    "lane_config": {
+      "type": "object",
+      "properties": {
+        "priority": { "enum": ["P0","P1","P2","P3"] },
+        "partitions": { "type": "integer", "minimum": 1 },
+        "max_throughput_rps": { "type": "number", "minimum": 0 },
+        "enabled": { "type": "boolean" }
+      },
+      "required": ["priority", "partitions"]
+    },
+    "qos_class_config": {
+      "type": "object",
+      "properties": {
+        "max_latency_ms": { "type": "integer", "minimum": 1 },
+        "drop_policy": { "enum": ["backpressure","queue","drop"] },
+        "batch": { "type": "boolean" },
+        "compression": { "type": "boolean" }
+      }
+    }
+  }
+}

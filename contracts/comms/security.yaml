@@ -1,0 +1,70 @@
+auth:
+  transport: ["mTLS","JWT"]
+  jwt_claims_required: ["sub","roles","exp","aud"]
+  token_validation:
+    verify_signature: true
+    verify_expiry: true
+    clock_skew_seconds: 30
+
+signing:
+  alg: "EdDSA"
+  required_for:
+    - governance_decisions
+    - model_deployments
+    - policy_changes
+  key_rotation_days: 90
+
+encryption:
+  payload_sensitive: true
+  alg: "XChaCha20-Poly1305"   # if at-rest in payload_ref store
+  key_derivation: "PBKDF2"
+  
+rbac:
+  header: "rbac"
+  enforcement: "deny-by-default"
+  roles:
+    system_admin: ["*"]
+    governance_operator: ["gov.*", "audit.*"]
+    ml_engineer: ["mldl.*", "intel.*", "mlt.*"]
+    data_operator: ["ingress.*", "memory.*"]
+    observer: ["*.read"]
+
+privacy:
+  pii_flags: ["name","email","location","financial","health","biometric"]
+  on_pii_without_consent: "block"
+  consent_management:
+    required_scopes: ["autonomy","pii_use","external_share"]
+    opt_out_grace_period_days: 30
+  
+  # Data classification levels
+  classification:
+    public: {encryption: false, audit: false}
+    internal: {encryption: true, audit: true}
+    restricted: {encryption: true, audit: true, approval_required: true}
+
+# Security headers validation
+header_validation:
+  require_traceparent: true
+  require_correlation_id: true
+  validate_checksums: true
+  max_hop_count: 64
+
+# Audit requirements
+audit:
+  log_all_governance: true
+  log_pii_access: true
+  log_failures: true
+  retention_days: 2555  # 7 years
+  
+# Threat protection
+protection:
+  rate_limiting:
+    enabled: true
+    global_rpm: 10000
+    per_user_rpm: 100
+    per_ip_rpm: 1000
+  
+  ddos_protection:
+    enabled: true
+    threshold_rps: 1000
+    ban_duration_minutes: 60

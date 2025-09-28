@@ -5,7 +5,10 @@ Integrates all API routes with the new repository-based architecture.
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
+import os
 
 from grace.core.database import init_database, close_database
 from grace.api.auth import router as auth_router
@@ -63,6 +66,14 @@ def create_app() -> FastAPI:
     async def health_check():
         """Health check endpoint."""
         return {"status": "healthy", "timestamp": "2024-09-28T19:20:00Z"}
+    
+    @app.get("/demo")
+    async def demo_page():
+        """Serve P0 implementation demo page."""
+        demo_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "grace_p0_demo.html")
+        if os.path.exists(demo_file_path):
+            return FileResponse(demo_file_path, media_type="text/html")
+        return {"error": "Demo page not found"}
     
     return app
 

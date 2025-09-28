@@ -1,0 +1,53 @@
+{
+  "$id": "grace://comms/envelope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Grace Message Envelope (GME)",
+  "type": "object",
+  "required": ["msg_id", "kind", "domain", "name", "ts", "headers"],
+  "properties": {
+    "msg_id":      { "type": "string", "pattern": "^msg_[a-z0-9]{10,}$" },
+    "kind":        { "enum": ["event", "command", "query", "reply"] },
+    "domain":      { "type": "string" },
+    "name":        { "type": "string" },
+    "version":     { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "ts":          { "type": "string", "format": "date-time" },
+    "headers": {
+      "type": "object",
+      "required": ["schema_ref","correlation_id","traceparent","priority","qos","partition_key"],
+      "properties": {
+        "schema_ref":      { "type": "string" },
+        "correlation_id":  { "type": "string", "pattern":"^cor_[a-z0-9_-]{6,}$" },
+        "causation_id":    { "type": "string" },
+        "reply_to":        { "type": "string" },
+        "expires_at":      { "type": "string", "format": "date-time" },
+        "deadline_ms":     { "type": "integer", "minimum": 1 },
+        "priority":        { "enum": ["P0","P1","P2","P3"] },
+        "qos":             { "enum": ["realtime","standard","bulk"] },
+        "partition_key":   { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "redelivery_count":{ "type": "integer", "minimum": 0 },
+        "retry_policy":    { 
+          "type": "object", 
+          "properties": {
+            "strategy": {"enum":["exp","lin","none"]},
+            "max_attempts":{"type":"integer"},
+            "base_ms":{"type":"integer"},
+            "jitter_ms":{"type":"integer"}
+          }
+        },
+        "compression":     { "enum": ["none","gzip","zstd"] },
+        "checksum":        { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "signature":       { "type": "string" },
+        "governance_label":{ "enum": ["public","internal","restricted"] },
+        "pii_flags":       { "type": "array", "items":{"type":"string"} },
+        "consent_scope":   { "type": "array", "items":{"enum":["autonomy","pii_use","external_share","canary"]} },
+        "rbac":            { "type": "array", "items":{"type":"string"} },
+        "traceparent":     { "type": "string" },
+        "tracestate":      { "type": "string" },
+        "hop_count":       { "type": "integer", "minimum": 0, "maximum": 64 }
+      }
+    },
+    "payload":     { "type": "object" },
+    "payload_ref": { "type": "string" }
+  }
+}

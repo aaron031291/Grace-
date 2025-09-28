@@ -2,7 +2,7 @@
 from typing import Dict, List, Optional, Type
 from abc import ABC, abstractmethod
 
-from ...contracts.quorum_feed import QuorumResult, QuorumFeedItem
+from ....contracts.quorum_feed import QuorumResult, QuorumFeedItem
 
 
 class Specialist(ABC):

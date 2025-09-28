@@ -1,0 +1,560 @@
+openapi: 3.0.0
+info:
+  title: Learning Kernel API
+  version: 1.0.0
+  description: Data-centric learning kernel API for labeling, active learning, weak supervision, and dataset management
+
+servers:
+  - url: /api/learning/v1
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  version:
+                    type: string
+
+  /datasets:
+    post:
+      summary: Register a new dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetManifest'
+      responses:
+        '201':
+          description: Dataset registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dataset_id:
+                    type: string
+
+  /datasets/{dataset_id}:
+    get:
+      summary: Get dataset manifest
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dataset manifest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetManifest'
+
+  /versions:
+    post:
+      summary: Publish a new dataset version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetVersion'
+      responses:
+        '201':
+          description: Version published successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dataset_id:
+                    type: string
+                  version:
+                    type: string
+
+  /versions/{dataset_id}/{version}:
+    get:
+      summary: Get dataset version details
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dataset version details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetVersion'
+
+  /label/tasks:
+    post:
+      summary: Create a labeling task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabelTask'
+      responses:
+        '201':
+          description: Label task created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+
+  /label/submit:
+    post:
+      summary: Submit a label
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Label'
+      responses:
+        '202':
+          description: Label submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  label_id:
+                    type: string
+
+  /active/query:
+    post:
+      summary: Query active learning batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryConfig'
+      responses:
+        '200':
+          description: Active learning query results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: string
+
+  /augment/apply:
+    post:
+      summary: Apply data augmentation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dataset_id:
+                  type: string
+                version:
+                  type: string
+                spec:
+                  $ref: '#/components/schemas/AugmentSpec'
+      responses:
+        '202':
+          description: Augmentation applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delta_rows:
+                    type: integer
+
+  /curriculum:
+    post:
+      summary: Update curriculum specification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurriculumSpec'
+      responses:
+        '201':
+          description: Curriculum updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  spec_id:
+                    type: string
+
+  /feature-view/build:
+    post:
+      summary: Build feature view for train/serve parity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dataset_id:
+                  type: string
+                version:
+                  type: string
+      responses:
+        '202':
+          description: Feature view build initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  view_uri:
+                    type: string
+
+  /snapshot/export:
+    post:
+      summary: Export learning kernel snapshot
+      responses:
+        '200':
+          description: Snapshot exported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_id:
+                    type: string
+                  uri:
+                    type: string
+
+  /rollback:
+    post:
+      summary: Rollback to snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to_snapshot:
+                  type: string
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  to_snapshot:
+                    type: string
+
+  /quality/report:
+    get:
+      summary: Get data quality report
+      parameters:
+        - name: dataset_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Data quality metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics:
+                    type: object
+
+components:
+  schemas:
+    DatasetManifest:
+      type: object
+      required: [dataset_id, task, modality, versions, default_version]
+      properties:
+        dataset_id:
+          type: string
+          pattern: "ds_[a-z0-9_-]{4,}"
+        task:
+          type: string
+          enum: [classification, regression, clustering, dimred, rl, nlp, vision, timeseries]
+        modality:
+          type: string
+          enum: [tabular, text, image, audio, video, graph]
+        schema:
+          type: object
+        versions:
+          type: array
+          items:
+            type: string
+        default_version:
+          type: string
+
+    DatasetVersion:
+      type: object
+      required: [dataset_id, version, source_refs, size, stats, splits, feature_view]
+      properties:
+        dataset_id:
+          type: string
+        version:
+          type: string
+        source_refs:
+          type: array
+          items:
+            type: string
+        size:
+          type: object
+          properties:
+            rows:
+              type: integer
+            bytes:
+              type: integer
+        stats:
+          type: object
+        splits:
+          type: object
+          properties:
+            train:
+              type: number
+            valid:
+              type: number
+            test:
+              type: number
+        feature_view:
+          type: string
+        lineage_hash:
+          type: string
+        governance_label:
+          type: string
+          enum: [public, internal, restricted]
+
+    LabelTask:
+      type: object
+      required: [task_id, dataset_id, version, policy_id, items]
+      properties:
+        task_id:
+          type: string
+          pattern: "lab_[a-z0-9]{6,}"
+        dataset_id:
+          type: string
+        version:
+          type: string
+        policy_id:
+          type: string
+        assign:
+          type: string
+          enum: [auto, round_robin, skill_based]
+        items:
+          type: array
+          items:
+            type: string
+        priority:
+          type: string
+          enum: [low, normal, high, critical]
+
+    Label:
+      type: object
+      required: [label_id, task_id, item_id, annotator_id, y, quality, at]
+      properties:
+        label_id:
+          type: string
+        task_id:
+          type: string
+        item_id:
+          type: string
+        annotator_id:
+          type: string
+        y: {}
+        evidence:
+          type: object
+        weak_sources:
+          type: array
+          items:
+            type: string
+        quality:
+          type: object
+          properties:
+            agreement:
+              type: number
+            gold_correct:
+              type: boolean
+        at:
+          type: string
+          format: date-time
+
+    LabelPolicy:
+      type: object
+      required: [policy_id, rubric, qa, pii]
+      properties:
+        policy_id:
+          type: string
+        rubric:
+          type: object
+        qa:
+          type: object
+          properties:
+            gold_ratio:
+              type: number
+            dual_label_ratio:
+              type: number
+            min_agreement:
+              type: number
+        pii:
+          type: object
+          properties:
+            allow:
+              type: boolean
+            mask:
+              type: boolean
+
+    QueryConfig:
+      type: object
+      required: [strategy, batch_size]
+      properties:
+        strategy:
+          type: string
+          enum: [uncertainty, margin, entropy, diversity, coresets, hybrid]
+        batch_size:
+          type: integer
+        segment_filters:
+          type: object
+        min_confidence:
+          type: number
+
+    CurriculumSpec:
+      type: object
+      required: [spec_id, objective, rules]
+      properties:
+        spec_id:
+          type: string
+        objective:
+          type: string
+          enum: [improve_tail, reduce_bias, boost_calibration, reduce_regret]
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              select_slice:
+                type: string
+              difficulty:
+                type: number
+              min_samples:
+                type: integer
+
+    AugmentSpec:
+      type: object
+      required: [spec_id, modality, ops]
+      properties:
+        spec_id:
+          type: string
+        modality:
+          type: string
+          enum: [text, image, audio, tabular]
+        ops:
+          type: array
+          items:
+            oneOf:
+              - type: object
+                properties:
+                  op:
+                    const: "synonym_swap"
+                  prob:
+                    type: number
+              - type: object
+                properties:
+                  op:
+                    const: "back_translate"
+                  lang:
+                    type: string
+              - type: object
+                properties:
+                  op:
+                    const: "rand_crop"
+                  prob:
+                    type: number
+              - type: object
+                properties:
+                  op:
+                    const: "noise_inject"
+                  std:
+                    type: number
+              - type: object
+                properties:
+                  op:
+                    const: "mixup"
+                  alpha:
+                    type: number
+
+    LearningExperience:
+      type: object
+      required: [exp_id, stage, metrics, timestamp]
+      properties:
+        exp_id:
+          type: string
+        stage:
+          type: string
+          enum: [labeling, active_query, weak_supervision, augmentation, curriculum, version_publish, eval]
+        metrics:
+          type: object
+          properties:
+            label_throughput_items_per_hr:
+              type: number
+            label_agreement:
+              type: number
+            gold_accuracy:
+              type: number
+            weak_precision:
+              type: number
+            query_gain_f1:
+              type: number
+            bias_delta:
+              type: number
+            leakage_flags:
+              type: integer
+            ds_drift_psi:
+              type: number
+            coverage:
+              type: number
+        segment:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

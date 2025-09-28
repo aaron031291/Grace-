@@ -72,6 +72,23 @@ class IDEBlockRequest(BaseModel):
     name: Optional[str] = None
     configuration: Optional[Dict[str, Any]] = None
 
+class ScreenShareRequest(BaseModel):
+    user_id: str
+    quality_settings: Optional[Dict[str, Any]] = None
+
+class RecordingRequest(BaseModel):
+    user_id: str
+    media_type: str  # "screen_recording", "audio_recording", "video_recording"
+    metadata: Optional[Dict[str, Any]] = None
+
+class VoiceSettingsRequest(BaseModel):
+    user_id: str
+    settings: Dict[str, Any]
+
+class BackgroundTaskRequest(BaseModel):
+    task_type: str
+    metadata: Dict[str, Any]
+
 # Global orb interface instance
 orb_interface = GraceUnifiedOrbInterface()
 
@@ -111,6 +128,12 @@ async def root():
             "governance": "/api/orb/v1/governance/",
             "notifications": "/api/orb/v1/notifications/",
             "ide": "/api/orb/v1/ide/",
+            "multimodal": {
+                "screen_share": "/api/orb/v1/multimodal/screen-share/",
+                "recording": "/api/orb/v1/multimodal/recording/",
+                "voice": "/api/orb/v1/multimodal/voice/",
+                "background_tasks": "/api/orb/v1/multimodal/tasks/"
+            },
             "websocket": "/ws/{session_id}",
             "stats": "/api/orb/v1/stats"
         }
@@ -517,6 +540,125 @@ async def get_block_registry():
             for block_id, block_info in registry.items()
         }
     }
+
+# Multimodal Interface Endpoints
+
+@app.post("/api/orb/v1/multimodal/screen-share/start")
+async def start_screen_share(request: ScreenShareRequest):
+    """Start screen sharing session."""
+    try:
+        session_id = await orb_interface.start_screen_share(
+            request.user_id,
+            request.quality_settings
+        )
+        return {
+            "session_id": session_id,
+            "status": "started",
+            "quality_settings": request.quality_settings
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/multimodal/screen-share/stop/{session_id}")
+async def stop_screen_share(session_id: str):
+    """Stop screen sharing session."""
+    success = await orb_interface.stop_screen_share(session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Screen sharing session not found")
+    return {"status": "stopped"}
+
+@app.post("/api/orb/v1/multimodal/recording/start")
+async def start_recording(request: RecordingRequest):
+    """Start recording (audio, video, or screen)."""
+    try:
+        session_id = await orb_interface.start_recording(
+            request.user_id,
+            request.media_type,
+            request.metadata
+        )
+        return {
+            "session_id": session_id,
+            "media_type": request.media_type,
+            "status": "started"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/multimodal/recording/stop/{session_id}")
+async def stop_recording(session_id: str):
+    """Stop recording and return session info."""
+    try:
+        result = await orb_interface.stop_recording(session_id)
+        return {
+            "status": "stopped",
+            **result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/multimodal/sessions")
+async def get_active_media_sessions(user_id: Optional[str] = None):
+    """Get active media sessions."""
+    sessions = orb_interface.get_active_media_sessions(user_id)
+    return {
+        "sessions": sessions,
+        "total": len(sessions)
+    }
+
+@app.post("/api/orb/v1/multimodal/voice/settings")
+async def set_voice_settings(request: VoiceSettingsRequest):
+    """Set voice input/output settings for user."""
+    try:
+        await orb_interface.set_voice_settings(request.user_id, request.settings)
+        return {"status": "updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/multimodal/voice/settings/{user_id}")
+async def get_voice_settings(user_id: str):
+    """Get voice settings for user."""
+    settings = orb_interface.get_voice_settings(user_id)
+    return {"user_id": user_id, "settings": settings}
+
+@app.post("/api/orb/v1/multimodal/voice/toggle/{user_id}")
+async def toggle_voice(user_id: str, enable: bool):
+    """Toggle voice input/output for user."""
+    try:
+        result = await orb_interface.toggle_voice(user_id, enable)
+        return {
+            "user_id": user_id,
+            "voice_enabled": result,
+            "status": "updated"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/multimodal/tasks")
+async def create_background_task(request: BackgroundTaskRequest):
+    """Queue a background processing task."""
+    try:
+        task_id = await orb_interface.queue_background_task(
+            request.task_type,
+            request.metadata
+        )
+        return {
+            "task_id": task_id,
+            "status": "queued"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/multimodal/tasks/{task_id}")
+async def get_background_task_status(task_id: str):
+    """Get status of background task."""
+    task_status = orb_interface.get_background_task_status(task_id)
+    if not task_status:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task_status
 
 # Statistics
 

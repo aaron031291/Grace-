@@ -11,6 +11,9 @@ from ..contracts.governed_decision import GovernedDecision
 from ..contracts.rag_query import RAGQuery, RAGResult
 from ..contracts.dto_common import MemoryEntry
 
+# Import the comprehensive Interface Service
+from ..interface.interface_service import InterfaceService
+
 
 # Request/Response models for API
 class MemoryRequest(BaseModel):
@@ -50,29 +53,24 @@ class InterfaceKernel:
         self.orchestration_kernel = orchestration_kernel
         self.resilience_kernel = resilience_kernel
         
-        # Initialize FastAPI app
-        self.app = FastAPI(
-            title="Grace Kernel API",
-            description="Multi-kernel AI governance system",
-            version="0.1.0"
+        # Initialize comprehensive Interface Service
+        self.interface_service = InterfaceService()
+        self.interface_service.set_kernel_references(
+            mtl_kernel=mtl_kernel,
+            governance_kernel=governance_kernel,
+            intelligence_kernel=None  # Would be passed if available
         )
         
-        # Add CORS middleware
-        self.app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        # Use Interface Service app
+        self.app = self.interface_service.app
         
-        # WebSocket connection manager
+        # Legacy WebSocket connections for backward compatibility
         self.websocket_connections = []
         
-        # Register routes
-        self._register_routes()
+        # Register additional legacy routes for compatibility
+        self._register_legacy_routes()
     
-    def _register_routes(self):
+    def _register_legacy_routes(self):
         """Register all API routes."""
         
         # Health check endpoint
@@ -236,7 +234,11 @@ class InterfaceKernel:
     
     def get_stats(self) -> Dict:
         """Get interface kernel statistics."""
-        return {
+        # Get comprehensive stats from Interface Service
+        interface_stats = self.interface_service.get_stats()
+        
+        # Add legacy compatibility data
+        interface_stats.update({
             "active_websocket_connections": len(self.websocket_connections),
             "kernels_connected": {
                 "mtl": bool(self.mtl_kernel),
@@ -244,8 +246,10 @@ class InterfaceKernel:
                 "orchestration": bool(self.orchestration_kernel),
                 "resilience": bool(self.resilience_kernel)
             },
-            "api_version": "0.1.0"
-        }
+            "api_version": "1.0.0"  # Updated version
+        })
+        
+        return interface_stats
     
     def set_mtl_kernel(self, mtl_kernel):
         """Set the MTL kernel."""

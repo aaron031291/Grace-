@@ -4,6 +4,8 @@ Grace Orchestration Service - FastAPI service facade for orchestration kernel.
 Provides RESTful API endpoints for managing orchestration loops, tasks,
 snapshots, and system state. Acts as the main interface to the orchestration
 kernel functionality.
+
+Enhanced with Phase 4: Governance Gate - Constitutional validation integration.
 """
 
 import asyncio
@@ -24,6 +26,8 @@ from .snapshots.manager import SnapshotManager
 from .bridges.mesh_bridge import MeshBridge
 from .bridges.gov_bridge import GovernanceBridge
 from .bridges.kernel_bridges import KernelBridges
+from ..governance.constitutional_validator import ConstitutionalValidator
+from ..governance.verification_engine import VerificationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +71,12 @@ class SnapshotExportRequest(BaseModel):
 
 
 class OrchestrationService:
-    """Main orchestration service providing FastAPI interface."""
+    """Main orchestration service providing FastAPI interface with constitutional governance."""
     
     def __init__(self):
         self.app = FastAPI(
             title="Grace Orchestration Kernel API",
-            description="Central conductor and scheduler for all Grace kernels",
+            description="Central conductor and scheduler for all Grace kernels with constitutional governance",
             version="1.0.0"
         )
         
@@ -111,6 +115,12 @@ class OrchestrationService:
         self.mesh_bridge = MeshBridge()
         self.governance_bridge = GovernanceBridge()
         self.kernel_bridges = KernelBridges(event_publisher=self._publish_event)
+        
+        # Phase 4: Governance Gate components
+        self.constitutional_validator = ConstitutionalValidator(
+            event_publisher=self._publish_event
+        )
+        self.verification_engine = None  # Will be initialized with proper dependencies
         
         # Service state
         self.started_at = None
@@ -156,8 +166,20 @@ class OrchestrationService:
         
         @self.app.post("/api/orch/v1/loops")
         async def create_loop(loop_request: LoopDefRequest):
-            """Create a new orchestration loop."""
+            """Create a new orchestration loop with constitutional validation."""
             try:
+                # Phase 4: Validate against constitution first
+                await self._validate_action_against_constitution({
+                    "type": "create_loop",
+                    "id": loop_request.loop_id,
+                    "component_id": "orchestration_service",
+                    "description": f"Creating orchestration loop: {loop_request.name}",
+                    "rationale": f"Loop for {loop_request.name} with {len(loop_request.kernels)} kernels",
+                    "risk_level": "medium" if loop_request.priority > 7 else "low",
+                    "reversible": True,
+                    "audit_trail": True
+                })
+                
                 # Validate with governance if available
                 if self.governance_bridge:
                     is_valid = await self.governance_bridge.validate_loop_execution(
@@ -199,8 +221,20 @@ class OrchestrationService:
         
         @self.app.post("/api/orch/v1/task/dispatch")
         async def dispatch_task(task_request: TaskDispatchRequest):
-            """Dispatch a new orchestration task."""
+            """Dispatch a new orchestration task with constitutional validation."""
             try:
+                # Phase 4: Validate against constitution
+                await self._validate_action_against_constitution({
+                    "type": "dispatch_task",
+                    "id": f"task_{task_request.loop_id}",
+                    "component_id": "orchestration_service",
+                    "description": f"Dispatching task for loop {task_request.loop_id}",
+                    "rationale": "Task dispatch requested via API",
+                    "risk_level": "high" if task_request.priority > 8 else "medium",
+                    "reversible": True,
+                    "audit_trail": True
+                })
+                
                 # Validate with governance if available
                 if self.governance_bridge:
                     is_valid = await self.governance_bridge.validate_task_dispatch(
@@ -342,6 +376,88 @@ class OrchestrationService:
             logger.info(f"Rollback operation {operation_id} completed successfully")
         except Exception as e:
             logger.error(f"Rollback operation failed: {e}")
+    
+    async def _validate_action_against_constitution(self, action: Dict[str, Any]):
+        """
+        Phase 4: Constitutional validation for orchestrator decisions.
+        Raises HTTPException if action violates constitutional principles.
+        """
+        try:
+            # Perform constitutional validation
+            validation_result = await self.constitutional_validator.validate_against_constitution(action)
+            
+            if not validation_result.is_valid:
+                # Log the constitutional violation
+                logger.warning(f"Constitutional violation detected for action {action.get('type', 'unknown')}: "
+                             f"score {validation_result.compliance_score:.3f}")
+                
+                # Prepare violation details for response
+                violation_details = []
+                for violation in validation_result.violations:
+                    violation_details.append({
+                        "principle": violation.principle,
+                        "severity": violation.severity,
+                        "description": violation.description
+                    })
+                
+                # Raise HTTP exception with constitutional violation details
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "Constitutional violation",
+                        "compliance_score": validation_result.compliance_score,
+                        "violations": violation_details,
+                        "validation_id": validation_result.validation_id
+                    }
+                )
+            
+            logger.debug(f"Constitutional validation passed for {action.get('type', 'unknown')} "
+                        f"(score: {validation_result.compliance_score:.3f})")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error during constitutional validation: {e}")
+            # In case of validation system failure, log but don't block action
+            # This ensures system remains operational even if validation fails
+            logger.warning("Constitutional validation failed due to system error - allowing action to proceed")
+    
+    async def validate_against_constitution(self, action: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Public method for constitutional validation (can be called by other components).
+        Returns validation result instead of raising exception.
+        """
+        try:
+            validation_result = await self.constitutional_validator.validate_against_constitution(action)
+            
+            return {
+                "is_valid": validation_result.is_valid,
+                "compliance_score": validation_result.compliance_score,
+                "violations": [
+                    {
+                        "principle": v.principle,
+                        "severity": v.severity,
+                        "description": v.description,
+                        "recommendation": v.recommendation
+                    }
+                    for v in validation_result.violations
+                ],
+                "validation_id": validation_result.validation_id
+            }
+            
+        except Exception as e:
+            logger.error(f"Constitutional validation error: {e}")
+            return {
+                "is_valid": False,
+                "compliance_score": 0.0,
+                "violations": [{
+                    "principle": "system_error",
+                    "severity": "critical", 
+                    "description": f"Validation system error: {str(e)}",
+                    "recommendation": "Check validation system health"
+                }],
+                "validation_id": "error"
+            }
     
     async def _publish_event(self, event_name: str, payload: Dict[str, Any]):
         """Publish events through the mesh bridge."""

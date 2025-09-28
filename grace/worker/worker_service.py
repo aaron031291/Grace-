@@ -162,21 +162,117 @@ class GraceWorker:
     
     async def _process_ingestion_task(self, task: dict):
         """Process file ingestion task."""
-        logger.info("Processing ingestion task - placeholder implementation")
-        # TODO: Implement file text extraction, chunking, and metadata extraction
-        await asyncio.sleep(0.1)  # Simulate processing
+        logger.info("Processing ingestion task")
+        
+        from ..memory_ingestion.pipeline import get_memory_ingestion_pipeline
+        from ..core.config import get_settings
+        
+        settings = get_settings()
+        pipeline = get_memory_ingestion_pipeline(settings.vector_url)
+        
+        try:
+            task_data = task.get('data', {})
+            
+            if 'file_path' in task_data:
+                # File ingestion
+                result = await pipeline.ingest_file(
+                    file_path=task_data['file_path'],
+                    session_id=task_data.get('session_id'),
+                    user_id=task_data.get('user_id', 'system'),
+                    tags=task_data.get('tags'),
+                    trust_score=task_data.get('trust_score', 0.7)
+                )
+            elif 'text' in task_data:
+                # Text ingestion
+                result = await pipeline.ingest_text_content(
+                    text=task_data['text'],
+                    title=task_data.get('title', 'Text Content'),
+                    session_id=task_data.get('session_id'),
+                    user_id=task_data.get('user_id', 'system'),
+                    tags=task_data.get('tags'),
+                    trust_score=task_data.get('trust_score', 0.7)
+                )
+            else:
+                logger.error("Ingestion task missing required data (file_path or text)")
+                return
+            
+            logger.info(f"Ingestion task completed with status: {result['status']}")
+            
+            # Store result in Redis for retrieval
+            if self.redis_client and 'task_id' in task:
+                result_key = f"grace:task_result:{task['task_id']}"
+                await self.redis_client.setex(result_key, 3600, str(result))  # 1 hour TTL
+            
+        except Exception as e:
+            logger.error(f"Ingestion task failed: {e}", exc_info=True)
     
     async def _process_embeddings_task(self, task: dict):
         """Process embeddings generation task."""
-        logger.info("Processing embeddings task - placeholder implementation")
-        # TODO: Implement text embedding generation and vector storage
-        await asyncio.sleep(0.1)  # Simulate processing
+        logger.info("Processing embeddings task")
+        
+        from ..memory_ingestion.embeddings import get_embedding_generator
+        
+        try:
+            task_data = task.get('data', {})
+            texts = task_data.get('texts', [])
+            
+            if not texts:
+                logger.warning("Embeddings task has no texts to process")
+                return
+            
+            generator = get_embedding_generator()
+            embedding_results = await generator.generate_embeddings(texts)
+            
+            logger.info(f"Generated embeddings for {len(texts)} texts")
+            
+            # Store result in Redis for retrieval
+            if self.redis_client and 'task_id' in task:
+                result_key = f"grace:task_result:{task['task_id']}"
+                result = {
+                    'status': 'success',
+                    'embeddings': embedding_results
+                }
+                await self.redis_client.setex(result_key, 3600, str(result))  # 1 hour TTL
+            
+        except Exception as e:
+            logger.error(f"Embeddings task failed: {e}", exc_info=True)
     
     async def _process_media_task(self, task: dict):
         """Process media processing task."""
-        logger.info("Processing media task - placeholder implementation")
-        # TODO: Implement media file processing (images, audio, video)
-        await asyncio.sleep(0.1)  # Simulate processing
+        logger.info("Processing media task")
+        
+        try:
+            task_data = task.get('data', {})
+            media_path = task_data.get('media_path')
+            media_type = task_data.get('media_type', 'unknown')
+            
+            if not media_path:
+                logger.warning("Media task missing media_path")
+                return
+            
+            # Basic media processing placeholder
+            # In a real implementation, this would handle:
+            # - Image OCR for text extraction
+            # - Audio transcription
+            # - Video frame analysis
+            # - Document conversion
+            
+            result = {
+                'status': 'processed',
+                'media_path': media_path,
+                'media_type': media_type,
+                'extracted_text': f"[Media content from {media_path} - processing placeholder]"
+            }
+            
+            logger.info(f"Processed media file: {media_path}")
+            
+            # Store result in Redis for retrieval
+            if self.redis_client and 'task_id' in task:
+                result_key = f"grace:task_result:{task['task_id']}"
+                await self.redis_client.setex(result_key, 3600, str(result))  # 1 hour TTL
+            
+        except Exception as e:
+            logger.error(f"Media task failed: {e}", exc_info=True)
     
     async def _monitor_queues(self):
         """Monitor queue sizes and health."""

@@ -10,7 +10,7 @@ import json
 from enum import Enum
 from dataclasses import dataclass, asdict
 
-from core.contracts import Experience, generate_correlation_id
+from ..core.contracts import Experience, generate_correlation_id
 
 
 logger = logging.getLogger(__name__)

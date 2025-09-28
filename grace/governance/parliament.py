@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import logging
 
-from core.contracts import Experience, generate_correlation_id
+from ..core.contracts import Experience, generate_correlation_id
 
 
 logger = logging.getLogger(__name__)

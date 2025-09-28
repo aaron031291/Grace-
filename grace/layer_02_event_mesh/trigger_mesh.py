@@ -9,7 +9,7 @@ import logging
 from enum import Enum
 from dataclasses import dataclass, asdict
 
-from core.contracts import EventType
+from ..core.contracts import EventType
 
 
 logger = logging.getLogger(__name__)

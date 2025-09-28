@@ -2,29 +2,33 @@
 Grace Unified Orb Interface - FastAPI Service
 Complete REST API and WebSocket endpoints for the Grace Orb Interface.
 """
-import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .orb_interface import GraceUnifiedOrbInterface, PanelType, NotificationPriority
-from .ide.grace_ide import BlockType
+from .ide.grace_ide import BlockType  # referenced by IDE endpoints
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------
 # Pydantic models for API
+# ---------------------------
+
 class SessionCreateRequest(BaseModel):
     user_id: str
     preferences: Optional[Dict[str, Any]] = None
+
 
 class ChatMessageRequest(BaseModel):
     session_id: str
     content: str
     attachments: Optional[List[Dict[str, Any]]] = None
+
 
 class PanelCreateRequest(BaseModel):
     session_id: str
@@ -33,15 +37,18 @@ class PanelCreateRequest(BaseModel):
     data: Optional[Dict[str, Any]] = None
     position: Optional[Dict[str, float]] = None
 
+
 class PanelUpdateRequest(BaseModel):
     session_id: str
     panel_id: str
     data: Dict[str, Any]
 
+
 class MemorySearchRequest(BaseModel):
     session_id: str
     query: str
     filters: Optional[Dict[str, Any]] = None
+
 
 class GovernanceTaskRequest(BaseModel):
     title: str
@@ -49,6 +56,7 @@ class GovernanceTaskRequest(BaseModel):
     task_type: str
     requester_id: str
     assignee_id: Optional[str] = None
+
 
 class NotificationRequest(BaseModel):
     user_id: str
@@ -59,11 +67,13 @@ class NotificationRequest(BaseModel):
     actions: Optional[List[Dict[str, str]]] = None
     auto_dismiss_seconds: Optional[int] = None
 
+
 class IDEFlowRequest(BaseModel):
     name: str
     description: str
     creator_id: str
     template_id: Optional[str] = None
+
 
 class IDEBlockRequest(BaseModel):
     flow_id: str
@@ -72,34 +82,114 @@ class IDEBlockRequest(BaseModel):
     name: Optional[str] = None
     configuration: Optional[Dict[str, Any]] = None
 
+
+# ---- Enhanced Features Request Models ----
+class KnowledgeEntryRequest(BaseModel):
+    title: str
+    content: str
+    source: str
+    domain: str
+    trust_score: float
+    relevance_tags: Optional[List[str]] = None
+    related_libraries: Optional[List[str]] = None
+
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str
+    domain: Optional[str] = None
+    min_trust_score: float = 0.0
+
+
+class TaskItemRequest(BaseModel):
+    title: str
+    description: str
+    priority: str = "medium"
+    assigned_to: str = "grace"
+
+
+class TaskUpdateRequest(BaseModel):
+    task_id: str
+    status: str
+    progress: Optional[float] = None
+
+
+class TaskDataMergeRequest(BaseModel):
+    task_id: str
+    data: Dict[str, Any]
+
+
+class MemoryItemRequest(BaseModel):
+    name: str
+    item_type: str
+    content: Optional[str] = None
+    parent_id: Optional[str] = None
+    is_editable: bool = True
+
+
+class MemoryItemUpdateRequest(BaseModel):
+    item_id: str
+    content: str
+
+
+class CollaborationSessionRequest(BaseModel):
+    topic: str
+    participants: List[str]
+
+
+class DiscussionPointRequest(BaseModel):
+    session_id: str
+    author: str
+    point: str
+    point_type: str = "discussion"
+
+
+class ActionItemRequest(BaseModel):
+    session_id: str
+    title: str
+    description: str
+    assigned_to: str
+    priority: str = "medium"
+
+
+# ---- Multimodal Models ----
 class ScreenShareRequest(BaseModel):
     user_id: str
     quality_settings: Optional[Dict[str, Any]] = None
+
 
 class RecordingRequest(BaseModel):
     user_id: str
     media_type: str  # "screen_recording", "audio_recording", "video_recording"
     metadata: Optional[Dict[str, Any]] = None
 
+
 class VoiceSettingsRequest(BaseModel):
     user_id: str
     settings: Dict[str, Any]
+
 
 class BackgroundTaskRequest(BaseModel):
     task_type: str
     metadata: Dict[str, Any]
 
+
+# ---------------------------
 # Global orb interface instance
+# ---------------------------
+
 orb_interface = GraceUnifiedOrbInterface()
 
+# ---------------------------
 # FastAPI app
+# ---------------------------
+
 app = FastAPI(
     title="Grace Unified Orb Interface",
     description="Complete interface for Grace AI system with chat, panels, IDE, and governance",
     version="1.0.0"
 )
 
-# Add CORS middleware
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -111,7 +201,9 @@ app.add_middleware(
 # WebSocket connections
 ws_connections: Dict[str, WebSocket] = {}
 
+# ---------------------------
 # API Endpoints
+# ---------------------------
 
 @app.get("/")
 async def root():
@@ -139,6 +231,7 @@ async def root():
         }
     }
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -148,7 +241,9 @@ async def health_check():
         "version": "1.0.0"
     }
 
+# ---------------------------
 # Session Management
+# ---------------------------
 
 @app.post("/api/orb/v1/sessions/create")
 async def create_session(request: SessionCreateRequest):
@@ -159,6 +254,7 @@ async def create_session(request: SessionCreateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/api/orb/v1/sessions/{session_id}")
 async def end_session(session_id: str):
     """End an orb session."""
@@ -167,13 +263,13 @@ async def end_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "ended"}
 
+
 @app.get("/api/orb/v1/sessions/{session_id}")
 async def get_session(session_id: str):
     """Get session information."""
     session = orb_interface.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
     return {
         "session_id": session.session_id,
         "user_id": session.user_id,
@@ -183,15 +279,17 @@ async def get_session(session_id: str):
         "active_panels": len(session.active_panels)
     }
 
+# ---------------------------
 # Chat Interface
+# ---------------------------
 
 @app.post("/api/orb/v1/chat/message")
 async def send_chat_message(request: ChatMessageRequest):
     """Send a chat message."""
     try:
         message_id = await orb_interface.send_chat_message(
-            request.session_id, 
-            request.content, 
+            request.session_id,
+            request.content,
             request.attachments
         )
         return {"message_id": message_id, "status": "sent"}
@@ -199,6 +297,7 @@ async def send_chat_message(request: ChatMessageRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/orb/v1/chat/{session_id}/history")
 async def get_chat_history(session_id: str, limit: Optional[int] = None):
@@ -219,15 +318,20 @@ async def get_chat_history(session_id: str, limit: Optional[int] = None):
         ]
     }
 
+# ---------------------------
 # Panel Management
+# ---------------------------
 
 @app.post("/api/orb/v1/panels/create")
 async def create_panel(request: PanelCreateRequest):
     """Create a new panel."""
     try:
-        # Convert string to PanelType enum
-        panel_type = PanelType(request.panel_type.lower())
-        
+        # Flexible enum parsing: allow value ("memory_explorer_panel") or name ("MEMORY_EXPLORER_PANEL")
+        try:
+            panel_type = PanelType(request.panel_type.lower())
+        except ValueError:
+            panel_type = PanelType[request.panel_type.upper()]
+
         panel_id = await orb_interface.create_panel(
             request.session_id,
             panel_type,
@@ -236,13 +340,15 @@ async def create_panel(request: PanelCreateRequest):
             request.position
         )
         return {"panel_id": panel_id, "status": "created"}
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Unknown panel_type '{request.panel_type}'")
     except ValueError as e:
-        if "not found" in str(e):
+        if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))
-        else:
-            raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/api/orb/v1/panels/{session_id}/{panel_id}")
 async def close_panel(session_id: str, panel_id: str):
@@ -252,17 +358,19 @@ async def close_panel(session_id: str, panel_id: str):
         raise HTTPException(status_code=404, detail="Panel not found or not closable")
     return {"status": "closed"}
 
+
 @app.put("/api/orb/v1/panels/update")
 async def update_panel_data(request: PanelUpdateRequest):
     """Update panel data."""
     success = await orb_interface.update_panel_data(
-        request.session_id, 
-        request.panel_id, 
+        request.session_id,
+        request.panel_id,
         request.data
     )
     if not success:
         raise HTTPException(status_code=404, detail="Panel not found")
     return {"status": "updated"}
+
 
 @app.get("/api/orb/v1/panels/{session_id}")
 async def get_panels(session_id: str):
@@ -284,32 +392,35 @@ async def get_panels(session_id: str):
         ]
     }
 
+# ---------------------------
 # Memory Management
+# ---------------------------
 
 @app.post("/api/orb/v1/memory/upload")
 async def upload_document(file: UploadFile = File(...), user_id: str = "default"):
     """Upload a document to memory."""
     try:
-        # Save uploaded file temporarily
         import tempfile
         import os
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
+
+        # safer suffix handling if filename has no dot
+        suffix = ""
+        if "." in (file.filename or ""):
+            suffix = f".{file.filename.rsplit('.', 1)[-1]}"
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
-        
+
         try:
-            # Get file type from filename
-            file_type = file.filename.split('.')[-1].lower()
-            
+            file_type = file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin"
             fragment_id = await orb_interface.upload_document(
                 user_id=user_id,
                 file_path=temp_file_path,
                 file_type=file_type,
                 metadata={"original_filename": file.filename, "size": len(content)}
             )
-            
             return {
                 "fragment_id": fragment_id,
                 "filename": file.filename,
@@ -318,11 +429,10 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "default"
                 "status": "uploaded"
             }
         finally:
-            # Clean up temp file
             os.unlink(temp_file_path)
-            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/orb/v1/memory/search")
 async def search_memory(request: MemorySearchRequest):
@@ -333,7 +443,6 @@ async def search_memory(request: MemorySearchRequest):
             request.query,
             request.filters
         )
-        
         return {
             "query": request.query,
             "results": [
@@ -352,12 +461,15 @@ async def search_memory(request: MemorySearchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/orb/v1/memory/stats")
 async def get_memory_stats():
     """Get memory usage statistics."""
     return orb_interface.get_memory_stats()
 
+# ---------------------------
 # Governance
+# ---------------------------
 
 @app.post("/api/orb/v1/governance/tasks")
 async def create_governance_task(request: GovernanceTaskRequest):
@@ -373,6 +485,7 @@ async def create_governance_task(request: GovernanceTaskRequest):
         return {"task_id": task_id, "status": "created"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/orb/v1/governance/tasks/{user_id}")
 async def get_governance_tasks(user_id: str, status_filter: Optional[str] = None):
@@ -395,6 +508,7 @@ async def get_governance_tasks(user_id: str, status_filter: Optional[str] = None
         ]
     }
 
+
 @app.put("/api/orb/v1/governance/tasks/{task_id}/status")
 async def update_governance_task_status(task_id: str, status: str, user_id: str):
     """Update governance task status."""
@@ -403,14 +517,15 @@ async def update_governance_task_status(task_id: str, status: str, user_id: str)
         raise HTTPException(status_code=404, detail="Task not found or permission denied")
     return {"status": "updated"}
 
+# ---------------------------
 # Notifications
+# ---------------------------
 
 @app.post("/api/orb/v1/notifications")
 async def create_notification(request: NotificationRequest):
     """Create a notification."""
     try:
         priority = NotificationPriority(request.priority.lower())
-        
         notification_id = await orb_interface.create_notification(
             request.user_id,
             request.title,
@@ -423,6 +538,7 @@ async def create_notification(request: NotificationRequest):
         return {"notification_id": notification_id, "status": "created"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/orb/v1/notifications/{user_id}")
 async def get_notifications(user_id: str, unread_only: bool = True):
@@ -444,6 +560,7 @@ async def get_notifications(user_id: str, unread_only: bool = True):
         ]
     }
 
+
 @app.delete("/api/orb/v1/notifications/{notification_id}")
 async def dismiss_notification(notification_id: str, user_id: str):
     """Dismiss a notification."""
@@ -452,7 +569,9 @@ async def dismiss_notification(notification_id: str, user_id: str):
         raise HTTPException(status_code=404, detail="Notification not found")
     return {"status": "dismissed"}
 
+# ---------------------------
 # IDE Integration
+# ---------------------------
 
 @app.post("/api/orb/v1/ide/panels/{session_id}")
 async def open_ide_panel(session_id: str, flow_id: Optional[str] = None):
@@ -462,6 +581,7 @@ async def open_ide_panel(session_id: str, flow_id: Optional[str] = None):
         return {"panel_id": panel_id, "status": "opened"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/orb/v1/ide/flows")
 async def create_ide_flow(request: IDEFlowRequest):
@@ -478,6 +598,7 @@ async def create_ide_flow(request: IDEFlowRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/orb/v1/ide/flows/{flow_id}")
 async def get_ide_flow(flow_id: str):
     """Get IDE flow details."""
@@ -485,7 +606,6 @@ async def get_ide_flow(flow_id: str):
     flow = ide.get_flow(flow_id)
     if not flow:
         raise HTTPException(status_code=404, detail="Flow not found")
-    
     return {
         "flow_id": flow.flow_id,
         "name": flow.name,
@@ -497,7 +617,7 @@ async def get_ide_flow(flow_id: str):
                 "block_id": block.block_id,
                 "name": block.name,
                 "description": block.description,
-                "block_type": block.block_type.value,
+                "block_type": block.block_type.value if hasattr(block.block_type, "value") else str(block.block_type),
                 "position": block.position,
                 "configuration": block.configuration
             }
@@ -505,6 +625,7 @@ async def get_ide_flow(flow_id: str):
         ],
         "connections": flow.connections
     }
+
 
 @app.post("/api/orb/v1/ide/flows/blocks")
 async def add_block_to_flow(request: IDEBlockRequest):
@@ -522,18 +643,18 @@ async def add_block_to_flow(request: IDEBlockRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/api/orb/v1/ide/blocks")
 async def get_block_registry():
     """Get available IDE blocks."""
     ide = orb_interface.get_ide_instance()
     registry = ide.get_block_registry()
-    
     return {
         "blocks": {
             block_id: {
                 "name": block_info["name"],
                 "description": block_info["description"],
-                "block_type": block_info["block_type"].value,
+                "block_type": block_info["block_type"].value if hasattr(block_info["block_type"], "value") else str(block_info["block_type"]),
                 "inputs": block_info["inputs"],
                 "outputs": block_info["outputs"]
             }
@@ -541,7 +662,9 @@ async def get_block_registry():
         }
     }
 
+# ---------------------------
 # Multimodal Interface Endpoints
+# ---------------------------
 
 @app.post("/api/orb/v1/multimodal/screen-share/start")
 async def start_screen_share(request: ScreenShareRequest):
@@ -559,6 +682,7 @@ async def start_screen_share(request: ScreenShareRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/orb/v1/multimodal/screen-share/stop/{session_id}")
 async def stop_screen_share(session_id: str):
     """Stop screen sharing session."""
@@ -566,6 +690,7 @@ async def stop_screen_share(session_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Screen sharing session not found")
     return {"status": "stopped"}
+
 
 @app.post("/api/orb/v1/multimodal/recording/start")
 async def start_recording(request: RecordingRequest):
@@ -586,28 +711,25 @@ async def start_recording(request: RecordingRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/orb/v1/multimodal/recording/stop/{session_id}")
 async def stop_recording(session_id: str):
     """Stop recording and return session info."""
     try:
         result = await orb_interface.stop_recording(session_id)
-        return {
-            "status": "stopped",
-            **result
-        }
+        return {"status": "stopped", **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/orb/v1/multimodal/sessions")
 async def get_active_media_sessions(user_id: Optional[str] = None):
     """Get active media sessions."""
     sessions = orb_interface.get_active_media_sessions(user_id)
-    return {
-        "sessions": sessions,
-        "total": len(sessions)
-    }
+    return {"sessions": sessions, "total": len(sessions)}
+
 
 @app.post("/api/orb/v1/multimodal/voice/settings")
 async def set_voice_settings(request: VoiceSettingsRequest):
@@ -618,24 +740,23 @@ async def set_voice_settings(request: VoiceSettingsRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/orb/v1/multimodal/voice/settings/{user_id}")
 async def get_voice_settings(user_id: str):
     """Get voice settings for user."""
     settings = orb_interface.get_voice_settings(user_id)
     return {"user_id": user_id, "settings": settings}
 
+
 @app.post("/api/orb/v1/multimodal/voice/toggle/{user_id}")
 async def toggle_voice(user_id: str, enable: bool):
     """Toggle voice input/output for user."""
     try:
         result = await orb_interface.toggle_voice(user_id, enable)
-        return {
-            "user_id": user_id,
-            "voice_enabled": result,
-            "status": "updated"
-        }
+        return {"user_id": user_id, "voice_enabled": result, "status": "updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/orb/v1/multimodal/tasks")
 async def create_background_task(request: BackgroundTaskRequest):
@@ -645,12 +766,10 @@ async def create_background_task(request: BackgroundTaskRequest):
             request.task_type,
             request.metadata
         )
-        return {
-            "task_id": task_id,
-            "status": "queued"
-        }
+        return {"task_id": task_id, "status": "queued"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/orb/v1/multimodal/tasks/{task_id}")
 async def get_background_task_status(task_id: str):
@@ -660,12 +779,15 @@ async def get_background_task_status(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     return task_status
 
+# ---------------------------
 # Statistics
+# ---------------------------
 
 @app.get("/api/orb/v1/stats")
 async def get_orb_stats():
     """Get comprehensive orb statistics."""
     return orb_interface.get_orb_stats()
+
 
 @app.get("/api/orb/v1/stats/ide")
 async def get_ide_stats():
@@ -673,31 +795,27 @@ async def get_ide_stats():
     ide = orb_interface.get_ide_instance()
     return ide.get_stats()
 
+# ---------------------------
 # WebSocket Support
+# ---------------------------
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for real-time communication."""
     await websocket.accept()
     ws_connections[session_id] = websocket
-    
+
     try:
         while True:
-            # Keep connection alive and handle messages
             data = await websocket.receive_json()
-            
             message_type = data.get("type", "")
-            
+
             if message_type == "chat_message":
-                # Handle chat message via WebSocket
                 content = data.get("content", "")
                 attachments = data.get("attachments", [])
-                
                 try:
                     message_id = await orb_interface.send_chat_message(session_id, content, attachments)
-                    
-                    # Send response back via WebSocket
-                    messages = orb_interface.get_chat_history(session_id, 2)  # Get last 2 messages
+                    messages = orb_interface.get_chat_history(session_id, 2)
                     await websocket.send_json({
                         "type": "chat_response",
                         "message_id": message_id,
@@ -709,52 +827,42 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 "timestamp": msg.timestamp,
                                 "message_type": msg.message_type
                             }
-                            for msg in messages[-1:]  # Send just the response
+                            for msg in messages[-1:]
                         ]
                     })
                 except Exception as e:
-                    await websocket.send_json({
-                        "type": "error",
-                        "error": str(e)
-                    })
-            
+                    await websocket.send_json({"type": "error", "error": str(e)})
+
             elif message_type == "ping":
-                # Heartbeat
                 await websocket.send_json({"type": "pong"})
-            
+
             else:
-                await websocket.send_json({
-                    "type": "error",
-                    "error": f"Unknown message type: {message_type}"
-                })
-                
+                await websocket.send_json({"type": "error", "error": f"Unknown message type: {message_type}"})
+
     except WebSocketDisconnect:
-        if session_id in ws_connections:
-            del ws_connections[session_id]
+        ws_connections.pop(session_id, None)
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
-        if session_id in ws_connections:
-            del ws_connections[session_id]
+        ws_connections.pop(session_id, None)
 
-# Startup event
+# ---------------------------
+# Lifecycle Hooks
+# ---------------------------
+
 @app.on_event("startup")
 async def startup_event():
-    """Application startup."""
     logger.info("Grace Unified Orb Interface API starting up...")
     logger.info(f"Orb Interface version: {orb_interface.version}")
     logger.info("API ready to serve requests")
 
-# Shutdown event
+
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Application shutdown."""
     logger.info("Grace Unified Orb Interface API shutting down...")
-    
-    # Clean up active sessions
-    for session_id in list(orb_interface.active_sessions.keys()):
-        await orb_interface.end_session(session_id)
-    
+    for sid in list(orb_interface.active_sessions.keys()):
+        await orb_interface.end_session(sid)
     logger.info("Shutdown complete")
+
 
 if __name__ == "__main__":
     import uvicorn

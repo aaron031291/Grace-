@@ -35,8 +35,8 @@ up: install-deps bootstrap
 	@echo "🚀 Starting Grace Governance System..."
 	@echo "Creating environment file..."
 	@cp -n .env.template .env 2>/dev/null || true
-	@echo "Starting services with docker-compose..."
-	docker-compose up -d
+	@echo "Starting services with docker compose..."
+	docker compose up -d
 	@echo "Waiting for services to be ready..."
 	@sleep 10
 	@echo "Running health check..."
@@ -51,13 +51,13 @@ up: install-deps bootstrap
 # Stop all services
 down:
 	@echo "🛑 Stopping Grace services..."
-	docker-compose down
+	docker compose down
 	@echo "✅ Services stopped"
 
 # Build Docker images
 build:
 	@echo "🔨 Building Grace Docker images..."
-	docker-compose build --no-cache
+	docker compose build --no-cache
 	@echo "✅ Images built successfully"
 
 # View logs
@@ -76,7 +76,7 @@ bootstrap:
 	@echo "Creating necessary directories..."
 	@mkdir -p logs data/postgres data/redis data/chroma
 	@echo "Waiting for databases to be ready..."
-	@docker-compose up -d postgres redis chromadb
+	@docker compose up -d postgres redis chromadb
 	@sleep 15
 	@echo "Running bootstrap script..."
 	@python scripts/bootstrap.py || echo "⚠️  Bootstrap script not yet created"
@@ -93,8 +93,8 @@ db-reset:
 	@echo "⚠️  This will DESTROY all data. Are you sure? (y/N)"
 	@read -r response && [ "$$response" = "y" ] || exit 1
 	@echo "🗄️  Resetting database..."
-	docker-compose down -v
-	docker-compose up -d postgres redis chromadb
+	docker compose down -v
+	docker compose up -d postgres redis chromadb
 	@sleep 10
 	@make migrate
 	@echo "✅ Database reset completed"
@@ -132,7 +132,7 @@ health-check:
 # Clean up
 clean:
 	@echo "🧹 Cleaning up Docker resources..."
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	docker system prune -f
 	@echo "✅ Cleanup completed"
 
@@ -142,7 +142,7 @@ deploy-dev:
 	@echo "Building images..."
 	@make build
 	@echo "Deploying..."
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 	@echo "✅ Development deployment completed"
 
 # Production deployment (placeholder)
@@ -153,13 +153,13 @@ deploy-prod:
 
 # Development helpers
 dev-logs:
-	docker-compose logs -f grace_orchestrator
+	docker compose logs -f grace_orchestrator
 
 dev-shell:
-	docker-compose exec grace_orchestrator /bin/bash
+	docker compose exec grace_orchestrator /bin/bash
 
 dev-python:
-	docker-compose exec grace_orchestrator python
+	docker compose exec grace_orchestrator python
 
 # Quality assurance pipeline
 qa: install-deps lint type-check test

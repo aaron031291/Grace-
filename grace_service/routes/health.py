@@ -18,8 +18,9 @@ startup_time = time.time()
 
 
 def get_app_state():
-    """Dependency injection placeholder."""
-    pass
+    """Dependency injection for app state."""
+    from ..app import app_state
+    return app_state
 
 
 @health_router.get("/status", response_model=HealthResponse)

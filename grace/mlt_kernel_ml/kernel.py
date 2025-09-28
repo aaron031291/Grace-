@@ -27,9 +27,10 @@ class MLTKernelML:
     auto-tunes thresholds, re-weights specialists, and manages model lifecycle.
     """
     
-    def __init__(self, event_bus=None, governance_engine=None):
+    def __init__(self, event_bus=None, governance_engine=None, mtl_kernel=None):
         self.event_bus = event_bus
         self.governance_engine = governance_engine
+        self.mtl_kernel = mtl_kernel  # Store MTL kernel reference
         
         # Initialize core components
         self.experience_collector = ExperienceCollector(event_bus)
@@ -40,7 +41,7 @@ class MLTKernelML:
         
         # Initialize service interfaces
         self.mlt_service = MLTService(self)
-        self.gov_bridge = MLTGovernanceBridge(governance_engine, event_bus)
+        self.gov_bridge = MLTGovernanceBridge(governance_engine, event_bus, mtl_kernel)
         
         # State
         self.running = False
@@ -274,6 +275,11 @@ class MLTKernelML:
         self.event_bus = event_bus
         self.experience_collector.event_bus = event_bus
         self.gov_bridge.event_bus = event_bus
+    
+    def set_mtl_kernel(self, mtl_kernel):
+        """Set the MTL kernel reference for memory, trust, and audit capabilities."""
+        self.mtl_kernel = mtl_kernel
+        self.gov_bridge.set_mtl_kernel(mtl_kernel)
     
     # Health and monitoring
     async def health_check(self) -> Dict[str, Any]:

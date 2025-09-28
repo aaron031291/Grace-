@@ -401,7 +401,8 @@ class InterfaceService:
                 user_id=action["payload"]["user_id"],
                 filters=action["payload"].get("filters")
             )
-            return f"Memory search completed: {result['result_count']} results"
+            result_count = result.get('result_count', 0)
+            return f"Memory search completed: {result_count} results"
         
         return "Memory action handled"
     

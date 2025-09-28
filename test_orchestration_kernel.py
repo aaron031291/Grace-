@@ -180,7 +180,7 @@ async def test_contracts_and_schemas():
         from pathlib import Path
         
         # Test schema files exist and are valid JSON
-        contracts_dir = Path(__file__).parent.parent / "grace" / "orchestration" / "contracts"
+        contracts_dir = Path(__file__).parent / "grace" / "orchestration" / "contracts"
         
         schema_files = [
             "orch.loop.schema.json",

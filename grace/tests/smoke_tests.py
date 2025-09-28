@@ -3,7 +3,7 @@ import sys
 import os
 
 # Add grace to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from grace.mtl_kernel.kernel import MTLKernel
 from grace.governance.grace_governance_kernel import GraceGovernanceKernel as GovernanceKernel

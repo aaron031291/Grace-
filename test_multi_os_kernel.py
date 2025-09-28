@@ -8,14 +8,14 @@ import sys
 import os
 from datetime import datetime
 
-# Add the multi_os directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'multi_os'))
+# Add the grace directory to path
+sys.path.insert(0, os.path.dirname(__file__))
 
-from multi_os_service import MultiOSService
-from orchestrator.scheduler import Scheduler
-from inventory.registry import Registry
-from telemetry.collector import TelemetryCollector
-from snapshots.manager import SnapshotManager
+from grace.multi_os.multi_os_service import MultiOSService
+from grace.multi_os.orchestrator.scheduler import Scheduler
+from grace.multi_os.inventory.registry import Registry
+from grace.multi_os.telemetry.collector import TelemetryCollector
+from grace.multi_os.snapshots.manager import SnapshotManager
 
 
 async def test_multi_os_service():

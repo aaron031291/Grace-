@@ -54,7 +54,8 @@ async def get_current_user_session(
         )
     
     # Update session access time
-    await repos.sessions.update(user_session.id, {"last_accessed": None})  # Will use current time
+    from datetime import datetime
+    await repos.sessions.update(user_session.id, {"last_accessed": datetime.utcnow()})
     await session.commit()
     
     return user, user_session

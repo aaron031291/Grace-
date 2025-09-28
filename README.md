@@ -6,7 +6,7 @@ The **Grace Governance Kernel** is an advanced AI governance system that impleme
 
 Grace implements a comprehensive governance architecture with the following components:
 
-### Core Governance Layer (`layer_01_governance/`)
+### Core Governance Layer (`grace/governance/`)
 - **Verification Engine** - Truth validation and claim analysis with constitutional reasoning
 - **Unified Logic** - Cross-layer synthesis and arbitration of specialist inputs
 - **Governance Engine** - Main orchestrator with policy enforcement and event management
@@ -71,7 +71,7 @@ pip install -r requirements.txt  # Optional system monitoring dependencies
 ### Basic Usage
 ```python
 import asyncio
-from grace_governance_kernel import GraceGovernanceKernel
+from grace.governance.grace_governance_kernel import GraceGovernanceKernel
 
 async def main():
     # Initialize and start governance kernel
@@ -214,7 +214,9 @@ Grace supports blue/green governance deployment:
 ```
 Grace-/
 ├── core/                    # Core infrastructure
-├── layer_01_governance/     # Governance components  
+├── grace/                   # Grace kernels and components
+│   ├── governance/          # Governance components  
+│   └── governance_kernel/   # Governance kernel components
 ├── layer_02_event_mesh/     # Event routing
 ├── layer_04_audit_logs/     # Audit system
 ├── immune/                  # Health monitoring
@@ -222,7 +224,6 @@ Grace-/
 │   └── specialists/         # Specialist implementations
 ├── config/                  # Configuration
 ├── schemas/                 # Event schemas
-├── grace_governance_kernel.py  # Main integration
 └── test_governance_kernel.py   # Test suite
 ```
 

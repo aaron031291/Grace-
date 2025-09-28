@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Resilience SLO Policy Schema",
+  "description": "Schema for Service Level Objective policies in Grace Resilience Kernel",
+  
+  "definitions": {
+    "SLOPolicy": {
+      "type": "object",
+      "required": ["service_id", "slos", "error_budget_days"],
+      "properties": {
+        "service_id": {
+          "type": "string",
+          "description": "Unique identifier for the service"
+        },
+        "slos": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["sli", "objective", "window"],
+            "properties": {
+              "sli": {
+                "enum": ["latency_p95_ms", "availability_pct", "error_rate_pct", "drift_psi"],
+                "description": "Service Level Indicator type"
+              },
+              "objective": {
+                "type": "number",
+                "description": "Target value for the SLI (e.g., latency ≤ 800ms, availability ≥ 99.9%)"
+              },
+              "window": {
+                "type": "string",
+                "pattern": "^\\d+[dmh]$",
+                "description": "Time window for measurement (e.g., '7d', '30d', '1h')"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "error_budget_days": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Error budget in days (e.g., 0.5 per 30d)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "type": "object",
+  "oneOf": [
+    {"$ref": "#/definitions/SLOPolicy"}
+  ]
+}

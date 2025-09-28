@@ -13,10 +13,10 @@ class BaseDTO(BaseModel):
 
 
 class W5HIndex(BaseModel):
-    """Who/What/When/Where/Why/How indexing."""
+    """Who/What/When/Where/Why/How indexing with enhanced capabilities."""
     who: List[str] = Field(default_factory=list)
     what: List[str] = Field(default_factory=list)
-    when: Optional[datetime] = None
+    when: List[str] = Field(default_factory=list)  # Changed to List[str] for temporal references
     where: List[str] = Field(default_factory=list)
     why: List[str] = Field(default_factory=list)
     how: List[str] = Field(default_factory=list)

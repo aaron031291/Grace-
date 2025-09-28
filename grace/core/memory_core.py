@@ -6,6 +6,7 @@ Part of Phase 3: Memory Core Production implementation.
 import json
 import hashlib
 import asyncio
+import uuid
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 import sqlite3
@@ -577,6 +578,26 @@ class MemoryCore:
     def _hash_dict(self, data: Dict[str, Any]) -> str:
         """Create a hash of dictionary data for deduplication."""
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+    
+    async def store_experience(self, experience: Experience) -> str:
+        """
+        Store an Experience object in memory for learning purposes.
+        This method is required for governance learning systems.
+        """
+        memory_id = await self.store_structured_memory(
+            memory_type="experience",
+            content=experience.to_dict(),
+            metadata={
+                "component_id": experience.component_id,
+                "type": experience.type,
+                "success_score": experience.success_score,
+                "source": "governance_learning"
+            },
+            importance_score=min(1.0, experience.success_score + 0.1)  # Boost importance slightly
+        )
+        
+        logger.debug(f"Stored experience: {memory_id}")
+        return memory_id
     
     async def close(self):
         """Close database connections."""

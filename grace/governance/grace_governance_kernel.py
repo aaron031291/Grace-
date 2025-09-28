@@ -3,7 +3,7 @@ Grace Governance Kernel - Main integration and initialization.
 """
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # Core infrastructure
 from core import EventBus, MemoryCore
@@ -14,6 +14,12 @@ from .unified_logic import UnifiedLogic
 from .governance_engine import GovernanceEngine
 from .parliament import Parliament
 from .trust_core_kernel import TrustCoreKernel
+
+# Additional governance components from governance_kernel merge
+from .policy_engine import PolicyEngine
+from .verification_bridge import VerificationBridge
+from .quorum_bridge import QuorumBridge
+from .synthesizer import Synthesizer
 
 # Supporting infrastructure
 from layer_04_audit_logs import ImmutableLogs
@@ -32,11 +38,40 @@ class GraceGovernanceKernel:
     event routing, audit trails, and health monitoring.
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, mtl_kernel=None, intelligence_kernel=None, config: Optional[Dict[str, Any]] = None):
+        # Handle both new (config dict) and old (positional args) calling conventions
+        if isinstance(mtl_kernel, dict) and intelligence_kernel is None and config is None:
+            # New style: GraceGovernanceKernel(config_dict)
+            config = mtl_kernel
+            mtl_kernel = None
+            intelligence_kernel = None
+        elif mtl_kernel is None and intelligence_kernel is None:
+            # New style: GraceGovernanceKernel() or GraceGovernanceKernel(config=config_dict)
+            pass
+        # else: Old style: GraceGovernanceKernel(mtl_kernel, intelligence_kernel)
+        
         self.config = config or {}
         self.components = {}
         self.is_initialized = False
         self.is_running = False
+        
+        # Synchronous governance components for compatibility
+        self.mtl_kernel = mtl_kernel
+        self.intelligence_kernel = intelligence_kernel
+        self.policy_engine = None
+        self.verification_bridge = None
+        self.quorum_bridge = None
+        self.synthesizer = None
+        
+        # Initialize synchronous components immediately for backward compatibility
+        self._init_sync_components()
+        
+    def _init_sync_components(self):
+        """Initialize synchronous governance components for backward compatibility."""
+        self.policy_engine = PolicyEngine()
+        self.verification_bridge = VerificationBridge()
+        self.quorum_bridge = QuorumBridge(self.intelligence_kernel)
+        self.synthesizer = Synthesizer()
         
     async def initialize(self):
         """Initialize all governance kernel components."""
@@ -104,6 +139,12 @@ class GraceGovernanceKernel:
             self.components['verification_engine'],
             self.components['unified_logic']
         )
+        
+        # Initialize synchronous governance components for compatibility
+        self.policy_engine = PolicyEngine()
+        self.verification_bridge = VerificationBridge()
+        self.quorum_bridge = QuorumBridge(self.intelligence_kernel)
+        self.synthesizer = Synthesizer()
         
         logger.info("Governance components initialized")
     
@@ -329,6 +370,132 @@ class GraceGovernanceKernel:
                 "rationale": f"Processing error: {str(e)}",
                 "error": True
             }
+    
+    def evaluate(self, request) -> Dict[str, Any]:
+        """
+        Synchronous governance evaluation pipeline compatible with original GovernanceKernel.
+        This method provides backward compatibility for the governance_kernel interface.
+        
+        Pipeline:
+        1) policy_engine.check(request)
+        2) verification_bridge.verify(request)
+        3) feed = mtl.feed_for_quorum(filters_from(request)) [if available]
+        4) result = quorum_bridge.consensus(feed)
+        5) decision = synthesizer.merge(request, results)
+        6) mtl.store_decision(decision) [if available]
+        """
+        try:
+            # Step 1: Policy evaluation
+            policy_results = self.policy_engine.check(request)
+            
+            # Step 2: Request verification
+            verification_result = self.verification_bridge.verify(request)
+            
+            # Step 3 & 4: Quorum consensus (if required)
+            quorum_consensus = None
+            requires_quorum = self._check_requires_quorum(request, policy_results)
+            
+            if requires_quorum and self.mtl_kernel:
+                # Generate filters from request for MTL feed
+                filters = self._filters_from_request(request)
+                feed_ids = self.mtl_kernel.feed_for_quorum(filters)
+                quorum_consensus = self.quorum_bridge.consensus(feed_ids, context={"request": request})
+            
+            # Step 5: Synthesize final decision
+            decision = self.synthesizer.merge(
+                request=request,
+                policy_results=policy_results,
+                verification_result=verification_result,
+                quorum_consensus=quorum_consensus
+            )
+            
+            # Step 6: Store decision (if MTL kernel available)
+            if self.mtl_kernel:
+                try:
+                    self.mtl_kernel.store_decision(decision)
+                except Exception as e:
+                    logger.warning(f"Failed to store decision in MTL: {e}")
+            
+            return decision
+            
+        except Exception as e:
+            logger.error(f"Error in synchronous governance evaluation: {e}")
+            return {
+                "request_id": self._extract_request_id(request),
+                "approved": False,
+                "confidence": 0.0,
+                "reasoning": f"Evaluation error: {str(e)}",
+                "error": True
+            }
+    
+    def _check_requires_quorum(self, request, policy_results: List[Dict[str, Any]]) -> bool:
+        """Check if request requires quorum based on policy results."""
+        # Check if any policy result indicates quorum requirement
+        for result in policy_results:
+            if result.get("requires_quorum", False):
+                return True
+        
+        # Check request directly
+        if hasattr(request, 'requires_quorum'):
+            return request.requires_quorum
+        elif isinstance(request, dict):
+            return request.get('requires_quorum', False)
+        
+        return False
+    
+    def _filters_from_request(self, request) -> dict:
+        """Generate MTL query filters from governance request."""
+        filters = {}
+        
+        # Extract relevant information from request for MTL query
+        if hasattr(request, 'request_type'):
+            filters['request_type'] = request.request_type
+        elif isinstance(request, dict):
+            filters['request_type'] = request.get('request_type', 'unknown')
+        
+        if hasattr(request, 'tags'):
+            filters['tags'] = request.tags
+        elif isinstance(request, dict):
+            filters['tags'] = request.get('tags', [])
+        
+        if hasattr(request, 'policy_domains'):
+            filters['domains'] = request.policy_domains
+        elif isinstance(request, dict):
+            filters['domains'] = request.get('policy_domains', [])
+        
+        return filters
+    
+    def _extract_request_id(self, request) -> str:
+        """Extract request ID from request regardless of format."""
+        if hasattr(request, 'id'):
+            return str(request.id)
+        elif hasattr(request, 'request_id'):
+            return str(request.request_id)
+        elif isinstance(request, dict):
+            return str(request.get('id', request.get('request_id', 'unknown')))
+        else:
+            return 'unknown'
+    
+    def get_stats(self) -> dict:
+        """Get governance kernel statistics for compatibility."""
+        return {
+            "status": "running" if self.is_running else "initialized",
+            "components_initialized": len(self.components),
+            "policy_engine_policies": len(self.policy_engine.policies) if self.policy_engine else 0,
+            "verification_methods": len(self.verification_bridge.verification_methods) if self.verification_bridge else 0,
+            "has_mtl_kernel": self.mtl_kernel is not None,
+            "has_intelligence_kernel": self.intelligence_kernel is not None
+        }
+    
+    def set_mtl_kernel(self, mtl_kernel):
+        """Set the MTL kernel for decision storage and feed generation."""
+        self.mtl_kernel = mtl_kernel
+    
+    def set_intelligence_kernel(self, intelligence_kernel):
+        """Set the intelligence kernel for quorum operations."""
+        self.intelligence_kernel = intelligence_kernel
+        if self.quorum_bridge:
+            self.quorum_bridge.set_intelligence_kernel(intelligence_kernel)
     
     def get_system_status(self) -> Dict[str, Any]:
         """Get current system status."""

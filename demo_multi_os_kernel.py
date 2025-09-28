@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the multi_os directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'multi_os'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'grace', 'multi_os'))
 
 from multi_os_service import MultiOSService
 

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grace.ai/schemas/ml-events/v1",
+  "title": "Grace ML Event Schemas",
+  "description": "Event schemas for Grace ML system",
+
+  "$defs": {
+    "SemVer": {
+      "type": "string", 
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "UID": {
+      "type": "string", 
+      "pattern": "^[a-z][a-z0-9_-]{4,64}$"
+    },
+    "ISO8601": {
+      "type": "string", 
+      "format": "date-time"
+    }
+  },
+
+  "events": [
+    {
+      "name": "EXPERIENCE_INGESTED",
+      "payload": {"$ref": "ml_schemas.json#/Experience"}
+    },
+    {
+      "name": "MLT_INSIGHT_READY",
+      "payload": {"$ref": "ml_schemas.json#/Insight"}
+    },
+    {
+      "name": "ADAPTATION_PLAN_PROPOSED",
+      "payload": {
+        "type": "object",
+        "required": ["correlation_id", "plan"],
+        "properties": {
+          "correlation_id": {"$ref": "#/$defs/UID"},
+          "plan": {"$ref": "ml_schemas.json#/AdaptationPlan"}
+        }
+      }
+    },
+    {
+      "name": "GOVERNANCE_VALIDATION",
+      "payload": {
+        "type": "object",
+        "required": ["correlation_id", "decision_subject", "inputs", "thresholds"],
+        "properties": {
+          "correlation_id": {"$ref": "#/$defs/UID"},
+          "decision_subject": {
+            "enum": ["action", "policy", "claim", "deployment"]
+          },
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "plan": {"$ref": "ml_schemas.json#/AdaptationPlan"},
+              "unified_decision": {
+                "type": "object",
+                "description": "when used outside MLT"
+              }
+            }
+          },
+          "thresholds": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "GOVERNANCE_APPROVED",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "correlation_id": {"$ref": "#/$defs/UID"},
+          "decision_id": {"$ref": "#/$defs/UID"},
+          "rationale": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "GOVERNANCE_REJECTED",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "correlation_id": {"$ref": "#/$defs/UID"},
+          "decision_id": {"$ref": "#/$defs/UID"},
+          "rationale": {"type": "string"},
+          "failure_modes": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    },
+    {
+      "name": "MLT_PLAN_APPLIED",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "plan_id": {"$ref": "#/$defs/UID"},
+          "snapshot_id": {"$ref": "#/$defs/UID"}
+        }
+      }
+    },
+    {
+      "name": "MODEL_DRIFT_ALERT",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "model_key": {"type": "string"},
+          "psi": {"type": "number"},
+          "zscore": {"type": "number"}
+        }
+      }
+    },
+    {
+      "name": "ROLLBACK_REQUESTED",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "target": {"enum": ["governance", "mlt", "model"]},
+          "to_snapshot": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "ROLLBACK_COMPLETED",
+      "payload": {
+        "type": "object",
+        "properties": {
+          "target": {"enum": ["governance", "mlt", "model"]},
+          "snapshot_id": {"type": "string"},
+          "at": {"$ref": "#/$defs/ISO8601"}
+        }
+      }
+    }
+  ]
+}

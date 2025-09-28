@@ -1,0 +1,37 @@
+{
+  "experience_id": "exp_ml_train_001",
+  "source": "training",
+  "task": "classification",
+  "context": {
+    "dataset_id": "customer_churn_v2",
+    "model_key": "tabular.classification.xgb",
+    "model_version": "1.3.2",
+    "segment": "enterprise",
+    "env": "dev"
+  },
+  "signals": {
+    "metrics": {
+      "accuracy": 0.92,
+      "f1": 0.89,
+      "auroc": 0.95,
+      "calibration": 0.96
+    },
+    "drift": {
+      "psi": 0.05,
+      "kl": 0.03,
+      "mmd": 0.02
+    },
+    "fairness": {
+      "delta": 0.02,
+      "groups": ["age_group", "gender"]
+    },
+    "latency": {
+      "p95_ms": 15.5
+    },
+    "compliance": {
+      "constitutional": 0.98
+    }
+  },
+  "ground_truth_lag_s": 86400,
+  "timestamp": "2024-01-15T10:30:00Z"
+}

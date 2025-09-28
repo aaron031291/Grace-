@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Grace Orchestration Loop Schema",
+  "description": "Schema for defining orchestration loops in Grace system",
+  
+  "definitions": {
+    "LoopDef": {
+      "type": "object",
+      "required": ["loop_id", "name", "priority", "interval_s", "kernels", "policies"],
+      "properties": {
+        "loop_id": {
+          "type": "string",
+          "description": "Unique identifier for the loop"
+        },
+        "name": {
+          "type": "string",
+          "enum": ["homeostasis", "ooda", "antifragility", "governance_adaptation", "meta_learning", "value_generation"],
+          "description": "Type of orchestration loop"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Priority level (1=lowest, 10=highest)"
+        },
+        "interval_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Loop execution interval in seconds"
+        },
+        "kernels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Dependent kernel names"
+        },
+        "policies": {
+          "type": "object",
+          "description": "Loop-specific policies for trust, compliance, and thresholds"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the loop is enabled"
+        }
+      }
+    }
+  },
+  
+  "type": "object",
+  "properties": {
+    "loop": {
+      "$ref": "#/definitions/LoopDef"
+    }
+  }
+}

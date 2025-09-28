@@ -72,6 +72,64 @@ class IDEBlockRequest(BaseModel):
     name: Optional[str] = None
     configuration: Optional[Dict[str, Any]] = None
 
+# Enhanced Features Request Models
+class KnowledgeEntryRequest(BaseModel):
+    title: str
+    content: str
+    source: str
+    domain: str
+    trust_score: float
+    relevance_tags: Optional[List[str]] = None
+    related_libraries: Optional[List[str]] = None
+
+class KnowledgeSearchRequest(BaseModel):
+    query: str
+    domain: Optional[str] = None
+    min_trust_score: float = 0.0
+
+class TaskItemRequest(BaseModel):
+    title: str
+    description: str
+    priority: str = "medium"
+    assigned_to: str = "grace"
+
+class TaskUpdateRequest(BaseModel):
+    task_id: str
+    status: str
+    progress: Optional[float] = None
+
+class TaskDataMergeRequest(BaseModel):
+    task_id: str
+    data: Dict[str, Any]
+
+class MemoryItemRequest(BaseModel):
+    name: str
+    item_type: str
+    content: Optional[str] = None
+    parent_id: Optional[str] = None
+    is_editable: bool = True
+
+class MemoryItemUpdateRequest(BaseModel):
+    item_id: str
+    content: str
+
+class CollaborationSessionRequest(BaseModel):
+    topic: str
+    participants: List[str]
+
+class DiscussionPointRequest(BaseModel):
+    session_id: str
+    author: str
+    point: str
+    point_type: str = "discussion"
+
+class ActionItemRequest(BaseModel):
+    session_id: str
+    title: str
+    description: str
+    assigned_to: str
+    priority: str = "medium"
+
 # Global orb interface instance
 orb_interface = GraceUnifiedOrbInterface()
 
@@ -530,6 +588,274 @@ async def get_ide_stats():
     """Get IDE statistics."""
     ide = orb_interface.get_ide_instance()
     return ide.get_stats()
+
+# Enhanced Features API Endpoints
+
+# Knowledge Base & Library Access
+@app.post("/api/orb/v1/knowledge/create")
+async def create_knowledge_entry(request: KnowledgeEntryRequest):
+    """Create a new knowledge base entry."""
+    try:
+        entry_id = await orb_interface.create_knowledge_entry(
+            title=request.title,
+            content=request.content,
+            source=request.source,
+            domain=request.domain,
+            trust_score=request.trust_score,
+            relevance_tags=request.relevance_tags,
+            related_libraries=request.related_libraries
+        )
+        return {"entry_id": entry_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/knowledge/search")
+async def search_knowledge_base(request: KnowledgeSearchRequest):
+    """Search knowledge base entries."""
+    try:
+        results = await orb_interface.search_knowledge_base(
+            query=request.query,
+            domain=request.domain,
+            min_trust_score=request.min_trust_score
+        )
+        return {
+            "query": request.query,
+            "results": [
+                {
+                    "entry_id": entry.entry_id,
+                    "title": entry.title,
+                    "content": entry.content[:500] + "..." if len(entry.content) > 500 else entry.content,
+                    "domain": entry.domain,
+                    "trust_score": entry.trust_score,
+                    "relevance_tags": entry.relevance_tags,
+                    "access_count": entry.access_count
+                }
+                for entry in results
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/knowledge/library/{library_name}/{topic}")
+async def access_library_data(library_name: str, topic: str):
+    """Access library data for a specific topic."""
+    try:
+        data = await orb_interface.access_library_data(library_name, topic)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/panels/knowledge-base/{session_id}")
+async def open_knowledge_base_panel(session_id: str):
+    """Open knowledge base panel."""
+    try:
+        panel_id = await orb_interface.open_knowledge_base_panel(session_id)
+        return {"panel_id": panel_id, "status": "opened"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Task Box Management
+@app.post("/api/orb/v1/tasks/create")
+async def create_task(request: TaskItemRequest):
+    """Create a new task item."""
+    try:
+        task_id = await orb_interface.create_task_item(
+            title=request.title,
+            description=request.description,
+            priority=request.priority,
+            assigned_to=request.assigned_to
+        )
+        return {"task_id": task_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/orb/v1/tasks/update")
+async def update_task(request: TaskUpdateRequest):
+    """Update task status and progress."""
+    try:
+        success = await orb_interface.update_task_status(
+            task_id=request.task_id,
+            status=request.status,
+            progress=request.progress
+        )
+        return {"task_id": request.task_id, "status": "updated" if success else "not_found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/tasks/merge-data")
+async def merge_task_data(request: TaskDataMergeRequest):
+    """Merge data into task's related information."""
+    try:
+        success = await orb_interface.merge_task_data(request.task_id, request.data)
+        return {"task_id": request.task_id, "status": "merged" if success else "not_found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/tasks")
+async def get_tasks(status: Optional[str] = None):
+    """Get tasks filtered by status."""
+    try:
+        tasks = orb_interface.get_tasks_by_status(status)
+        return {
+            "status_filter": status,
+            "tasks": [
+                {
+                    "task_id": task.task_id,
+                    "title": task.title,
+                    "description": task.description,
+                    "status": task.status,
+                    "priority": task.priority,
+                    "assigned_to": task.assigned_to,
+                    "progress": task.progress,
+                    "created_at": task.created_at,
+                    "updated_at": task.updated_at,
+                    "tags": task.tags
+                }
+                for task in tasks
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/panels/task-box/{session_id}")
+async def open_task_box_panel(session_id: str):
+    """Open task box panel."""
+    try:
+        panel_id = await orb_interface.open_task_box_panel(session_id)
+        return {"panel_id": panel_id, "status": "opened"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Memory Explorer
+@app.post("/api/orb/v1/memory/create-item")
+async def create_memory_item(request: MemoryItemRequest):
+    """Create a new memory explorer item."""
+    try:
+        item_id = await orb_interface.create_memory_item(
+            name=request.name,
+            item_type=request.item_type,
+            content=request.content,
+            parent_id=request.parent_id,
+            is_editable=request.is_editable
+        )
+        return {"item_id": item_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/orb/v1/memory/update-content")
+async def update_memory_content(request: MemoryItemUpdateRequest):
+    """Update memory item content."""
+    try:
+        success = await orb_interface.update_memory_item_content(request.item_id, request.content)
+        return {"item_id": request.item_id, "status": "updated" if success else "not_found_or_readonly"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/memory/tree")
+async def get_memory_tree(parent_id: Optional[str] = None):
+    """Get memory explorer tree structure."""
+    try:
+        items = orb_interface.get_memory_tree(parent_id)
+        return {
+            "parent_id": parent_id,
+            "items": [
+                {
+                    "item_id": item.item_id,
+                    "name": item.name,
+                    "item_type": item.item_type,
+                    "has_content": item.content is not None,
+                    "children_count": len(item.children),
+                    "is_editable": item.is_editable,
+                    "created_at": item.created_at,
+                    "modified_at": item.modified_at,
+                    "tags": item.tags
+                }
+                for item in items
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/panels/memory-explorer/{session_id}")
+async def open_memory_explorer_panel(session_id: str):
+    """Open memory explorer panel."""
+    try:
+        panel_id = await orb_interface.open_memory_explorer_panel(session_id)
+        return {"panel_id": panel_id, "status": "opened"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Collaboration System
+@app.post("/api/orb/v1/collaboration/create-session")
+async def create_collaboration_session(request: CollaborationSessionRequest):
+    """Create a new collaboration session."""
+    try:
+        session_id = await orb_interface.create_collaboration_session(
+            topic=request.topic,
+            participants=request.participants
+        )
+        return {"session_id": session_id, "status": "created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/collaboration/add-discussion-point")
+async def add_discussion_point(request: DiscussionPointRequest):
+    """Add a discussion point to collaboration session."""
+    try:
+        success = await orb_interface.add_discussion_point(
+            session_id=request.session_id,
+            author=request.author,
+            point=request.point,
+            point_type=request.point_type
+        )
+        return {"session_id": request.session_id, "status": "added" if success else "session_not_found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/collaboration/add-action-item")
+async def add_action_item(request: ActionItemRequest):
+    """Add an action item to collaboration session."""
+    try:
+        success = await orb_interface.add_action_item(
+            session_id=request.session_id,
+            title=request.title,
+            description=request.description,
+            assigned_to=request.assigned_to,
+            priority=request.priority
+        )
+        return {"session_id": request.session_id, "status": "added" if success else "session_not_found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orb/v1/collaboration/sessions")
+async def get_collaboration_sessions(status: Optional[str] = None):
+    """Get collaboration sessions."""
+    try:
+        sessions = []
+        for session in orb_interface.collaboration_sessions.values():
+            if not status or session.status == status:
+                sessions.append({
+                    "session_id": session.session_id,
+                    "topic": session.topic,
+                    "participants": session.participants,
+                    "status": session.status,
+                    "discussion_points_count": len(session.discussion_points),
+                    "action_items_count": len(session.action_items),
+                    "created_at": session.created_at,
+                    "updated_at": session.updated_at
+                })
+        return {"sessions": sessions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orb/v1/panels/collaboration/{session_id}")
+async def open_collaboration_panel(session_id: str, collab_session_id: Optional[str] = None):
+    """Open collaboration panel."""
+    try:
+        panel_id = await orb_interface.open_collaboration_panel(session_id, collab_session_id)
+        return {"panel_id": panel_id, "status": "opened"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # WebSocket Support
 

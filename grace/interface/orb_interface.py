@@ -28,6 +28,10 @@ class PanelType(Enum):
     TASK_MANAGER = "task_manager"
     IDE = "ide"
     DASHBOARD = "dashboard"
+    KNOWLEDGE_BASE = "knowledge_base"
+    TASK_BOX = "task_box"
+    COLLABORATION = "collaboration"
+    LIBRARY_ACCESS = "library_access"
 
 
 class NotificationPriority(Enum):
@@ -98,11 +102,71 @@ class GovernanceTask:
     description: str
     task_type: str  # approval, review, audit
     priority: str
-    requester_id: str
-    assignee_id: Optional[str] = None
-    due_date: Optional[str] = None
-    status: str = "pending"
-    details: Dict[str, Any] = field(default_factory=dict)
+    status: str = "pending"  # pending, in_progress, completed, failed
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+@dataclass
+class TaskItem:
+    """Individual task in the task box."""
+    task_id: str
+    title: str
+    description: str
+    status: str  # pending, in_progress, completed, failed
+    priority: str  # low, medium, high, critical
+    assigned_to: str  # grace, user, system
+    created_at: str
+    updated_at: str
+    progress: float = 0.0  # 0.0 to 1.0
+    tags: List[str] = field(default_factory=list)
+    related_data: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class KnowledgeEntry:
+    """Knowledge base entry with library access."""
+    entry_id: str
+    title: str
+    content: str
+    source: str  # library, document, interaction
+    domain: str  # coding, trading, analysis, etc.
+    trust_score: float
+    relevance_tags: List[str]
+    created_at: str
+    last_accessed: str
+    access_count: int = 0
+    related_libraries: List[str] = field(default_factory=list)
+
+
+@dataclass
+class MemoryExplorerItem:
+    """File explorer-like memory item."""
+    item_id: str
+    name: str
+    item_type: str  # folder, file, fragment
+    content: Optional[str] = None
+    parent_id: Optional[str] = None
+    children: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    modified_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    is_editable: bool = True
+
+
+@dataclass
+class CollaborationSession:
+    """Collaboration session for IDE-like development discussions."""
+    session_id: str
+    topic: str
+    participants: List[str]  # user_ids
+    status: str  # active, paused, completed
+    discussion_points: List[Dict[str, Any]] = field(default_factory=list)
+    action_items: List[Dict[str, Any]] = field(default_factory=list)
+    shared_workspace: Dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 @dataclass
@@ -147,6 +211,12 @@ class GraceUnifiedOrbInterface:
         self.memory_fragments: Dict[str, MemoryFragment] = {}
         self.governance_tasks: Dict[str, GovernanceTask] = {}
         self.notifications: Dict[str, OrbNotification] = {}
+        
+        # New enhanced features storage
+        self.task_items: Dict[str, TaskItem] = {}
+        self.knowledge_entries: Dict[str, KnowledgeEntry] = {}
+        self.memory_explorer_items: Dict[str, MemoryExplorerItem] = {}
+        self.collaboration_sessions: Dict[str, CollaborationSession] = {}
         
         # System capabilities
         self.max_panels_per_session = 6
@@ -193,6 +263,30 @@ class GraceUnifiedOrbInterface:
                 "default_size": {"width": 500, "height": 400},
                 "components": ["pending_approvals", "audit_trail", "policies"],
                 "refresh_interval": 15
+            },
+            "knowledge_base_panel": {
+                "title": "Knowledge Base & Library Access",
+                "default_size": {"width": 600, "height": 500},
+                "components": ["search", "library_browser", "knowledge_graph", "access_logs"],
+                "refresh_interval": 0
+            },
+            "task_box_panel": {
+                "title": "Task Box",
+                "default_size": {"width": 400, "height": 600},
+                "components": ["active_tasks", "completed_tasks", "task_filters", "merge_tools"],
+                "refresh_interval": 10
+            },
+            "collaboration_panel": {
+                "title": "Collaboration Hub",
+                "default_size": {"width": 800, "height": 600},
+                "components": ["discussion_board", "action_items", "shared_workspace", "development_notes"],
+                "refresh_interval": 5
+            },
+            "memory_explorer_panel": {
+                "title": "Memory Explorer",
+                "default_size": {"width": 500, "height": 700},
+                "components": ["file_tree", "content_viewer", "editor", "metadata_panel"],
+                "refresh_interval": 0
             }
         }
 
@@ -778,5 +872,300 @@ class GraceUnifiedOrbInterface:
                 "version": self.grace_intelligence.version,
                 "domain_pods": len(self.grace_intelligence.domain_pods),
                 "models_available": len(self.grace_intelligence.model_registry)
+            },
+            "enhanced_features": {
+                "task_items": len(self.task_items),
+                "knowledge_entries": len(self.knowledge_entries),
+                "memory_explorer_items": len(self.memory_explorer_items),
+                "collaboration_sessions": len(self.collaboration_sessions)
             }
         }
+
+    # Enhanced Features Methods
+    
+    # Knowledge Base & Library Access
+    async def create_knowledge_entry(self, title: str, content: str, source: str, 
+                                   domain: str, trust_score: float, 
+                                   relevance_tags: List[str] = None,
+                                   related_libraries: List[str] = None) -> str:
+        """Create a new knowledge base entry with library access."""
+        entry_id = f"knowledge_{uuid.uuid4().hex[:8]}"
+        
+        entry = KnowledgeEntry(
+            entry_id=entry_id,
+            title=title,
+            content=content,
+            source=source,
+            domain=domain,
+            trust_score=trust_score,
+            relevance_tags=relevance_tags or [],
+            created_at=datetime.utcnow().isoformat(),
+            last_accessed=datetime.utcnow().isoformat(),
+            related_libraries=related_libraries or []
+        )
+        
+        self.knowledge_entries[entry_id] = entry
+        logger.info(f"Created knowledge entry {entry_id}: {title}")
+        return entry_id
+
+    async def search_knowledge_base(self, query: str, domain: str = None, 
+                                  min_trust_score: float = 0.0) -> List[KnowledgeEntry]:
+        """Search knowledge base entries."""
+        results = []
+        query_lower = query.lower()
+        
+        for entry in self.knowledge_entries.values():
+            if domain and entry.domain != domain:
+                continue
+            if entry.trust_score < min_trust_score:
+                continue
+                
+            # Simple search in title, content, and tags
+            if (query_lower in entry.title.lower() or 
+                query_lower in entry.content.lower() or 
+                any(query_lower in tag.lower() for tag in entry.relevance_tags)):
+                
+                # Update access count
+                entry.access_count += 1
+                entry.last_accessed = datetime.utcnow().isoformat()
+                results.append(entry)
+        
+        # Sort by trust score and access count
+        results.sort(key=lambda x: (x.trust_score, x.access_count), reverse=True)
+        return results
+
+    async def access_library_data(self, library_name: str, topic: str) -> Dict[str, Any]:
+        """Access library data for a specific topic (simulation)."""
+        # This would integrate with actual library APIs in production
+        return {
+            "library": library_name,
+            "topic": topic,
+            "data_points": f"Retrieved {library_name} data for {topic}",
+            "timestamp": datetime.utcnow().isoformat(),
+            "confidence": 0.85,
+            "references": [f"{library_name} documentation", f"{library_name} examples"]
+        }
+
+    # Task Box Management  
+    async def create_task_item(self, title: str, description: str, priority: str = "medium",
+                             assigned_to: str = "grace") -> str:
+        """Create a new task item."""
+        task_id = f"task_{uuid.uuid4().hex[:8]}"
+        
+        task = TaskItem(
+            task_id=task_id,
+            title=title,
+            description=description,
+            status="pending",
+            priority=priority,
+            assigned_to=assigned_to,
+            created_at=datetime.utcnow().isoformat(),
+            updated_at=datetime.utcnow().isoformat()
+        )
+        
+        self.task_items[task_id] = task
+        logger.info(f"Created task {task_id}: {title}")
+        return task_id
+
+    async def update_task_status(self, task_id: str, status: str, progress: float = None) -> bool:
+        """Update task status and progress."""
+        if task_id not in self.task_items:
+            return False
+        
+        task = self.task_items[task_id]
+        task.status = status
+        task.updated_at = datetime.utcnow().isoformat()
+        
+        if progress is not None:
+            task.progress = min(1.0, max(0.0, progress))
+        
+        logger.info(f"Updated task {task_id} status to {status}")
+        return True
+
+    async def merge_task_data(self, task_id: str, data: Dict[str, Any]) -> bool:
+        """Merge relevant information into task's related data."""
+        if task_id not in self.task_items:
+            return False
+        
+        task = self.task_items[task_id]
+        task.related_data.update(data)
+        task.updated_at = datetime.utcnow().isoformat()
+        
+        logger.info(f"Merged data into task {task_id}")
+        return True
+
+    def get_tasks_by_status(self, status: str = None) -> List[TaskItem]:
+        """Get tasks filtered by status."""
+        if status:
+            return [task for task in self.task_items.values() if task.status == status]
+        return list(self.task_items.values())
+
+    # Memory Explorer (File System-like)
+    async def create_memory_item(self, name: str, item_type: str, content: str = None,
+                               parent_id: str = None, is_editable: bool = True) -> str:
+        """Create a new memory explorer item."""
+        item_id = f"mem_{uuid.uuid4().hex[:8]}"
+        
+        item = MemoryExplorerItem(
+            item_id=item_id,
+            name=name,
+            item_type=item_type,
+            content=content,
+            parent_id=parent_id,
+            is_editable=is_editable
+        )
+        
+        # Add to parent's children if parent exists
+        if parent_id and parent_id in self.memory_explorer_items:
+            parent = self.memory_explorer_items[parent_id]
+            if item_id not in parent.children:
+                parent.children.append(item_id)
+        
+        self.memory_explorer_items[item_id] = item
+        logger.info(f"Created memory item {item_id}: {name}")
+        return item_id
+
+    async def update_memory_item_content(self, item_id: str, content: str) -> bool:
+        """Update memory item content."""
+        if item_id not in self.memory_explorer_items:
+            return False
+        
+        item = self.memory_explorer_items[item_id]
+        if not item.is_editable:
+            return False
+        
+        item.content = content
+        item.modified_at = datetime.utcnow().isoformat()
+        
+        logger.info(f"Updated memory item {item_id} content")
+        return True
+
+    def get_memory_tree(self, parent_id: str = None) -> List[MemoryExplorerItem]:
+        """Get memory items in tree structure."""
+        if parent_id:
+            return [item for item in self.memory_explorer_items.values() 
+                   if item.parent_id == parent_id]
+        else:
+            # Return root items (no parent)
+            return [item for item in self.memory_explorer_items.values() 
+                   if item.parent_id is None]
+
+    # Collaboration System
+    async def create_collaboration_session(self, topic: str, participants: List[str]) -> str:
+        """Create a new collaboration session."""
+        session_id = f"collab_{uuid.uuid4().hex[:8]}"
+        
+        session = CollaborationSession(
+            session_id=session_id,
+            topic=topic,
+            participants=participants,
+            status="active"
+        )
+        
+        self.collaboration_sessions[session_id] = session
+        logger.info(f"Created collaboration session {session_id}: {topic}")
+        return session_id
+
+    async def add_discussion_point(self, session_id: str, author: str, 
+                                 point: str, point_type: str = "discussion") -> bool:
+        """Add a discussion point to collaboration session."""
+        if session_id not in self.collaboration_sessions:
+            return False
+        
+        session = self.collaboration_sessions[session_id]
+        discussion_point = {
+            "id": f"point_{uuid.uuid4().hex[:6]}",
+            "author": author,
+            "point": point,
+            "type": point_type,
+            "timestamp": datetime.utcnow().isoformat(),
+            "responses": []
+        }
+        
+        session.discussion_points.append(discussion_point)
+        session.updated_at = datetime.utcnow().isoformat()
+        
+        logger.info(f"Added discussion point to session {session_id}")
+        return True
+
+    async def add_action_item(self, session_id: str, title: str, description: str, 
+                            assigned_to: str, priority: str = "medium") -> bool:
+        """Add an action item to collaboration session."""
+        if session_id not in self.collaboration_sessions:
+            return False
+        
+        session = self.collaboration_sessions[session_id]
+        action_item = {
+            "id": f"action_{uuid.uuid4().hex[:6]}",
+            "title": title,
+            "description": description,
+            "assigned_to": assigned_to,
+            "priority": priority,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        session.action_items.append(action_item)
+        session.updated_at = datetime.utcnow().isoformat()
+        
+        logger.info(f"Added action item to session {session_id}")
+        return True
+
+    # Panel Management for New Features
+    async def open_knowledge_base_panel(self, session_id: str) -> str:
+        """Open knowledge base panel."""
+        return await self.create_panel(
+            session_id=session_id,
+            panel_type=PanelType.KNOWLEDGE_BASE,
+            title="Knowledge Base & Library Access",
+            data={
+                "total_entries": len(self.knowledge_entries),
+                "domains": list(set(entry.domain for entry in self.knowledge_entries.values())),
+                "recent_searches": []
+            }
+        )
+
+    async def open_task_box_panel(self, session_id: str) -> str:
+        """Open task box panel."""
+        return await self.create_panel(
+            session_id=session_id,
+            panel_type=PanelType.TASK_BOX,
+            title="Task Box",
+            data={
+                "pending_tasks": len(self.get_tasks_by_status("pending")),
+                "in_progress_tasks": len(self.get_tasks_by_status("in_progress")),
+                "completed_tasks": len(self.get_tasks_by_status("completed")),
+                "task_summary": self.get_tasks_by_status()
+            }
+        )
+
+    async def open_collaboration_panel(self, session_id: str, collab_session_id: str = None) -> str:
+        """Open collaboration panel."""
+        return await self.create_panel(
+            session_id=session_id,
+            panel_type=PanelType.COLLABORATION,
+            title="Collaboration Hub",
+            data={
+                "collaboration_session_id": collab_session_id,
+                "active_sessions": len([s for s in self.collaboration_sessions.values() 
+                                     if s.status == "active"]),
+                "discussion_points": 0 if not collab_session_id else 
+                    len(self.collaboration_sessions.get(collab_session_id, CollaborationSession("", "", [], "")).discussion_points)
+            }
+        )
+
+    async def open_memory_explorer_panel(self, session_id: str) -> str:
+        """Open memory explorer panel."""
+        return await self.create_panel(
+            session_id=session_id,
+            panel_type=PanelType.MEMORY,
+            title="Memory Explorer",
+            data={
+                "total_items": len(self.memory_explorer_items),
+                "folder_count": len([item for item in self.memory_explorer_items.values() 
+                                   if item.item_type == "folder"]),
+                "file_count": len([item for item in self.memory_explorer_items.values() 
+                                 if item.item_type == "file"]),
+                "root_items": self.get_memory_tree()
+            }
+        )

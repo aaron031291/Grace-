@@ -6,7 +6,7 @@ import sys
 import os
 
 # Add grace to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def test_governance_api_basic():
     """Test basic governance API functionality."""

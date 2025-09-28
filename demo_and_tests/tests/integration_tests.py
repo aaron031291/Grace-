@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 
 # Add grace to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Import system check
 from system_check import GraceSystemHealthChecker, ComponentStatus

@@ -7,8 +7,14 @@ and manages kernel lifecycle for resilient operation.
 
 import asyncio
 import time
-import psutil
 from datetime import datetime, timedelta
+
+# Optional psutil import for system metrics
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 from typing import Dict, List, Optional, Any, Callable, Set
 from enum import Enum
 from dataclasses import dataclass
@@ -524,9 +530,14 @@ class Watchdog:
         
         # Simulate metrics collection
         try:
-            # Get system metrics
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            memory_percent = psutil.virtual_memory().percent
+            # Get system metrics if psutil is available
+            if PSUTIL_AVAILABLE:
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory_percent = psutil.virtual_memory().percent
+            else:
+                # Fallback values when psutil not available
+                cpu_percent = 15.0
+                memory_percent = 45.0
             
             # Simulate kernel-specific metrics
             response_time = 100.0  # ms

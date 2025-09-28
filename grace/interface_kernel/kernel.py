@@ -265,7 +265,7 @@ def create_app():
     """Create and configure the FastAPI application."""
     from ..mtl_kernel.kernel import MTLKernel
     from ..governance.grace_governance_kernel import GraceGovernanceKernel as GovernanceKernel
-    from ..intelligence_kernel.kernel import IntelligenceKernel
+    from ..intelligence.kernel.kernel import IntelligenceKernel
     
     # Initialize kernels
     mtl_kernel = MTLKernel()

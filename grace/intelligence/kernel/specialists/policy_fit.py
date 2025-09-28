@@ -1,7 +1,7 @@
 """Policy fit specialist - evaluates how well content aligns with policies."""
 from typing import Dict, List, Optional
 
-from ...contracts.quorum_feed import QuorumFeedItem
+from ....contracts.quorum_feed import QuorumFeedItem
 from .specialist import BaseSpecialist
 
 

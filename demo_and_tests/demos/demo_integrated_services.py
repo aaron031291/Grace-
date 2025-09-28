@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Add the project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Core Grace imports
 from grace.layer_02_event_mesh import GraceEventBus, EventMeshConfig, EventTypes

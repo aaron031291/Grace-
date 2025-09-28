@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # Add the project root to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from grace.resilience.resilience_service import ResilienceService
 from grace.resilience.controllers.circuit import CircuitBreaker

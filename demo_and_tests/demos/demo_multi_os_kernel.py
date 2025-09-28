@@ -7,9 +7,9 @@ import sys
 import os
 
 # Add the multi_os directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'multi_os'))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from multi_os_service import MultiOSService
+from multi_os.multi_os_service import MultiOSService
 
 
 async def demo_multi_os_kernel():

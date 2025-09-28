@@ -430,7 +430,7 @@ class UnifiedLogic:
             timestamp=datetime.now()
         )
         
-        self.memory_core.store_experience(experience)
+        await self.memory_core.store_experience(experience)
         
         # Emit learning event
         await self.event_bus.publish("LEARNING_EXPERIENCE", experience.to_dict())

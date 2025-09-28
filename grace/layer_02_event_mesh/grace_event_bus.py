@@ -10,7 +10,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import uuid
 import hashlib
 
-from .message_envelope import GraceMessageEnvelope, GMEHeaders, EventTypes
+from ..contracts.message_envelope import GraceMessageEnvelope, GMEHeaders, EventTypes
+from .transports import EventTransport, InMemoryTransport, create_transport
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,9 @@ class GraceEventBus:
     def __init__(self, 
                  retry_config: Optional[RetryConfig] = None,
                  backpressure_config: Optional[BackpressureConfig] = None,
-                 enable_deduplication: bool = True):
+                 enable_deduplication: bool = True,
+                 transport: Optional[EventTransport] = None,
+                 transport_config: Optional[Dict[str, Any]] = None):
         self.subscribers: Dict[str, List[Callable]] = defaultdict(list)
         self.message_queue: Queue = Queue()
         self.processing_workers: List[asyncio.Task] = []
@@ -114,6 +117,15 @@ class GraceEventBus:
         self.retry_config = retry_config or RetryConfig()
         self.backpressure_config = backpressure_config or BackpressureConfig()
         self.enable_deduplication = enable_deduplication
+        
+        # Transport layer
+        if transport:
+            self.transport = transport
+        else:
+            # Default to in-memory transport with optional config
+            transport_type = (transport_config or {}).get("type", "in-memory")
+            transport_cfg = (transport_config or {}).get("config", {})
+            self.transport = create_transport(transport_type, transport_cfg)
         
         # Components
         self.dlq = DeadLetterQueue()
@@ -151,6 +163,10 @@ class GraceEventBus:
         self.running = True
         logger.info("Starting Grace Event Bus...")
         
+        # Connect to transport
+        if not await self.transport.connect():
+            raise RuntimeError("Failed to connect to event transport")
+        
         # Start processing workers
         worker_count = 4  # Configure based on load
         for i in range(worker_count):
@@ -175,6 +191,9 @@ class GraceEventBus:
         await asyncio.gather(*self.processing_workers, return_exceptions=True)
         self.processing_workers.clear()
         
+        # Disconnect from transport
+        await self.transport.disconnect()
+        
         logger.info("Grace Event Bus stopped")
     
     def register_schema(self, event_type: str, schema: Dict[str, Any]):
@@ -193,8 +212,19 @@ class GraceEventBus:
             "handler": handler,
             "subscribed_at": datetime.utcnow()
         })
+        
+        # Also subscribe to transport
+        asyncio.create_task(self._transport_subscribe(event_pattern, handler))
+        
         logger.info(f"Subscribed to {event_pattern} (ID: {subscription_id})")
         return subscription_id
+    
+    async def _transport_subscribe(self, event_pattern: str, handler: Callable):
+        """Subscribe to transport with error handling."""
+        try:
+            await self.transport.subscribe(event_pattern, handler)
+        except Exception as e:
+            logger.error(f"Failed to subscribe to transport for {event_pattern}: {e}")
     
     def unsubscribe(self, event_pattern: str, subscription_id: str):
         """Unsubscribe from events."""
@@ -225,7 +255,22 @@ class GraceEventBus:
         if correlation_id:
             gme.payload["correlation_id"] = correlation_id
         
+        # Publish to transport first, then enqueue for local processing
+        topic = self._event_type_to_topic(event_type)
+        try:
+            await self.transport.publish(topic, gme)
+        except Exception as e:
+            logger.error(f"Failed to publish to transport: {e}")
+            # Continue with local processing even if transport fails
+        
         return await self._enqueue_message(gme)
+    
+    def _event_type_to_topic(self, event_type: str) -> str:
+        """Convert event type to transport topic."""
+        # Use event type prefix as topic for now
+        # Could be made more sophisticated based on routing rules
+        parts = event_type.split("_")
+        return parts[0].lower() if parts else "events"
     
     async def publish_gme(self, gme: GraceMessageEnvelope) -> str:
         """Publish a pre-constructed GME message."""
@@ -416,7 +461,8 @@ class GraceEventBus:
             },
             "registered_schemas": len(self.schema_registry),
             "dlq_stats": self.dlq.get_stats(),
-            "deduplication_cache_size": len(self.seen_messages)
+            "deduplication_cache_size": len(self.seen_messages),
+            "transport": asyncio.create_task(self.transport.health_check()) if hasattr(self.transport, 'health_check') else {}
         }
     
     def get_health(self) -> Dict[str, Any]:

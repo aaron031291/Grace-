@@ -80,8 +80,14 @@ def _evaluate_latency_p95(samples: dict, objective: float, window: str) -> dict:
 
 def _evaluate_availability(samples: dict, objective: float, window: str) -> dict:
     """Evaluate availability SLI."""
-    success_count = samples.get("success_count", 0)
-    total_count = samples.get("total_count", 0)
+    success_count = samples.get("success_count", [0])
+    total_count = samples.get("total_count", [0])
+    
+    # Handle both list and scalar inputs
+    if isinstance(success_count, list):
+        success_count = sum(success_count) if success_count else 0
+    if isinstance(total_count, list):
+        total_count = sum(total_count) if total_count else 0
     
     if total_count == 0:
         return {
@@ -111,8 +117,14 @@ def _evaluate_availability(samples: dict, objective: float, window: str) -> dict
 
 def _evaluate_error_rate(samples: dict, objective: float, window: str) -> dict:
     """Evaluate error rate SLI."""
-    error_count = samples.get("error_count", 0)
-    total_count = samples.get("total_count", 0)
+    error_count = samples.get("error_count", [0])
+    total_count = samples.get("total_count", [0])
+    
+    # Handle both list and scalar inputs
+    if isinstance(error_count, list):
+        error_count = sum(error_count) if error_count else 0
+    if isinstance(total_count, list):
+        total_count = sum(total_count) if total_count else 0
     
     if total_count == 0:
         return {

@@ -1,15 +1,21 @@
 # Grace Governance Kernel Requirements
 
-# Core dependencies
-asyncio  # Built-in
-sqlite3  # Built-in
-json     # Built-in
-hashlib  # Built-in
-datetime # Built-in
-logging  # Built-in
-statistics # Built-in
+# Core dependencies (Python standard library — no install needed)
+# asyncio
+# sqlite3
+# json
+# hashlib
+# datetime
+# logging
+# statistics
 
-# Optional system monitoring (install if needed)
+# External runtime dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+websockets>=12.0
+
+# Optional system monitoring
 # psutil>=5.8.0
 
 # Development dependencies (optional)

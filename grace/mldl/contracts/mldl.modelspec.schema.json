@@ -1,0 +1,52 @@
+{
+  "ModelSpec": {
+    "type": "object",
+    "required": ["model_key", "family", "task", "adapter", "hyperparams", "feature_view"],
+    "properties": {
+      "model_key": {
+        "type": "string",
+        "description": "Unique model identifier"
+      },
+      "family": {
+        "type": "string",
+        "enum": [
+          "lr", "svm", "knn", "tree", "rf", "xgb", "lgbm", "nb", "svr",
+          "cnn", "rnn", "lstm", "transformer", "gan",
+          "kmeans", "agglo", "dbscan", "pca",
+          "rl_q", "rl_dqn", "rl_pg"
+        ],
+        "description": "Model family identifier"
+      },
+      "task": {
+        "type": "string",
+        "enum": ["classification", "regression", "clustering", "dimred", "rl"],
+        "description": "ML task type"
+      },
+      "adapter": {
+        "type": "string",
+        "description": "Module path for model adapter"
+      },
+      "hyperparams": {
+        "type": "object",
+        "description": "Initial parameters or HPO search space"
+      },
+      "feature_view": {
+        "type": "string",
+        "description": "Feature view reference for train/serve parity"
+      },
+      "tags": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Model tags"
+      },
+      "constraints": {
+        "type": "object",
+        "properties": {
+          "latency_ms": {"type": "number"},
+          "cost_units": {"type": "number"}
+        },
+        "description": "Model constraints"
+      }
+    }
+  }
+}

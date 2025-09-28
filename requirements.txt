@@ -15,6 +15,11 @@ uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 websockets>=12.0
 
+# MLDL Kernel dependencies
+numpy>=1.21.0
+scikit-learn>=1.0.0
+joblib>=1.0.0
+
 # Optional system monitoring
 # psutil>=5.8.0
 

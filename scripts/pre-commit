@@ -1,0 +1,81 @@
+#!/bin/sh
+#
+# Grace Pre-commit Hook
+# Runs basic checks before allowing commits
+#
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${YELLOW}Running Grace pre-commit checks...${NC}"
+
+# Change to repository root
+cd "$(git rev-parse --show-toplevel)"
+
+# Check if Python is available
+if ! command -v python >/dev/null 2>&1; then
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo -e "${RED}❌ Python not found. Please install Python.${NC}"
+        exit 1
+    fi
+    PYTHON=python3
+else
+    PYTHON=python
+fi
+
+# Basic import test
+echo "🔍 Testing Grace imports..."
+if ! $PYTHON -c "import grace; print('Grace imports successfully')" >/dev/null 2>&1; then
+    echo -e "${RED}❌ Grace import failed. Please fix import errors.${NC}"
+    exit 1
+fi
+
+# Check for basic Python syntax errors
+echo "🔍 Checking Python syntax..."
+if ! find . -name "*.py" -path "./grace/*" -exec $PYTHON -m py_compile {} \; >/dev/null 2>&1; then
+    echo -e "${RED}❌ Python syntax errors found. Please fix syntax errors.${NC}"
+    exit 1
+fi
+
+# Check if requirements.txt exists and dependencies are met
+if [ -f "requirements.txt" ]; then
+    echo "🔍 Checking basic dependencies..."
+    # Try importing key dependencies
+    if ! $PYTHON -c "import asyncio, json, sqlite3, datetime, logging, statistics" >/dev/null 2>&1; then
+        echo -e "${RED}❌ Core dependency import failed.${NC}"
+        exit 1
+    fi
+fi
+
+# Check for merge conflict markers
+echo "🔍 Checking for merge conflict markers..."
+if git diff --cached --name-only | xargs grep -l "^<<<<<<< \|^======= \|^>>>>>>> " 2>/dev/null; then
+    echo -e "${RED}❌ Merge conflict markers found. Please resolve conflicts.${NC}"
+    exit 1
+fi
+
+# Check for TODO/FIXME comments in staged files
+echo "🔍 Checking for TODO/FIXME in staged files..."
+todos=$(git diff --cached --name-only | xargs grep -n "TODO\|FIXME" 2>/dev/null || true)
+if [ -n "$todos" ]; then
+    echo -e "${YELLOW}⚠️  Found TODO/FIXME comments:${NC}"
+    echo "$todos"
+    echo -e "${YELLOW}Consider addressing these before committing.${NC}"
+fi
+
+# Check commit message format if available
+if [ -n "$2" ]; then
+    commit_msg=$(cat "$1")
+    if ! echo "$commit_msg" | grep -qE '^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .{1,50}'; then
+        echo -e "${YELLOW}⚠️  Consider using conventional commit format:${NC}"
+        echo "   feat(scope): description"
+        echo "   fix(scope): description"
+        echo "   docs(scope): description"
+    fi
+fi
+
+echo -e "${GREEN}✅ All pre-commit checks passed!${NC}"
+exit 0

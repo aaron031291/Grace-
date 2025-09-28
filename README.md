@@ -216,7 +216,7 @@ Grace-/
 ├── core/                    # Core infrastructure
 ├── grace/                   # Grace kernels and components
 │   ├── governance/          # Unified governance system (merged)
-│   ├── intelligence_kernel/ # Intelligence and consensus
+│   ├── intelligence/       # Intelligence service and kernel (merged)
 │   ├── mtl_kernel/          # Memory, trust, and logging
 │   └── ...                  # Other kernel components
 ├── layer_02_event_mesh/     # Event routing

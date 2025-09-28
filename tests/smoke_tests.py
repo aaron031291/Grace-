@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from grace.mtl_kernel.kernel import MTLKernel
 from grace.governance.grace_governance_kernel import GraceGovernanceKernel as GovernanceKernel
-from grace.intelligence_kernel.kernel import IntelligenceKernel
+from grace.intelligence.kernel.kernel import IntelligenceKernel
 from grace.contracts.dto_common import MemoryEntry
 from grace.contracts.governed_request import GovernedRequest
 

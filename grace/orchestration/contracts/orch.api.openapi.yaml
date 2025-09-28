@@ -1,0 +1,267 @@
+openapi: 3.0.3
+info:
+  title: Grace Orchestration Kernel API
+  description: REST API for managing orchestration loops, tasks, and system state
+  version: 1.0.0
+servers:
+  - url: /api/orch/v1
+    description: Orchestration API v1
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Get orchestration kernel health status
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  version:
+                    type: string
+                  uptime_seconds:
+                    type: number
+                  active_loops:
+                    type: integer
+                  active_tasks:
+                    type: integer
+
+  /loops:
+    get:
+      summary: List loops
+      description: Get all orchestration loop definitions
+      responses:
+        '200':
+          description: List of loop definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoopDef'
+    
+    post:
+      summary: Create loop
+      description: Create a new orchestration loop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoopDef'
+      responses:
+        '201':
+          description: Loop created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  loop_id:
+                    type: string
+        '400':
+          description: Invalid loop definition
+        '409':
+          description: Loop already exists
+
+  /loops/{loop_id}/enable:
+    post:
+      summary: Enable loop
+      description: Enable or disable an orchestration loop
+      parameters:
+        - name: loop_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '202':
+          description: Loop status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+        '404':
+          description: Loop not found
+
+  /task/dispatch:
+    post:
+      summary: Dispatch task
+      description: Dispatch a new orchestration task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loop_id, inputs]
+              properties:
+                loop_id:
+                  type: string
+                inputs:
+                  type: object
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+      responses:
+        '202':
+          description: Task dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+        '400':
+          description: Invalid task request
+        '404':
+          description: Loop not found
+
+  /task/{task_id}/status:
+    get:
+      summary: Get task status
+      description: Get current status of an orchestration task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchTask'
+        '404':
+          description: Task not found
+
+  /snapshot/export:
+    post:
+      summary: Export snapshot
+      description: Create and export a system state snapshot
+      responses:
+        '200':
+          description: Snapshot created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_id:
+                    type: string
+                  uri:
+                    type: string
+                    description: "URI to download snapshot"
+        '500':
+          description: Snapshot creation failed
+
+  /rollback:
+    post:
+      summary: Rollback system
+      description: Rollback orchestration to a previous snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_snapshot]
+              properties:
+                to_snapshot:
+                  type: string
+                  description: "Target snapshot ID"
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  to_snapshot:
+                    type: string
+        '400':
+          description: Invalid rollback request
+        '404':
+          description: Snapshot not found
+
+components:
+  schemas:
+    LoopDef:
+      type: object
+      required: [loop_id, name, priority, interval_s, kernels, policies]
+      properties:
+        loop_id:
+          type: string
+        name:
+          type: string
+          enum: [homeostasis, ooda, antifragility, governance_adaptation, meta_learning, value_generation]
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 10
+        interval_s:
+          type: integer
+          minimum: 1
+        kernels:
+          type: array
+          items:
+            type: string
+        policies:
+          type: object
+        enabled:
+          type: boolean
+          default: true
+
+    OrchTask:
+      type: object
+      required: [task_id, loop_id, stage, inputs]
+      properties:
+        task_id:
+          type: string
+        loop_id:
+          type: string
+        stage:
+          type: string
+          enum: [start, run, validate, complete, rollback]
+        inputs:
+          type: object
+        outputs:
+          type: object
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, rolled_back]
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+        ts:
+          type: string
+          format: date-time

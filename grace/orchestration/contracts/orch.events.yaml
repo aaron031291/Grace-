@@ -1,0 +1,186 @@
+# Grace Orchestration Event Schema
+# Events published and consumed by the Orchestration Kernel
+
+events:
+  ORCH_LOOP_STARTED:
+    description: "Emitted when an orchestration loop begins execution"
+    payload:
+      type: object
+      required: [loop_id, ts]
+      properties:
+        loop_id:
+          type: string
+          description: "Loop identifier that started"
+        ts:
+          type: string
+          format: date-time
+          description: "Start timestamp"
+  
+  ORCH_TASK_DISPATCHED:
+    description: "Emitted when a task is dispatched for execution"
+    payload:
+      type: object
+      required: [task]
+      properties:
+        task:
+          $ref: "orch.task.schema.json#/definitions/OrchTask"
+  
+  ORCH_TASK_COMPLETED:
+    description: "Emitted when a task completes (success or failure)"
+    payload:
+      type: object
+      required: [task_id, status]
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [succeeded, failed, rolled_back]
+        outputs:
+          type: object
+          description: "Task execution results"
+  
+  ORCH_ERROR:
+    description: "Emitted when an orchestration error occurs"
+    payload:
+      type: object
+      required: [task_id, loop_id, error]
+      properties:
+        task_id:
+          type: string
+        loop_id:
+          type: string
+        error:
+          type: object
+          properties:
+            code: {type: string}
+            message: {type: string}
+            details: {type: object}
+  
+  ORCH_INSTANCE_SPAWNED:
+    description: "Emitted when a new orchestration instance is spawned"
+    payload:
+      type: object
+      required: [instance_id, loop_id]
+      properties:
+        instance_id:
+          type: string
+        loop_id:
+          type: string
+        parent:
+          type: string
+          description: "Parent instance ID if applicable"
+  
+  ORCH_INSTANCE_RETIRED:
+    description: "Emitted when an orchestration instance is retired"
+    payload:
+      type: object
+      required: [instance_id, loop_id, ts]
+      properties:
+        instance_id:
+          type: string
+        loop_id:
+          type: string
+        ts:
+          type: string
+          format: date-time
+  
+  ORCH_SNAPSHOT_CREATED:
+    description: "Emitted when a system snapshot is created"
+    payload:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot:
+          $ref: "orch.task.schema.json#/definitions/OrchSnapshot"
+  
+  ROLLBACK_REQUESTED:
+    description: "Request to rollback orchestration to a specific snapshot"
+    payload:
+      type: object
+      required: [target, to_snapshot]
+      properties:
+        target:
+          type: string
+          enum: [orchestration]
+        to_snapshot:
+          type: string
+          description: "Target snapshot ID for rollback"
+  
+  ROLLBACK_COMPLETED:
+    description: "Confirmation that rollback has completed"
+    payload:
+      type: object
+      required: [target, snapshot_id, at]
+      properties:
+        target:
+          type: string
+          enum: [orchestration]
+        snapshot_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+  
+  ORCH_EXPERIENCE:
+    description: "Meta-learning experience from orchestration operations"
+    payload:
+      type: object
+      required: [schema_version, experience]
+      properties:
+        schema_version:
+          type: string
+          enum: ["1.0.0"]
+        experience:
+          $ref: "#/definitions/OrchExperience"
+
+# Meta-learning experience schema
+definitions:
+  OrchExperience:
+    type: object
+    required: [exp_id, loop_id, stage, metrics, timestamp]
+    properties:
+      exp_id:
+        type: string
+        description: "Unique experience identifier"
+      loop_id:
+        type: string
+        description: "Associated loop identifier"
+      stage:
+        type: string
+        enum: [dispatch, run, validate, error, rollback]
+        description: "Orchestration stage this experience covers"
+      metrics:
+        type: object
+        properties:
+          task_latency_ms:
+            type: number
+            description: "Task execution latency in milliseconds"
+          loop_duration_s:
+            type: number
+            description: "Total loop execution time in seconds"
+          success_rate:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+            description: "Success rate (0-1)"
+          rollback_count:
+            type: integer
+            minimum: 0
+            description: "Number of rollbacks in this period"
+          spawn_count:
+            type: integer
+            minimum: 0
+            description: "Number of instances spawned"
+          isolation_success:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+            description: "Error isolation success rate"
+          violation_rate:
+            type: number
+            minimum: 0.0
+            description: "Governance violation rate"
+      timestamp:
+        type: string
+        format: date-time

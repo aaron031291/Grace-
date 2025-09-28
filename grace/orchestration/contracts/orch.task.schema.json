@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Grace Orchestration Task Schema",
+  "description": "Schema for orchestration tasks in Grace system",
+  
+  "definitions": {
+    "OrchTask": {
+      "type": "object",
+      "required": ["task_id", "loop_id", "stage", "inputs"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "Unique identifier for the task"
+        },
+        "loop_id": {
+          "type": "string",
+          "description": "Associated loop identifier"
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["start", "run", "validate", "complete", "rollback"],
+          "description": "Current execution stage"
+        },
+        "inputs": {
+          "type": "object",
+          "description": "Task input parameters"
+        },
+        "outputs": {
+          "type": "object",
+          "description": "Task execution results"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "running", "succeeded", "failed", "rolled_back"],
+          "description": "Task execution status"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {"type": "string"},
+            "message": {"type": "string"},
+            "details": {"type": "object"}
+          },
+          "description": "Error information if task failed"
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last status update"
+        }
+      }
+    },
+    
+    "OrchSnapshot": {
+      "type": "object",
+      "required": ["snapshot_id", "loops", "active_tasks", "policies", "created_at"],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "description": "Unique snapshot identifier"
+        },
+        "loops": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/LoopDef"},
+          "description": "Active loop definitions"
+        },
+        "active_tasks": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Currently active task IDs"
+        },
+        "policies": {
+          "type": "object",
+          "description": "System-wide orchestration policies"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Snapshot creation timestamp"
+        },
+        "hash": {
+          "type": "string",
+          "description": "SHA256 hash of snapshot content for integrity"
+        }
+      }
+    },
+    
+    "LoopDef": {
+      "type": "object",
+      "required": ["loop_id", "name", "priority", "interval_s", "kernels", "policies"],
+      "properties": {
+        "loop_id": {"type": "string"},
+        "name": {
+          "enum": ["homeostasis", "ooda", "antifragility", "governance_adaptation", "meta_learning", "value_generation"]
+        },
+        "priority": {"type": "integer", "minimum": 1, "maximum": 10},
+        "interval_s": {"type": "integer"},
+        "kernels": {"type": "array", "items": {"type": "string"}},
+        "policies": {"type": "object"},
+        "enabled": {"type": "boolean", "default": true}
+      }
+    }
+  },
+  
+  "type": "object",
+  "properties": {
+    "task": {"$ref": "#/definitions/OrchTask"},
+    "snapshot": {"$ref": "#/definitions/OrchSnapshot"}
+  }
+}

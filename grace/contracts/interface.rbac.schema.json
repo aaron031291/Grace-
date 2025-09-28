@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "interface.rbac.schema.json",
+  "title": "Interface RBAC Schema",
+  "description": "Role-based access control policy definitions",
+  "definitions": {
+    "PolicyRule": {
+      "type": "object",
+      "required": ["rule_id", "effect", "actions", "resources", "condition"],
+      "properties": {
+        "rule_id": {"type": "string"},
+        "effect": {
+          "enum": ["allow", "deny"]
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "task.create", "task.update", "task.run", "task.pause", "task.cancel",
+              "memory.query", "memory.search", "intel.request",
+              "ingress.register_source", "governance.request_approval",
+              "consent.grant", "consent.revoke", "settings.update",
+              "snapshot.export", "snapshot.rollback"
+            ]
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "condition": {
+          "type": "object",
+          "properties": {
+            "label_in": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "time_after": {"type": "string"},
+            "time_before": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

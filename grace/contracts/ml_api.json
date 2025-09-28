@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grace.ai/schemas/ml-api/v1",
+  "title": "Grace ML REST API Specification",
+  "description": "REST API endpoints for Grace ML system",
+
+  "$defs": {
+    "SemVer": {
+      "type": "string", 
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "UID": {
+      "type": "string", 
+      "pattern": "^[a-z][a-z0-9_-]{4,64}$"
+    },
+    "ISO8601": {
+      "type": "string", 
+      "format": "date-time"
+    }
+  },
+
+  "endpoints": {
+    "GET /health": {
+      "description": "Health check endpoint",
+      "response": {
+        "status_code": 200,
+        "schema": {
+          "type": "object",
+          "required": ["status", "version"],
+          "properties": {
+            "status": {"const": "ok"},
+            "version": {"$ref": "#/$defs/SemVer"}
+          }
+        }
+      }
+    },
+
+    "POST /experience": {
+      "description": "Submit experience data",
+      "request_body": {"$ref": "ml_schemas.json#/Experience"},
+      "response": {
+        "status_code": 202,
+        "schema": {
+          "type": "object",
+          "required": ["experience_id"],
+          "properties": {
+            "experience_id": {"$ref": "#/$defs/UID"}
+          }
+        }
+      }
+    },
+
+    "GET /insights": {
+      "description": "Get insights since timestamp",
+      "parameters": {
+        "since": {
+          "in": "query",
+          "required": false,
+          "schema": {"$ref": "#/$defs/ISO8601"}
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "schema": {
+          "type": "array",
+          "items": {"$ref": "ml_schemas.json#/Insight"}
+        }
+      }
+    },
+
+    "POST /plan/propose": {
+      "description": "Propose adaptation plan",
+      "request_body": {"$ref": "ml_schemas.json#/AdaptationPlan"},
+      "response": {
+        "status_code": 202,
+        "schema": {
+          "type": "object",
+          "required": ["correlation_id"],
+          "properties": {
+            "correlation_id": {"$ref": "#/$defs/UID"}
+          }
+        }
+      }
+    },
+
+    "GET /plans/{id}/status": {
+      "description": "Get plan status",
+      "parameters": {
+        "id": {
+          "in": "path",
+          "required": true,
+          "schema": {"$ref": "#/$defs/UID"}
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "schema": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": ["pending", "approved", "rejected", "applied"]
+            },
+            "rationale": {"type": "string"}
+          }
+        }
+      }
+    },
+
+    "POST /snapshot/export": {
+      "description": "Export snapshot",
+      "response": {
+        "status_code": 200,
+        "schema": {
+          "type": "object",
+          "required": ["snapshot_id", "uri"],
+          "properties": {
+            "snapshot_id": {"$ref": "#/$defs/UID"},
+            "uri": {"type": "string"}
+          }
+        }
+      }
+    },
+
+    "POST /rollback": {
+      "description": "Request rollback",
+      "request_body": {
+        "type": "object",
+        "required": ["target", "to_snapshot"],
+        "properties": {
+          "target": {"enum": ["governance", "mlt", "model"]},
+          "to_snapshot": {"type": "string"}
+        }
+      },
+      "response": {
+        "status_code": 202,
+        "schema": {
+          "type": "object",
+          "required": ["target", "to_snapshot"],
+          "properties": {
+            "target": {"enum": ["governance", "mlt", "model"]},
+            "to_snapshot": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

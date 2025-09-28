@@ -1,0 +1,90 @@
+version: 1
+events:
+  - name: GOVERNANCE_VALIDATION
+    payload:
+      correlation_id: str
+      decision_subject:
+        type: enum
+        values: ["action", "policy", "claim", "deployment"]
+      inputs:
+        mldl_consensus_id: str
+        claims:
+          type: array
+          items:
+            type: object
+            properties:
+              id: str
+              statement: str
+              sources:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    uri: str
+                    credibility: float
+              evidence:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type: 
+                      enum: ["doc", "db", "api"]
+                    pointer: str
+              confidence: float
+              logical_chain:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    step: str
+        context: object
+      thresholds:
+        min_confidence: float
+        min_trust: float
+    responses:
+      - GOVERNANCE_APPROVED
+      - GOVERNANCE_REJECTED
+      - GOVERNANCE_NEEDS_REVIEW
+
+  - name: GOVERNANCE_APPROVED
+    payload:
+      correlation_id: str
+      decision_id: str
+      rationale: str
+      confidence: float
+      trust_score: float
+      timestamp: str
+
+  - name: GOVERNANCE_REJECTED
+    payload:
+      correlation_id: str
+      decision_id: str
+      rationale: str
+      failure_modes:
+        type: array
+        items: str
+      timestamp: str
+
+  - name: GOVERNANCE_NEEDS_REVIEW
+    payload:
+      correlation_id: str
+      decision_id: str
+      rationale: str
+      review_reasons:
+        type: array
+        items: str
+      timestamp: str
+
+  - name: GOVERNANCE_SNAPSHOT_CREATED
+    payload:
+      snapshot_id: str
+      instance_id: str
+      hash: str
+      created_at: str
+
+  - name: GOVERNANCE_ROLLBACK
+    payload:
+      target_instance: str
+      snapshot_id: str
+      reason: str
+      initiated_at: str

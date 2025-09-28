@@ -8,9 +8,10 @@ import asyncio
 import logging
 from typing import Optional
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
@@ -18,6 +19,7 @@ import redis.asyncio as redis
 
 from ..core.config import get_settings
 from ..core.observability import setup_logging, request_id_middleware, metrics_middleware
+from ..auth.jwt_auth import get_current_user
 
 # Metrics
 REQUEST_COUNT = Counter('grace_api_requests_total', 'Total API requests', ['method', 'endpoint', 'status'])
@@ -88,6 +90,12 @@ def create_app() -> FastAPI:
     app.middleware("http")(request_id_middleware)
     app.middleware("http")(metrics_middleware)
     
+    # Add authentication middleware (optional - can be disabled for development)
+    if settings.jwt_secret_key and not settings.debug:
+        from ..auth.jwt_auth import JWTManager, AuthMiddleware
+        jwt_manager = JWTManager(settings.jwt_secret_key)
+        app.add_middleware(AuthMiddleware, jwt_manager=jwt_manager)
+    
     # Mount metrics endpoint
     metrics_app = make_asgi_app()
     app.mount("/metrics", metrics_app)
@@ -121,6 +129,94 @@ def create_app() -> FastAPI:
             
         return checks
     
+    # Authentication endpoints
+    @app.post("/api/v1/auth/token")
+    async def create_token(request_data: dict):
+        """Create JWT token for user authentication."""
+        from ..auth.jwt_auth import get_jwt_manager, GraceScopes
+        
+        user_id = request_data.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+        
+        # In production, validate credentials here
+        # For now, accept any user_id for demo purposes
+        
+        # Grant scopes based on user type (simplified)
+        scopes = []
+        roles = request_data.get('roles', ['user'])
+        
+        if 'admin' in roles:
+            scopes = [GraceScopes.READ_CHAT, GraceScopes.WRITE_MEMORY, 
+                     GraceScopes.GOVERN_TASKS, GraceScopes.SANDBOX_BUILD, 
+                     GraceScopes.NETWORK_ACCESS, GraceScopes.ADMIN]
+        elif 'developer' in roles:
+            scopes = [GraceScopes.READ_CHAT, GraceScopes.WRITE_MEMORY, 
+                     GraceScopes.SANDBOX_BUILD]
+        else:
+            scopes = [GraceScopes.READ_CHAT]
+        
+        jwt_manager = get_jwt_manager()
+        token = jwt_manager.create_token(user_id, scopes, roles)
+        
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user_id": user_id,
+            "scopes": scopes,
+            "roles": roles
+        }
+    
+    @app.get("/api/v1/auth/me")
+    async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+        """Get information about the current authenticated user."""
+        return {
+            "user_id": current_user["user_id"],
+            "scopes": current_user["scopes"],
+            "roles": current_user["roles"],
+            "token_info": {
+                "issued_at": current_user["token_data"].get("iat"),
+                "expires_at": current_user["token_data"].get("exp"),
+                "issuer": current_user["token_data"].get("iss")
+            }
+        }
+    
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        """WebSocket endpoint with authentication."""
+        from ..auth.websocket_auth import authenticate_websocket, GraceScopes
+        
+        try:
+            # Authenticate WebSocket connection
+            auth_ws = await authenticate_websocket(
+                websocket, 
+                required_scopes=[GraceScopes.READ_CHAT]
+            )
+            
+            logger.info(f"WebSocket connected: {auth_ws.user_id}")
+            
+            try:
+                while True:
+                    # Receive message from client
+                    data = await auth_ws.receive_json()
+                    
+                    # Echo back with user context
+                    response = {
+                        "type": "echo",
+                        "user_id": auth_ws.user_id,
+                        "message": data.get("message", ""),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                    await auth_ws.send_json(response)
+                    
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+        
+        except Exception as e:
+            logger.error(f"WebSocket authentication failed: {e}")
+            await websocket.close(code=1008, reason="Authentication failed")
+    
     # Basic endpoints
     @app.get("/api/v1/sessions")
     async def list_sessions():
@@ -128,8 +224,16 @@ def create_app() -> FastAPI:
         return {"sessions": [], "message": "Sessions endpoint - to be implemented"}
     
     @app.get("/api/v1/search")
-    async def search_knowledge(q: str = "", filters: str = "", trust_threshold: float = 0.5, limit: int = 10):
+    async def search_knowledge(q: str = "", filters: str = "", trust_threshold: float = 0.5, limit: int = 10,
+                              current_user: dict = Depends(get_current_user)):
         """Search knowledge base with vector and keyword filters."""
+        from ..auth.jwt_auth import require_scopes, GraceScopes
+        
+        # Check if user has read permissions
+        user_scopes = current_user.get("scopes", [])
+        if GraceScopes.READ_CHAT not in user_scopes:
+            raise HTTPException(status_code=403, detail="Insufficient permissions for search")
+        
         if not q.strip():
             return {"results": [], "message": "Empty query"}
         
@@ -139,6 +243,7 @@ def create_app() -> FastAPI:
         try:
             results = await pipeline.search_memory(
                 query=q,
+                user_id=current_user["user_id"],
                 trust_threshold=trust_threshold,
                 limit=limit
             )
@@ -148,26 +253,37 @@ def create_app() -> FastAPI:
                 "filters": filters,
                 "trust_threshold": trust_threshold,
                 "results": results,
-                "count": len(results)
+                "count": len(results),
+                "user_id": current_user["user_id"]
             }
         except Exception as e:
             logger.error(f"Search failed: {e}")
             raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
     
     @app.post("/api/v1/memory/ingest")
-    async def ingest_memory(request_data: dict):
+    async def ingest_memory(request_data: dict, current_user: dict = Depends(get_current_user)):
         """Ingest file into memory system."""
+        from ..auth.jwt_auth import GraceScopes
+        
+        # Check if user has write permissions
+        user_scopes = current_user.get("scopes", [])
+        if GraceScopes.WRITE_MEMORY not in user_scopes:
+            raise HTTPException(status_code=403, detail="Insufficient permissions for memory ingestion")
+        
         from ..memory_ingestion.pipeline import get_memory_ingestion_pipeline
         pipeline = get_memory_ingestion_pipeline(settings.vector_url)
         
         try:
+            # Add user context to request
+            request_data["user_id"] = current_user["user_id"]
+            
             # Handle different ingestion types
             if 'file_path' in request_data:
                 # File ingestion
                 result = await pipeline.ingest_file(
                     file_path=request_data['file_path'],
                     session_id=request_data.get('session_id'),
-                    user_id=request_data.get('user_id', 'anonymous'),
+                    user_id=current_user["user_id"],
                     tags=request_data.get('tags'),
                     trust_score=request_data.get('trust_score', 0.7)
                 )
@@ -177,7 +293,7 @@ def create_app() -> FastAPI:
                     text=request_data['text'],
                     title=request_data.get('title', 'Text Content'),
                     session_id=request_data.get('session_id'),
-                    user_id=request_data.get('user_id', 'anonymous'),
+                    user_id=current_user["user_id"],
                     tags=request_data.get('tags'),
                     trust_score=request_data.get('trust_score', 0.7)
                 )

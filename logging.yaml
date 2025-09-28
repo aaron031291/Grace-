@@ -1,0 +1,83 @@
+# Logging configuration for Grace Governance System
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+  
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/grace.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+  
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: json
+    filename: logs/grace_errors.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+
+  audit_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: logs/grace_audit.log
+    maxBytes: 52428800  # 50MB
+    backupCount: 10
+
+loggers:
+  grace:
+    level: DEBUG
+    handlers: [console, file, error_file]
+    propagate: false
+  
+  grace.governance:
+    level: DEBUG
+    handlers: [console, file, audit_file]
+    propagate: false
+  
+  grace.ingress:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+  
+  grace_service:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+  
+  uvicorn:
+    level: INFO
+    handlers: [console]
+    propagate: false
+  
+  uvicorn.error:
+    level: INFO
+    handlers: [console, error_file]
+    propagate: false
+    
+  uvicorn.access:
+    level: INFO
+    handlers: [console]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console, file]

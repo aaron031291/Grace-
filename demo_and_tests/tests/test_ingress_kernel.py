@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Add the project root to Python path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from grace.ingress_kernel import IngressKernel
 from grace.contracts.ingress_contracts import SourceConfig, SourceKind, AuthMode, ParserType, PIIPolicy, GovernanceLabel

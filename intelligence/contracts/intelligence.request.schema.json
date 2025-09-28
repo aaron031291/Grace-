@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grace.ai/schemas/intelligence/task-request/v1",
+  "title": "Intelligence Task Request",
+  "description": "Canonical task request schema for Intelligence Kernel",
+  
+  "TaskRequest": {
+    "type": "object",
+    "required": ["req_id", "task", "input", "context"],
+    "properties": {
+      "req_id": {
+        "type": "string", 
+        "pattern": "req_[a-z0-9_-]{6,}"
+      },
+      "task": {
+        "enum": [
+          "classification", "regression", "clustering", "dimred", 
+          "rl", "ranking", "nlp", "vision", "timeseries"
+        ]
+      },
+      "input": {
+        "type": "object",
+        "properties": {
+          "X": {
+            "description": "tabular/embeddings/bytes/text data"
+          },
+          "y_true": {
+            "description": "optional ground truth for evaluation"
+          },
+          "modality": {
+            "enum": ["tabular", "text", "image", "audio", "video", "graph"]
+          }
+        }
+      },
+      "context": {
+        "type": "object",
+        "properties": {
+          "user_ctx": {
+            "type": "object",
+            "description": "RBAC and user labels"
+          },
+          "latency_budget_ms": {"type": "integer"},
+          "cost_budget_units": {"type": "number"},
+          "explanation": {"type": "boolean"},
+          "canary_allowed": {"type": "boolean", "default": true},
+          "segment": {"type": "string"},
+          "env": {"enum": ["dev", "staging", "prod"]}
+        }
+      },
+      "constraints": {
+        "type": "object",
+        "properties": {
+          "models_allowlist": {
+            "type": "array", 
+            "items": {"type": "string"}
+          },
+          "models_denylist": {
+            "type": "array", 
+            "items": {"type": "string"}
+          },
+          "min_calibration": {"type": "number"},
+          "fairness_delta_max": {"type": "number"}
+        }
+      },
+      "timestamp": {"type": "string", "format": "date-time"}
+    }
+  }
+}

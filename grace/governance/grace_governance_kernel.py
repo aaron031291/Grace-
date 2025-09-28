@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional, List
 
 # Core infrastructure
-from core import EventBus, MemoryCore
+from ..core import EventBus, MemoryCore
 
 # Governance components (now in same directory)
 from .verification_engine import VerificationEngine
@@ -22,10 +22,10 @@ from .quorum_bridge import QuorumBridge
 from .synthesizer import Synthesizer
 
 # Supporting infrastructure
-from layer_04_audit_logs import ImmutableLogs
-from layer_02_event_mesh import TriggerMesh
-from immune import EnhancedAVNCore
-from mldl import MLDLQuorum
+from ..layer_04_audit_logs import ImmutableLogs
+from ..layer_02_event_mesh import TriggerMesh
+from ..immune import EnhancedAVNCore
+from ..mldl import MLDLQuorum
 
 
 logger = logging.getLogger(__name__)

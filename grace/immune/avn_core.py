@@ -10,7 +10,7 @@ import logging
 import json
 from enum import Enum
 
-from core.contracts import Experience
+from ..core.contracts import Experience
 
 
 logger = logging.getLogger(__name__)

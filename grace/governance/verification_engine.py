@@ -308,29 +308,55 @@ class VerificationEngine:
         statement1 = claim1.statement.lower()
         statement2 = claim2.statement.lower()
         
-        # Simple contradiction patterns
-        negation_patterns = [
-            (r'is (.+)', r'is not \1'),
-            (r'will (.+)', r'will not \1'),
-            (r'can (.+)', r'cannot \1'),
-            (r'should (.+)', r'should not \1')
+        # Simple contradiction patterns - check for positive/negative pairs
+        positive_patterns = [
+            r'is (.+)',
+            r'will (.+)', 
+            r'can (.+)',
+            r'should (.+)'
         ]
         
-        for positive_pattern, negative_pattern in negation_patterns:
-            if re.search(positive_pattern, statement1) and re.search(negative_pattern, statement2):
-                return ContradictionReport(
-                    claim_ids=[claim1.id, claim2.id],
-                    contradiction_type="direct_negation",
-                    description=f"Claim {claim1.id} contradicts claim {claim2.id} through direct negation",
-                    confidence=0.8
-                )
-            elif re.search(negative_pattern, statement1) and re.search(positive_pattern, statement2):
-                return ContradictionReport(
-                    claim_ids=[claim1.id, claim2.id],
-                    contradiction_type="direct_negation",
-                    description=f"Claim {claim1.id} contradicts claim {claim2.id} through direct negation",
-                    confidence=0.8
-                )
+        negative_patterns = [
+            r'is not (.+)',
+            r'will not (.+)',
+            r'cannot (.+)', 
+            r'should not (.+)'
+        ]
+        
+        # Check each positive pattern against corresponding negative pattern
+        for i, (pos_pattern, neg_pattern) in enumerate(zip(positive_patterns, negative_patterns)):
+            pos_match1 = re.search(pos_pattern, statement1)
+            neg_match2 = re.search(neg_pattern, statement2)
+            
+            if pos_match1 and neg_match2:
+                # Extract the subject and see if they're similar
+                subject1 = pos_match1.group(1)
+                subject2 = neg_match2.group(1)
+                
+                # Simple similarity check
+                if subject1 == subject2 or self._calculate_text_similarity(subject1, subject2) > 0.7:
+                    return ContradictionReport(
+                        claim_ids=[claim1.id, claim2.id],
+                        contradiction_type="direct_negation",
+                        description=f"Claim {claim1.id} contradicts claim {claim2.id} through direct negation",
+                        confidence=0.8
+                    )
+            
+            # Check the reverse
+            neg_match1 = re.search(neg_pattern, statement1)
+            pos_match2 = re.search(pos_pattern, statement2)
+            
+            if neg_match1 and pos_match2:
+                subject1 = neg_match1.group(1)
+                subject2 = pos_match2.group(1)
+                
+                if subject1 == subject2 or self._calculate_text_similarity(subject1, subject2) > 0.7:
+                    return ContradictionReport(
+                        claim_ids=[claim1.id, claim2.id],
+                        contradiction_type="direct_negation", 
+                        description=f"Claim {claim1.id} contradicts claim {claim2.id} through direct negation",
+                        confidence=0.8
+                    )
         
         return None
     

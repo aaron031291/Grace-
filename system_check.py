@@ -324,11 +324,11 @@ class GraceSystemHealthChecker:
                 inputs=test_inputs
             )
             
-            if decision and hasattr(decision, 'decision') and decision.decision:
+            if decision and hasattr(decision, 'recommendation') and decision.recommendation:
                 return ComponentStatus(
                     name="Decision_Narration",
                     status="healthy",
-                    details={"decision": decision.decision, "confidence": getattr(decision, 'confidence', 0.0)},
+                    details={"decision": decision.recommendation, "confidence": getattr(decision, 'confidence', 0.0)},
                     response_time=time.time() - self.start_time
                 )
             else:

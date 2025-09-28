@@ -1,0 +1,270 @@
+{
+  "timestamp": "2025-09-28T16:42:53.409843",
+  "overall_status": "degraded",
+  "components": [
+    {
+      "name": "EventBus",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core.event_bus",
+        "class_name": "EventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.023574352264404297
+    },
+    {
+      "name": "MemoryCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core",
+        "class_name": "MemoryCore",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 4.291534423828125e-06
+    },
+    {
+      "name": "EventMesh",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_02_event_mesh",
+        "class_name": "GraceEventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.17546963691711426
+    },
+    {
+      "name": "AuditLogs",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_04_audit_logs.immutable_logs",
+        "class_name": "ImmutableLogs",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.0005095005035400391
+    },
+    {
+      "name": "GovernanceKernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.governance.grace_governance_kernel",
+        "class_name": "GraceGovernanceKernel"
+      },
+      "error": "Import error: No module named 'numpy'",
+      "response_time": null
+    },
+    {
+      "name": "VerificationEngine",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.verification_engine",
+        "class_name": "VerificationEngine",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 5.4836273193359375e-06
+    },
+    {
+      "name": "TrustCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.trust_core_kernel",
+        "class_name": "TrustCoreKernel",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.6226043701171875e-06
+    },
+    {
+      "name": "Parliament",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.parliament",
+        "class_name": "Parliament",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.6226043701171875e-06
+    },
+    {
+      "name": "GovernanceAPI",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.governance_api",
+        "class_name": "GovernanceAPIService",
+        "importable": true,
+        "description": "Grace Governance API Service."
+      },
+      "error": null,
+      "response_time": 0.0036482810974121094
+    },
+    {
+      "name": "MTL_Kernel",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.kernel",
+        "class_name": "MTLKernel",
+        "importable": true,
+        "description": "Main MTL kernel orchestrating all memory, trust, and learning operations."
+      },
+      "error": null,
+      "response_time": 0.007937908172607422
+    },
+    {
+      "name": "TrustService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.trust_service",
+        "class_name": "TrustService",
+        "importable": true,
+        "description": "Trust ledger for managing attestations and trust scores."
+      },
+      "error": null,
+      "response_time": 1.9073486328125e-06
+    },
+    {
+      "name": "ImmutableLogService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.immutable_log_service",
+        "class_name": "ImmutableLogService",
+        "importable": true,
+        "description": "Immutable audit log with Merkle proofs."
+      },
+      "error": null,
+      "response_time": 1.430511474609375e-06
+    },
+    {
+      "name": "SecurityVault",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.contracts.message_envelope_simple",
+        "class_name": "RBACContext",
+        "importable": true,
+        "description": "Role-based access control context."
+      },
+      "error": null,
+      "response_time": 1.6689300537109375e-06
+    },
+    {
+      "name": "StatusService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.interface.status_service",
+        "class_name": "GraceStatusService",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.049077749252319336
+    },
+    {
+      "name": "InterfaceKernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.interface_kernel.kernel",
+        "class_name": "InterfaceKernel"
+      },
+      "error": "Import error: No module named 'numpy'",
+      "response_time": null
+    },
+    {
+      "name": "OrchestrationService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.orchestration.orchestration_service",
+        "class_name": "OrchestrationService",
+        "importable": true,
+        "description": "Main orchestration service providing FastAPI interface with constitutional governance."
+      },
+      "error": null,
+      "response_time": 4.291534423828125e-06
+    },
+    {
+      "name": "OODA_Loop",
+      "status": "healthy",
+      "details": {
+        "loop_type": "ooda",
+        "stages": [
+          {
+            "timestamp": "2025-09-28T16:42:53.982874",
+            "stage": "observe"
+          },
+          {
+            "timestamp": "2025-09-28T16:42:53.982879",
+            "stage": "orient"
+          },
+          {
+            "timestamp": "2025-09-28T16:42:53.982881",
+            "stage": "decide"
+          },
+          {
+            "timestamp": "2025-09-28T16:42:53.982882",
+            "stage": "act"
+          }
+        ]
+      },
+      "error": null,
+      "response_time": 0.5730462074279785
+    },
+    {
+      "name": "Contradiction_Detection",
+      "status": "healthy",
+      "details": {
+        "contradictions_found": 1
+      },
+      "error": null,
+      "response_time": 0.5738050937652588
+    },
+    {
+      "name": "Decision_Narration",
+      "status": "degraded",
+      "details": {
+        "decision_type": "<class 'grace.core.contracts.UnifiedDecision'>"
+      },
+      "error": "Invalid decision structure or empty decision",
+      "response_time": null
+    },
+    {
+      "name": "Trust_Scoring",
+      "status": "healthy",
+      "details": {
+        "trust_score": 0.5,
+        "audit_id": "trust_init_test_memory_entry",
+        "attestation_id": "88d698dc-914a-47a6-b894-9b57b155f003"
+      },
+      "error": null,
+      "response_time": 0.5757870674133301
+    }
+  ],
+  "layers_status": {
+    "EventBus": "healthy",
+    "MemoryCore": "healthy",
+    "EventMesh": "healthy",
+    "AuditLogs": "healthy"
+  },
+  "vaults_status": {
+    "MTL_Kernel": "healthy",
+    "TrustService": "healthy",
+    "ImmutableLogService": "healthy",
+    "SecurityVault": "healthy"
+  },
+  "telemetry_active": false,
+  "ooda_loop_functional": true,
+  "governance_functional": false,
+  "recommendations": [
+    "Missing components detected (2). Check installation and imports.",
+    "Telemetry systems not fully operational. Monitor system visibility may be limited.",
+    "Governance system not fully functional. Security and decision-making may be compromised."
+  ]
+}

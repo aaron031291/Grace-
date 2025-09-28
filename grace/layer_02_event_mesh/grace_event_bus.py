@@ -6,6 +6,7 @@ import logging
 from asyncio import Queue
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Any, Callable, Dict, List, Optional, Set
 import uuid
 import hashlib
@@ -56,7 +57,7 @@ class DeadLetterQueue:
         dlq_entry = {
             "message": message,
             "failure_reason": failure_reason,
-            "failed_at": datetime.utcnow(),
+            "failed_at": utc_now(),
             "original_timestamp": message.timestamp,
             "retry_count": message.retry_count
         }
@@ -126,7 +127,7 @@ class GraceEventBus:
             "messages_failed": 0,
             "messages_deduplicated": 0,
             "messages_dropped": 0,
-            "start_time": datetime.utcnow()
+            "start_time": utc_now()
         }
         
         self._register_default_schemas()
@@ -140,7 +141,7 @@ class GraceEventBus:
                 if isinstance(event_type, str):
                     self.schema_registry[event_type] = {
                         "schema_version": "1.0.0",
-                        "registered_at": datetime.utcnow().isoformat()
+                        "registered_at": iso_format()
                     }
     
     async def start(self):
@@ -181,7 +182,7 @@ class GraceEventBus:
         """Register a schema for an event type."""
         self.schema_registry[event_type] = {
             "schema": schema,
-            "registered_at": datetime.utcnow().isoformat()
+            "registered_at": iso_format()
         }
         logger.info(f"Registered schema for event type: {event_type}")
     
@@ -191,7 +192,7 @@ class GraceEventBus:
         self.subscribers[event_pattern].append({
             "id": subscription_id,
             "handler": handler,
-            "subscribed_at": datetime.utcnow()
+            "subscribed_at": utc_now()
         })
         logger.info(f"Subscribed to {event_pattern} (ID: {subscription_id})")
         return subscription_id
@@ -404,7 +405,7 @@ class GraceEventBus:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get event bus statistics."""
-        uptime = (datetime.utcnow() - self.processing_stats["start_time"]).total_seconds()
+        uptime = (utc_now() - self.processing_stats["start_time"]).total_seconds()
         
         return {
             "uptime_seconds": uptime,

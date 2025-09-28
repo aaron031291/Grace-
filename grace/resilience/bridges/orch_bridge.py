@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class OrchestrationBridge:
                 "target": service_id,
                 "reason": reason,
                 "requester": "resilience",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             if self.orchestration_client:
@@ -59,7 +60,7 @@ class OrchestrationBridge:
             healing_record = {
                 **request,
                 "result": result,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             }
             self.healing_actions.append(healing_record)
             
@@ -97,7 +98,7 @@ class OrchestrationBridge:
                 "resource_type": resource_type,
                 "reason": reason,
                 "requester": "resilience",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             if self.orchestration_client:
@@ -118,7 +119,7 @@ class OrchestrationBridge:
             healing_record = {
                 **request,
                 "result": result,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             }
             self.healing_actions.append(healing_record)
             
@@ -156,7 +157,7 @@ class OrchestrationBridge:
                 "target_instances": target_instances,
                 "reason": reason,
                 "requester": "resilience",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             if self.orchestration_client:
@@ -177,7 +178,7 @@ class OrchestrationBridge:
             healing_record = {
                 **request,
                 "result": result,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             }
             self.healing_actions.append(healing_record)
             
@@ -215,7 +216,7 @@ class OrchestrationBridge:
                 "isolation_type": isolation_type,
                 "reason": reason,
                 "requester": "resilience",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             if self.orchestration_client:
@@ -227,14 +228,14 @@ class OrchestrationBridge:
                 result = {
                     "status": "success",
                     "message": f"Service {service_id} isolated ({isolation_type})",
-                    "isolation_id": f"iso_{service_id}_{int(datetime.now().timestamp())}"
+                    "isolation_id": f"iso_{service_id}_{int(utc_now().timestamp())}"
                 }
             
             # Record healing action
             healing_record = {
                 **request,
                 "result": result,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             }
             self.healing_actions.append(healing_record)
             
@@ -271,7 +272,7 @@ class OrchestrationBridge:
                         "healthy": 3,
                         "unhealthy": 0
                     },
-                    "last_check": datetime.now().isoformat()
+                    "last_check": iso_format()
                 }
             
             logger.debug(f"Health check for service {service_id}: {result['status']}")
@@ -329,7 +330,7 @@ class OrchestrationBridge:
                 "step_status": "success" if overall_success else "partial_failure",
                 "actions_executed": len(results),
                 "results": results,
-                "executed_at": datetime.now().isoformat()
+                "executed_at": iso_format()
             }
             
         except Exception as e:
@@ -367,5 +368,5 @@ class OrchestrationBridge:
             "successful_actions": successful_actions,
             "success_rate_pct": (successful_actions / total_actions * 100) if total_actions > 0 else 0,
             "action_counts": action_counts,
-            "generated_at": datetime.now().isoformat()
+            "generated_at": iso_format()
         }

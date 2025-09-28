@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 
 
@@ -15,13 +16,13 @@ class GovernanceBridge:
     
     async def submit_policy_proposal(self, policy_change: Dict[str, Any]) -> str:
         """Submit policy change proposal to governance."""
-        proposal_id = f"learn_policy_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        proposal_id = f"learn_policy_{format_for_filename()}"
         
         proposal = {
             "proposal_id": proposal_id,
             "type": "learning_policy_change",
             "change": policy_change,
-            "submitted_at": datetime.now().isoformat(),
+            "submitted_at": iso_format(),
             "status": "pending",
             "impact_assessment": self._assess_policy_impact(policy_change)
         }
@@ -36,7 +37,7 @@ class GovernanceBridge:
     async def submit_dataset_publication_request(self, dataset_id: str, version: str,
                                                 governance_label: str = "internal") -> str:
         """Submit dataset publication request to governance."""
-        proposal_id = f"learn_publish_{dataset_id}_{version}_{datetime.now().strftime('%H%M%S')}"
+        proposal_id = f"learn_publish_{dataset_id}_{version}_{utc_now().strftime('%H%M%S')}"
         
         proposal = {
             "proposal_id": proposal_id,
@@ -44,7 +45,7 @@ class GovernanceBridge:
             "dataset_id": dataset_id,
             "version": version,
             "governance_label": governance_label,
-            "submitted_at": datetime.now().isoformat(),
+            "submitted_at": iso_format(),
             "status": "pending",
             "compliance_checks": self._run_compliance_checks(dataset_id, version, governance_label)
         }
@@ -57,7 +58,7 @@ class GovernanceBridge:
     
     async def submit_rollback_request(self, snapshot_id: str, reason: str) -> str:
         """Submit rollback request to governance."""
-        proposal_id = f"learn_rollback_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        proposal_id = f"learn_rollback_{format_for_filename()}"
         
         proposal = {
             "proposal_id": proposal_id,
@@ -65,7 +66,7 @@ class GovernanceBridge:
             "target": "learning",
             "to_snapshot": snapshot_id,
             "reason": reason,
-            "submitted_at": datetime.now().isoformat(),
+            "submitted_at": iso_format(),
             "status": "pending",
             "risk_assessment": self._assess_rollback_risk(snapshot_id)
         }
@@ -157,7 +158,7 @@ class GovernanceBridge:
             return False
         
         proposal["status"] = "approved" if approved else "rejected"
-        proposal["decision_at"] = datetime.now().isoformat()
+        proposal["decision_at"] = iso_format()
         proposal["reason"] = reason
         
         if approved:

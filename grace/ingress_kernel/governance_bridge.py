@@ -4,6 +4,7 @@ Ingress-Governance Bridge - Connects Ingress Kernel to Governance System.
 import asyncio
 import logging
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List
 import uuid
 
@@ -22,7 +23,7 @@ class GovernanceRequest:
         self.request_type = request_type
         self.data = data
         self.context = context or {}
-        self.timestamp = datetime.utcnow()
+        self.timestamp = utc_now()
 
 
 class IngressGovernanceBridge:
@@ -381,7 +382,7 @@ class IngressGovernanceBridge:
         """Refresh cached policies."""
         try:
             # Clear expired cache entries
-            current_time = datetime.utcnow()
+            current_time = utc_now()
             expired_keys = [
                 k for k, expiry in self.cache_expiry.items()
                 if current_time > expiry

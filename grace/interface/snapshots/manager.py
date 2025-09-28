@@ -2,6 +2,7 @@
 import json
 import hashlib
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 import logging
 import uuid
@@ -89,11 +90,11 @@ class SnapshotManager:
     
     def export_snapshot(self) -> Dict[str, str]:
         """Create and export current interface state snapshot."""
-        snapshot_id = f"ui_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        snapshot_id = f"ui_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
         
         snapshot_data = {
             "snapshot_id": snapshot_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": iso_format(),
             **self.current_config
         }
         
@@ -146,7 +147,7 @@ class SnapshotManager:
             rollback_event = {
                 "target": "interface",
                 "snapshot_id": to_snapshot,
-                "at": datetime.utcnow().isoformat()
+                "at": iso_format()
             }
             
             logger.info(f"Successfully rolled back to snapshot {to_snapshot}")

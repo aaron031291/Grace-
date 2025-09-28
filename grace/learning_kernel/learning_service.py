@@ -4,6 +4,7 @@ import os
 import hashlib
 import sqlite3
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
@@ -117,7 +118,7 @@ class LearningService:
             return {
                 "status": "ok",
                 "version": "1.0.0",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
         
         @self.app.post("/api/learning/v1/datasets")
@@ -253,7 +254,7 @@ class LearningService:
             """Update curriculum specification."""
             try:
                 # Store curriculum spec (simple implementation)
-                spec_id = curriculum.get("spec_id", f"curr_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                spec_id = curriculum.get("spec_id", f"curr_{format_for_filename()}")
                 
                 # Emit event
                 await self.mesh_bridge.publish_event("LEARN_CURRICULUM_UPDATED", {
@@ -298,7 +299,7 @@ class LearningService:
                 await self.mesh_bridge.publish_event("ROLLBACK_COMPLETED", {
                     "target": "learning",
                     "snapshot_id": request["to_snapshot"],
-                    "at": datetime.now().isoformat()
+                    "at": iso_format()
                 })
                 
                 return result

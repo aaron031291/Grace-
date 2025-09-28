@@ -5,6 +5,7 @@ import logging
 import statistics
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import (
     Experience, Insight, InsightType, RecommendationType, 
@@ -93,7 +94,7 @@ class InsightGenerator:
                     },
                     confidence=confidence,
                     recommendation=RecommendationType.RETRAIN,
-                    timestamp=datetime.now()
+                    timestamp=utc_now()
                 )
         
         return None
@@ -131,7 +132,7 @@ class InsightGenerator:
                 },
                 confidence=confidence,
                 recommendation=RecommendationType.RETRAIN if avg_psi > 0.2 else RecommendationType.RECALIBRATE,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
         
         return None
@@ -169,7 +170,7 @@ class InsightGenerator:
                 },
                 confidence=confidence,
                 recommendation=RecommendationType.REWEIGHT,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
         
         return None
@@ -203,7 +204,7 @@ class InsightGenerator:
                 },
                 confidence=confidence,
                 recommendation=RecommendationType.RECALIBRATE,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
         
         return None
@@ -248,7 +249,7 @@ class InsightGenerator:
                 },
                 confidence=confidence,
                 recommendation=RecommendationType.HPO,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
         
         return None
@@ -287,7 +288,7 @@ class InsightGenerator:
                 },
                 confidence=confidence,
                 recommendation=RecommendationType.POLICY_TUNE,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
         
         return None

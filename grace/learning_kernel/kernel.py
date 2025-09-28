@@ -4,6 +4,7 @@ import os
 import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from pydantic import BaseModel
 
 # Import new learning kernel components
@@ -242,7 +243,7 @@ class LearningKernel:
             result=result,
             success=success,
             confidence=confidence,
-            timestamp=datetime.utcnow()
+            timestamp=utc_now()
         )
         
         self.outcomes.append(outcome)

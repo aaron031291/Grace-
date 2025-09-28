@@ -4,6 +4,7 @@ import json
 import hashlib
 import sqlite3
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 
 
@@ -69,7 +70,7 @@ class DatasetRegistry:
             "dataset_id": dataset_id,
             "version": version,
             "source_refs": sorted(refs),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
         lineage_json = json.dumps(lineage_data, sort_keys=True)
         lineage_hash = hashlib.sha256(lineage_json.encode()).hexdigest()

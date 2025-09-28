@@ -4,6 +4,7 @@ Enhanced AVN Core - Health monitoring and anomaly detection for Grace governance
 import asyncio
 from typing import Dict, List, Any, Optional, Tuple, Callable
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from dataclasses import dataclass, asdict
 import statistics
 import logging
@@ -42,7 +43,7 @@ class HealthMetric:
     value: float
     threshold_min: Optional[float] = None
     threshold_max: Optional[float] = None
-    timestamp: datetime = datetime.now()
+    timestamp: datetime = utc_now()
     
     def is_healthy(self) -> bool:
         """Check if metric is within healthy thresholds."""
@@ -74,7 +75,7 @@ class ComponentHealth:
     def __init__(self, component_id: str):
         self.component_id = component_id
         self.metrics: Dict[str, List[HealthMetric]] = {}
-        self.last_heartbeat = datetime.now()
+        self.last_heartbeat = utc_now()
         self.status = "healthy"
         self.alert_count = 0
         self.performance_baseline = {}
@@ -91,7 +92,7 @@ class ComponentHealth:
         if len(self.metrics[metric.metric_name]) > 1000:
             self.metrics[metric.metric_name] = self.metrics[metric.metric_name][-1000:]
         
-        self.last_heartbeat = datetime.now()
+        self.last_heartbeat = utc_now()
     
     def get_latest_metric(self, metric_name: str) -> Optional[HealthMetric]:
         """Get the latest metric value."""
@@ -104,7 +105,7 @@ class ComponentHealth:
         if metric_name not in self.metrics:
             return None
         
-        cutoff_time = datetime.now() - timedelta(minutes=window_minutes)
+        cutoff_time = utc_now() - timedelta(minutes=window_minutes)
         recent_metrics = [
             m for m in self.metrics[metric_name] 
             if m.timestamp >= cutoff_time
@@ -153,7 +154,7 @@ class ComponentHealth:
                     health_factors.append(0.5)  # Unhealthy but unknown deviation
         
         # Check heartbeat freshness
-        time_since_heartbeat = (datetime.now() - self.last_heartbeat).total_seconds()
+        time_since_heartbeat = (utc_now() - self.last_heartbeat).total_seconds()
         if time_since_heartbeat > 300:  # 5 minutes
             health_factors.append(0.0)
         elif time_since_heartbeat > 60:  # 1 minute
@@ -336,7 +337,7 @@ class EnhancedAVNCore:
     
     async def _check_component_heartbeats(self):
         """Check for components that haven't sent heartbeats."""
-        current_time = datetime.now()
+        current_time = utc_now()
         
         for component_id, component in self.component_health.items():
             time_since_heartbeat = (current_time - component.last_heartbeat).total_seconds()
@@ -471,7 +472,7 @@ class EnhancedAVNCore:
         # Look for recurring patterns
         recent_alerts = [
             alert for alert in self.alert_history[-100:]  # Last 100 alerts
-            if (datetime.now() - alert.timestamp).days <= 7
+            if (utc_now() - alert.timestamp).days <= 7
         ]
         
         # Group by component and anomaly type
@@ -514,14 +515,14 @@ class EnhancedAVNCore:
                          component_id: str, description: str, 
                          metrics: Dict[str, float], confidence: float):
         """Raise an anomaly alert."""
-        alert_id = f"alert_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{component_id}_{anomaly_type.value}"
+        alert_id = f"alert_{format_for_filename()}_{component_id}_{anomaly_type.value}"
         
         # Check for duplicate alerts
         existing_alert = None
         for alert in self.active_alerts.values():
             if (alert.component_id == component_id and 
                 alert.anomaly_type == anomaly_type and
-                (datetime.now() - alert.timestamp).total_seconds() < 300):  # 5 minutes
+                (utc_now() - alert.timestamp).total_seconds() < 300):  # 5 minutes
                 existing_alert = alert
                 break
         
@@ -539,7 +540,7 @@ class EnhancedAVNCore:
             description=description,
             metrics=metrics,
             confidence=confidence,
-            timestamp=datetime.now(),
+            timestamp=utc_now(),
             resolution_actions=resolution_actions,
             auto_resolve=(severity in [SeverityLevel.INFO, SeverityLevel.WARNING])
         )
@@ -627,7 +628,7 @@ class EnhancedAVNCore:
                 "alert_id": alert_id,
                 "component_id": alert.component_id,
                 "resolution_note": resolution_note,
-                "resolved_at": datetime.now().isoformat()
+                "resolved_at": iso_format()
             })
             
             logger.info(f"Resolved alert {alert_id}: {resolution_note}")
@@ -703,7 +704,7 @@ class EnhancedAVNCore:
             await self.event_bus.publish("COMPONENT_FAILOVER", {
                 "component_id": component_id,
                 "reason": reason,
-                "triggered_at": datetime.now().isoformat(),
+                "triggered_at": iso_format(),
                 "triggered_by": "avn_core"
             })
             

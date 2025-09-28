@@ -1,6 +1,7 @@
 """Bridge to Governance kernel for approvals and policy prompts."""
 import asyncio
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 import logging
 import uuid
@@ -27,7 +28,7 @@ class GovernanceBridge:
             "resource": request_data.get("resource"),
             "context": request_data.get("context", {}),
             "priority": request_data.get("priority", 5),
-            "created_at": datetime.utcnow(),
+            "created_at": utc_now(),
             "status": "pending"
         }
         

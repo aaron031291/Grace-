@@ -16,6 +16,7 @@ import logging
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import pickle
@@ -169,7 +170,7 @@ class GraceSnapshotManager:
                 INSERT OR REPLACE INTO instance_states 
                 (instance_name, current_snapshots, status, last_updated) 
                 VALUES (?, ?, ?, ?)
-            """, (instance, json.dumps({}), "standby", datetime.utcnow().isoformat()))
+            """, (instance, json.dumps({}), "standby", iso_format()))
         
         # Set blue as active
         self.conn.execute("""
@@ -200,7 +201,7 @@ class GraceSnapshotManager:
         """
         try:
             # Generate snapshot ID
-            timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+            timestamp = utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')
             snapshot_id = f"{component_type}_{timestamp}_{uuid.uuid4().hex[:8]}"
             
             # Calculate payload hash
@@ -228,7 +229,7 @@ class GraceSnapshotManager:
             """, (
                 snapshot_id, component_type,
                 description or f"{component_type} snapshot at {timestamp}",
-                object_key, state_hash, datetime.utcnow().isoformat(),
+                object_key, state_hash, iso_format(),
                 created_by, size_bytes, json.dumps(metadata),
                 json.dumps(tags or {})
             ))
@@ -243,7 +244,7 @@ class GraceSnapshotManager:
                 "object_key": object_key,
                 "state_hash": f"sha256:{state_hash}",
                 "size_bytes": size_bytes,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": iso_format(),
                 "description": description
             }
             
@@ -300,7 +301,7 @@ class GraceSnapshotManager:
             """, (
                 rollback_id, component_type, backup_snapshot["snapshot_id"], 
                 to_snapshot, reason, triggered_by, "in_progress", 
-                datetime.utcnow().isoformat()
+                iso_format()
             ))
             
             self.conn.commit()
@@ -321,7 +322,7 @@ class GraceSnapshotManager:
                     UPDATE rollback_history 
                     SET status = ?, completed_at = ?
                     WHERE rollback_id = ?
-                """, ("completed", datetime.utcnow().isoformat(), rollback_id))
+                """, ("completed", iso_format(), rollback_id))
                 
                 status = "completed"
                 logger.info(f"Rollback {rollback_id} completed successfully")
@@ -331,7 +332,7 @@ class GraceSnapshotManager:
                     SET status = ?, error_message = ?, completed_at = ?
                     WHERE rollback_id = ?
                 """, ("failed", "Rollback execution failed", 
-                     datetime.utcnow().isoformat(), rollback_id))
+                     iso_format(), rollback_id))
                 
                 status = "failed"
                 logger.error(f"Rollback {rollback_id} failed")
@@ -346,7 +347,7 @@ class GraceSnapshotManager:
                 "status": status,
                 "reason": reason,
                 "triggered_by": triggered_by,
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": iso_format()
             }
             
         except Exception as e:
@@ -357,7 +358,7 @@ class GraceSnapshotManager:
                     UPDATE rollback_history 
                     SET status = ?, error_message = ?, completed_at = ?
                     WHERE rollback_id = ?
-                """, ("failed", str(e), datetime.utcnow().isoformat(), rollback_id))
+                """, ("failed", str(e), iso_format(), rollback_id))
                 self.conn.commit()
             except:
                 pass
@@ -429,7 +430,7 @@ class GraceSnapshotManager:
                 END,
                 last_updated = ?
                 WHERE instance_name IN (?, ?)
-            """, (active_instance, standby_instance, datetime.utcnow().isoformat(),
+            """, (active_instance, standby_instance, iso_format(),
                   active_instance, standby_instance))
             
             self.conn.commit()
@@ -446,7 +447,7 @@ class GraceSnapshotManager:
                 "component_type": component_type,
                 "snapshot_id": new_snapshot,
                 "health_score": health_score,
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": iso_format()
             }
             
         except Exception as e:
@@ -537,7 +538,7 @@ class GraceSnapshotManager:
         # For now, return a mock state
         return {
             "component_type": component_type,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": iso_format(),
             "version": "1.0.0",
             "config": {"mock": "state"},
             "runtime_info": {
@@ -589,7 +590,7 @@ class GraceSnapshotManager:
                 UPDATE instance_states 
                 SET current_snapshots = ?, last_updated = ?
                 WHERE instance_name = ?
-            """, (json.dumps(current_snapshots), datetime.utcnow().isoformat(), instance_name))
+            """, (json.dumps(current_snapshots), iso_format(), instance_name))
             
             self.conn.commit()
     
@@ -633,7 +634,7 @@ class GraceSnapshotManager:
                 "component_stats": component_stats,
                 "rollback_stats": rollback_stats,
                 "instance_states": instance_states,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": iso_format()
             }
             
         except Exception as e:

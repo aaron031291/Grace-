@@ -4,6 +4,7 @@ import json
 import sqlite3
 import random
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Tuple
 
 
@@ -49,7 +50,7 @@ class SemiSupervisedLearning:
                     "confidence": pred["confidence"],
                     "source": "pseudo_labeling",
                     "iteration": iteration + 1,
-                    "created_at": datetime.now().isoformat()
+                    "created_at": iso_format()
                 }
                 pseudo_labels.append(pseudo_label)
                 
@@ -120,7 +121,7 @@ class SemiSupervisedLearning:
             
             # Store predictions
             for label in pseudo_labels:
-                prediction_id = f"pseudo_{label['item_id']}_{datetime.now().strftime('%H%M%S')}"
+                prediction_id = f"pseudo_{label['item_id']}_{utc_now().strftime('%H%M%S')}"
                 
                 conn.execute("""
                     INSERT INTO weak_predictions (

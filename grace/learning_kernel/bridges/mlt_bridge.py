@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 
 
@@ -17,7 +18,7 @@ class MLTBridge:
                                      dataset_id: Optional[str] = None,
                                      version: Optional[str] = None) -> str:
         """Send a learning experience to MLT kernel."""
-        exp_id = f"learn_exp_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        exp_id = f"learn_exp_{utc_now().strftime('%Y%m%d_%H%M%S_%f')}"
         
         experience = {
             "exp_id": exp_id,
@@ -26,7 +27,7 @@ class MLTBridge:
             "segment": segment,
             "dataset_id": dataset_id,
             "version": version,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
         
         # Validate stage
@@ -142,7 +143,7 @@ class MLTBridge:
         # Store received plan
         self.received_plans.append({
             "plan": plan,
-            "received_at": datetime.now().isoformat()
+            "received_at": iso_format()
         })
         
         # Extract learning-specific actions
@@ -238,7 +239,7 @@ class MLTBridge:
         # Recent experiences
         recent_count = len([
             exp for exp in self.sent_experiences
-            if (datetime.now() - datetime.fromisoformat(exp["timestamp"])).total_seconds() < 3600
+            if (utc_now() - datetime.fromisoformat(exp["timestamp"])).total_seconds() < 3600
         ])
         
         return {

@@ -4,6 +4,7 @@ import json
 import sqlite3
 import hashlib
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
@@ -18,13 +19,13 @@ class SnapshotManager:
     
     def create_snapshot(self, description: Optional[str] = None) -> Dict[str, Any]:
         """Create a snapshot of current Learning Kernel state."""
-        snapshot_id = f"learn_{datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        snapshot_id = f"learn_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
         
         # Collect current state from all components
         snapshot_data = {
             "snapshot_id": snapshot_id,
             "description": description or "Automated snapshot",
-            "created_at": datetime.now().isoformat(),
+            "created_at": iso_format(),
             "datasets": self._collect_datasets(),
             "versions": self._collect_dataset_versions(),
             "feature_views": self._collect_feature_views(),
@@ -276,7 +277,7 @@ class SnapshotManager:
             
             rollback_result = {
                 "snapshot_id": to_snapshot,
-                "rollback_completed_at": datetime.now().isoformat(),
+                "rollback_completed_at": iso_format(),
                 "status": "success",
                 "restored_components": [
                     "dataset_versions", "feature_views", "active_query_config", 

@@ -1,6 +1,7 @@
 """Grace Message Envelope (GME) - Standard message format for all Grace events (simplified version)."""
 
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Any, Dict, List, Optional
 import uuid
 import hashlib
@@ -85,7 +86,7 @@ class GraceMessageEnvelope:
         self.headers = headers
         self.payload = payload
         self.idempotency_key = idempotency_key or f"idem_{uuid.uuid4().hex[:12]}"
-        self.timestamp = timestamp or datetime.utcnow()
+        self.timestamp = timestamp or utc_now()
         self.retry_count = retry_count
         self.ttl_seconds = ttl_seconds
         self.schema_version = schema_version
@@ -102,7 +103,7 @@ class GraceMessageEnvelope:
     
     def is_expired(self) -> bool:
         """Check if message has exceeded its TTL."""
-        age_seconds = (datetime.utcnow() - self.timestamp).total_seconds()
+        age_seconds = (utc_now() - self.timestamp).total_seconds()
         return age_seconds > self.ttl_seconds
     
     def increment_retry(self) -> None:

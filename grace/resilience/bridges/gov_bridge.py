@@ -224,4 +224,5 @@ class GovernanceBridge:
     def _get_timestamp(self) -> str:
         """Get current timestamp."""
         from datetime import datetime
-        return datetime.now().isoformat()
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
+        return iso_format()

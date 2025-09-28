@@ -9,6 +9,7 @@ Governance Adaptation, Meta-Learning, and Value Generation loops.
 import asyncio
 import time
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 import heapq
@@ -105,8 +106,8 @@ class TaskRequest:
         self.stage = stage
         self.inputs = inputs
         self.priority = priority
-        self.deadline = deadline or datetime.now() + timedelta(minutes=10)
-        self.created_at = datetime.now()
+        self.deadline = deadline or utc_now() + timedelta(minutes=10)
+        self.created_at = utc_now()
         self.started_at = None
         self.completed_at = None
         self.status = "pending"
@@ -121,7 +122,7 @@ class TaskRequest:
     
     def is_expired(self) -> bool:
         """Check if task has exceeded its deadline."""
-        return datetime.now() > self.deadline
+        return utc_now() > self.deadline
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -320,7 +321,7 @@ class Scheduler:
             if self.event_publisher:
                 await self.event_publisher("ORCH_LOOP_STARTED", {
                     "loop_id": loop.loop_id,
-                    "ts": datetime.now().isoformat()
+                    "ts": iso_format()
                 })
                 
         except Exception as e:
@@ -348,7 +349,7 @@ class Scheduler:
         
         # Start task execution
         task.status = "running"
-        task.started_at = datetime.now()
+        task.started_at = utc_now()
         self.active_tasks[task.task_id] = task
         
         # Execute task asynchronously
@@ -373,7 +374,7 @@ class Scheduler:
             
             # Complete task
             task.status = "succeeded"
-            task.completed_at = datetime.now()
+            task.completed_at = utc_now()
             task.outputs = {"result": "success", "duration": duration}
             
             logger.debug(f"Task {task.task_id} completed successfully")
@@ -393,7 +394,7 @@ class Scheduler:
                 self.loops[task.loop_id].record_execution(duration, False)
             
             task.status = "failed"
-            task.completed_at = datetime.now()
+            task.completed_at = utc_now()
             task.error = {
                 "code": "EXECUTION_ERROR",
                 "message": str(e),
@@ -420,7 +421,7 @@ class Scheduler:
     
     async def _handle_expired_tasks(self):
         """Handle tasks that have exceeded their timeout."""
-        current_time = datetime.now()
+        current_time = utc_now()
         timeout_delta = timedelta(minutes=self.task_timeout_minutes)
         
         expired_tasks = []
@@ -503,16 +504,16 @@ class Scheduler:
     async def _execute_ooda_loop(self, loop: LoopDefinition) -> Dict[str, Any]:
         """Execute OODA (Observe-Orient-Decide-Act) loop."""
         # Observe - gather intelligence
-        observations = {"timestamp": datetime.now().isoformat(), "stage": "observe"}
+        observations = {"timestamp": iso_format(), "stage": "observe"}
         
         # Orient - analyze situation
-        orientation = {"timestamp": datetime.now().isoformat(), "stage": "orient"}
+        orientation = {"timestamp": iso_format(), "stage": "orient"}
         
         # Decide - make decisions
-        decisions = {"timestamp": datetime.now().isoformat(), "stage": "decide"}
+        decisions = {"timestamp": iso_format(), "stage": "decide"}
         
         # Act - execute actions
-        actions = {"timestamp": datetime.now().isoformat(), "stage": "act"}
+        actions = {"timestamp": iso_format(), "stage": "act"}
         
         return {
             "loop_type": "ooda",

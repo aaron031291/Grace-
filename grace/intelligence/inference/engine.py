@@ -12,6 +12,7 @@ import logging
 import asyncio
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import random
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class InferenceEngine:
             InferenceResult dictionary
         """
         try:
-            start_time = datetime.now()
+            start_time = utc_now()
             
             # Extract plan details
             route = plan.get("route", {})
@@ -128,7 +129,7 @@ class InferenceEngine:
                 
                 # Add model metadata
                 prediction_result["model_key"] = model_key
-                prediction_result["inference_time"] = datetime.now().isoformat()
+                prediction_result["inference_time"] = iso_format()
                 
                 results.append(prediction_result)
                 
@@ -314,7 +315,7 @@ class InferenceEngine:
             
             return {
                 "shadow_results": shadow_results,
-                "shadow_timestamp": datetime.now().isoformat(),
+                "shadow_timestamp": iso_format(),
                 "shadow_agreement": 0.85  # Mock agreement score
             }
             
@@ -369,7 +370,7 @@ class InferenceEngine:
                                model_results: List[Dict], shadow_result: Optional[Dict], 
                                start_time: datetime) -> Dict[str, Any]:
         """Create final InferenceResult object."""
-        end_time = datetime.now()
+        end_time = utc_now()
         total_ms = (end_time - start_time).total_seconds() * 1000
         
         # Extract outputs
@@ -464,7 +465,7 @@ class InferenceEngine:
     def _track_inference_metrics(self, result: Dict, plan: Dict, start_time: datetime):
         """Track inference metrics for monitoring."""
         metrics_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "plan_id": plan.get("plan_id"),
             "latency_ms": result["timing"]["total_ms"],
             "success": "error" not in result,

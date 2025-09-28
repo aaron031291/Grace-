@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from grace.comms import create_envelope, MessageKind, Priority, QoSClass, validate_envelope
 from grace.core.event_bus import EventBus
+from grace.utils.datetime_utils import utc_now, iso_format
 
 
 async def example_intelligence_workflow():
@@ -180,7 +181,7 @@ async def example_experience_collection():
                 "resource_utilization": 0.78
             },
             "outcome": "success",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         },
         priority=Priority.P3,  # Low priority background data
         qos=QoSClass.BULK,
@@ -209,7 +210,7 @@ async def example_experience_collection():
                 "consensus_rate": 0.88
             },
             "outcome": "success",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         },
         priority=Priority.P3,
         qos=QoSClass.BULK, 
@@ -296,7 +297,7 @@ async def example_error_handling():
             "error_details": {
                 "error_code": "E.UNAVAILABLE",
                 "error_message": "Source endpoint unreachable after 3 retries",
-                "last_attempt": datetime.utcnow().isoformat()
+                "last_attempt": iso_format()
             },
             "dlq_topic": "grace.dlq",
             "retention_days": 7

@@ -4,6 +4,7 @@ Ingress-MLT Bridge - Connects Ingress Kernel to Meta Learning and Trust (MLT) Sy
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List
 import uuid
 
@@ -37,7 +38,7 @@ class IngressMLTBridge:
         # Metrics aggregation
         self.metrics_window = timedelta(minutes=15)  # 15-minute windows
         self.current_metrics = {}
-        self.last_metrics_reset = datetime.utcnow()
+        self.last_metrics_reset = utc_now()
         
         self.running = False
     
@@ -119,14 +120,14 @@ class IngressMLTBridge:
             self.adaptation_plans[plan_id] = {
                 "plan": plan,
                 "status": "received",
-                "received_at": datetime.utcnow()
+                "received_at": utc_now()
             }
             
             # Apply plan actions
             success = await self._apply_adaptation_plan(plan)
             
             self.adaptation_plans[plan_id]["status"] = "applied" if success else "failed"
-            self.adaptation_plans[plan_id]["applied_at"] = datetime.utcnow()
+            self.adaptation_plans[plan_id]["applied_at"] = utc_now()
             
             logger.info(f"Applied adaptation plan: {plan_id}, success: {success}")
             return success
@@ -179,7 +180,7 @@ class IngressMLTBridge:
     
     async def _collect_stage_metrics(self):
         """Collect metrics from each ingress stage."""
-        current_time = datetime.utcnow()
+        current_time = utc_now()
         
         # Reset metrics window if needed
         if current_time - self.last_metrics_reset > self.metrics_window:

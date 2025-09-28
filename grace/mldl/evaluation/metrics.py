@@ -5,6 +5,7 @@ import numpy as np
 from typing import Dict, Any, Optional, List, Union
 import logging
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +364,7 @@ def fairness(y_true, y_pred, groups: Dict[str, List], proba=None) -> Dict[str, A
     """
     try:
         fairness_metrics = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "groups": list(groups.keys()),
             "metrics": {}
         }

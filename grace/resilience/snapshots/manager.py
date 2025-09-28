@@ -5,6 +5,7 @@ import hashlib
 import logging
 import sqlite3
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, List, Optional
 import asyncio
 
@@ -89,7 +90,7 @@ class SnapshotManager:
             Created snapshot information
         """
         try:
-            snapshot_id = f"res_{datetime.now().strftime('%Y-%m-%dT%H-%M-%SZ')}"
+            snapshot_id = f"res_{utc_now().strftime('%Y-%m-%dT%H-%M-%SZ')}"
             
             # Collect current state (this would integrate with actual services)
             state_data = await self._collect_current_state()
@@ -123,7 +124,7 @@ class SnapshotManager:
                 snapshot_id, snapshot_type, description, slo_policies,
                 resilience_policies, dependency_graphs, circuit_states,
                 degradation_states, chaos_config, state_hash,
-                datetime.now().isoformat(), size_bytes,
+                iso_format(), size_bytes,
                 json.dumps(metadata or {})
             ))
             
@@ -135,7 +136,7 @@ class SnapshotManager:
                 "description": description,
                 "state_hash": state_hash,
                 "size_bytes": size_bytes,
-                "created_at": datetime.now().isoformat(),
+                "created_at": iso_format(),
                 "uri": f"resilience://snapshots/{snapshot_id}"
             }
             
@@ -180,7 +181,7 @@ class SnapshotManager:
                 ) VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 rollback_id, to_snapshot, reason, triggered_by,
-                "in_progress", datetime.now().isoformat()
+                "in_progress", iso_format()
             ))
             self.conn.commit()
             
@@ -193,7 +194,7 @@ class SnapshotManager:
                 SET status = ?, completed_at = ?, affected_services = ?
                 WHERE rollback_id = ?
             """, (
-                "completed", datetime.now().isoformat(),
+                "completed", iso_format(),
                 json.dumps(affected_services), rollback_id
             ))
             self.conn.commit()
@@ -203,7 +204,7 @@ class SnapshotManager:
                 "to_snapshot": to_snapshot,
                 "status": "completed",
                 "affected_services": affected_services,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             }
             
             logger.info(f"Completed rollback to snapshot {to_snapshot}")
@@ -217,7 +218,7 @@ class SnapshotManager:
                     SET status = ?, completed_at = ?, error_message = ?
                     WHERE rollback_id = ?
                 """, (
-                    "failed", datetime.now().isoformat(), str(e), rollback_id
+                    "failed", iso_format(), str(e), rollback_id
                 ))
                 self.conn.commit()
             except:

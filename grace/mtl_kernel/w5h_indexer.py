@@ -1,6 +1,7 @@
 """W5H Indexer - Who/What/When/Where/Why/How indexing system."""
 import re
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Set
 
 from ..contracts.dto_common import W5HIndex, MemoryEntry
@@ -67,7 +68,7 @@ class W5HIndexer:
             index.how.extend(matches)
         
         # WHEN - Set current timestamp (could be enhanced with NLP)
-        index.when = datetime.utcnow()
+        index.when = utc_now()
         
         # Deduplicate and clean up
         index.who = list(set(index.who))

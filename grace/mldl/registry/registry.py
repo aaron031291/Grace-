@@ -7,6 +7,7 @@ import logging
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import os
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ class ModelRegistry:
                 json.dumps(bundle.get("lineage", {})),
                 json.dumps(bundle.get("tags", [])),
                 bundle.get("validation_hash", ""),
-                bundle.get("created_at", datetime.now().isoformat())
+                bundle.get("created_at", iso_format())
             ))
             
             self.conn.commit()
@@ -138,7 +139,7 @@ class ModelRegistry:
                 "model_key": model_key,
                 "version": version,
                 "status": "registered",
-                "registered_at": datetime.now().isoformat()
+                "registered_at": iso_format()
             }
             
         except Exception as e:
@@ -321,7 +322,7 @@ class ModelRegistry:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 model_key, version, approval_type, status, approver, reason,
-                datetime.now().isoformat()
+                iso_format()
             ))
             
             self.conn.commit()
@@ -335,7 +336,7 @@ class ModelRegistry:
                 "status": status,
                 "approver": approver,
                 "reason": reason,
-                "created_at": datetime.now().isoformat()
+                "created_at": iso_format()
             }
             
         except Exception as e:
@@ -352,7 +353,7 @@ class ModelRegistry:
                 ) VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 model_key, version, deployment_id, environment, status,
-                datetime.now().isoformat()
+                iso_format()
             ))
             
             self.conn.commit()
@@ -365,7 +366,7 @@ class ModelRegistry:
                 "deployment_id": deployment_id,
                 "environment": environment,
                 "status": status,
-                "created_at": datetime.now().isoformat()
+                "created_at": iso_format()
             }
             
         except Exception as e:
@@ -398,7 +399,7 @@ class ModelRegistry:
     async def create_snapshot(self) -> Dict[str, Any]:
         """Create a snapshot of the current registry state."""
         try:
-            snapshot_id = f"registry_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            snapshot_id = f"registry_{format_for_filename()}"
             
             # Get all registered models
             cursor = self.conn.execute("SELECT * FROM models WHERE status = 'registered'")
@@ -407,7 +408,7 @@ class ModelRegistry:
             # Create snapshot
             snapshot = {
                 "snapshot_id": snapshot_id,
-                "created_at": datetime.now().isoformat(),
+                "created_at": iso_format(),
                 "model_count": len(models),
                 "models": models
             }
@@ -443,7 +444,7 @@ class ModelRegistry:
                 "total_models": total_models,
                 "status_breakdown": status_counts,
                 "recent_registrations": recent_registrations,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
         except Exception as e:

@@ -4,6 +4,7 @@ Core data structures and contracts for the Grace governance kernel.
 from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from enum import Enum
 import uuid
 
@@ -187,5 +188,5 @@ def generate_decision_id() -> str:
 
 def generate_snapshot_id() -> str:
     """Generate a unique snapshot ID with timestamp."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
     return f"govsnap_{timestamp}_{uuid.uuid4().hex[:8]}"

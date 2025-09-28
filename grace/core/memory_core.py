@@ -5,6 +5,7 @@ import json
 import hashlib
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import sqlite3
 from pathlib import Path
 import logging
@@ -188,7 +189,7 @@ class MemoryCore:
     
     def get_decision_history(self, instance_id: str, days: int = 30) -> List[Dict[str, Any]]:
         """Get recent decision history for an instance."""
-        cutoff = datetime.now().isoformat()
+        cutoff = iso_format()
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -230,7 +231,7 @@ class MemoryCore:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 decision_id, instance_a, instance_b, json.dumps(diff_data),
-                latency_diff, compliance_diff, datetime.now().isoformat()
+                latency_diff, compliance_diff, iso_format()
             ))
             conn.commit()
     
@@ -274,7 +275,7 @@ class MemoryCore:
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 topic_hash, decision_id, keywords, outcome, confidence,
-                datetime.now().isoformat()
+                iso_format()
             ))
             conn.commit()
     

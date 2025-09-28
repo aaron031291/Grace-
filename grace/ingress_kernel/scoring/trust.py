@@ -5,6 +5,7 @@ import logging
 import hashlib
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import math
 
 from grace.contracts.ingress_contracts import NormRecord, SourceConfig
@@ -112,7 +113,7 @@ class TrustScorer:
                 self.reputation_history[source_id] = []
             
             self.reputation_history[source_id].append({
-                "timestamp": datetime.utcnow(),
+                "timestamp": utc_now(),
                 "old_reputation": current_rep,
                 "new_reputation": new_rep,
                 "outcome_score": outcome_score,
@@ -197,7 +198,7 @@ class TrustScorer:
             self.content_signatures[content_sig].append({
                 "source_id": record.source.source_id,
                 "record_id": record.record_id,
-                "timestamp": datetime.utcnow()
+                "timestamp": utc_now()
             })
             
             # Calculate agreement score
@@ -328,7 +329,7 @@ class TrustScorer:
         
         recent_history = [
             h for h in history 
-            if h["timestamp"] > datetime.utcnow() - timedelta(days=7)
+            if h["timestamp"] > utc_now() - timedelta(days=7)
         ]
         
         return {

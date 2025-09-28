@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional, Callable
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class MeshBridge:
             event = {
                 "event_type": event_type,
                 "source": "resilience",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": iso_format(),
                 "correlation_id": self._generate_correlation_id(),
                 "payload": payload
             }

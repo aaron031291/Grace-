@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import json
 import uuid
 from collections import defaultdict, deque
@@ -83,7 +84,7 @@ class TelemetryCollector:
             labels: Optional labels for the metric
             timestamp: Optional timestamp (defaults to now)
         """
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or utc_now()
         
         metric_data = {
             "name": name,
@@ -117,7 +118,7 @@ class TelemetryCollector:
             component: Optional component name
             timestamp: Optional timestamp (defaults to now)
         """
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or utc_now()
         
         log_entry = {
             "id": str(uuid.uuid4()),
@@ -155,7 +156,7 @@ class TelemetryCollector:
             "operation": operation,
             "host_id": host_id,
             "task_id": task_id,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": iso_format(),
             "spans": [],
             "status": "active"
         }
@@ -183,7 +184,7 @@ class TelemetryCollector:
             "duration_ms": duration_ms,
             "status": status,
             "metadata": metadata or {},
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         }
         
         self.traces[trace_id]["spans"].append(span)
@@ -201,12 +202,12 @@ class TelemetryCollector:
         
         trace = self.traces[trace_id]
         trace["status"] = status
-        trace["finished_at"] = datetime.utcnow().isoformat()
+        trace["finished_at"] = iso_format()
         
         # Calculate total duration
         try:
             start_time = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00"))
-            end_time = datetime.utcnow()
+            end_time = utc_now()
             duration_ms = (end_time - start_time.replace(tzinfo=None)).total_seconds() * 1000
             trace["total_duration_ms"] = duration_ms
         except Exception:
@@ -226,7 +227,7 @@ class TelemetryCollector:
         Returns:
             Event ID
         """
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or utc_now()
         event_id = str(uuid.uuid4())
         
         event = {
@@ -266,7 +267,7 @@ class TelemetryCollector:
             "kpis": self.kpis.copy(),
             "collection_period": {
                 "start": None,
-                "end": datetime.utcnow().isoformat()
+                "end": iso_format()
             }
         }
         
@@ -406,7 +407,7 @@ class TelemetryCollector:
         """Get current KPI values."""
         return {
             "kpis": self.kpis.copy(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": iso_format(),
             "collection_stats": {
                 "total_metrics": sum(len(m) for m in self.metrics.values()),
                 "total_logs": len(self.logs),
@@ -423,7 +424,7 @@ class TelemetryCollector:
             Dict with cleanup statistics
         """
         retention = self.config.get("retention", {})
-        now = datetime.utcnow()
+        now = utc_now()
         
         stats = {
             "metrics_cleaned": 0,
@@ -497,7 +498,7 @@ class TelemetryCollector:
     
     def _process_event_metrics(self, event_name: str, payload: Dict[str, Any], host_id: Optional[str]) -> None:
         """Process events to extract metrics."""
-        timestamp = datetime.utcnow()
+        timestamp = utc_now()
         
         # Task completion metrics
         if event_name == "MOS_TASK_COMPLETED":
@@ -573,7 +574,7 @@ class TelemetryCollector:
         if not time_window:
             return list(measurements)
         
-        cutoff = datetime.utcnow() - timedelta(seconds=time_window)
+        cutoff = utc_now() - timedelta(seconds=time_window)
         recent = []
         
         for measurement in reversed(measurements):

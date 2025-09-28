@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import json
 import uuid
 
@@ -56,8 +57,8 @@ class Registry:
             host_id = host_descriptor["host_id"]
             
             # Add timestamp and processing info
-            host_descriptor["registered_at"] = datetime.utcnow().isoformat()
-            host_descriptor["last_seen"] = datetime.utcnow().isoformat()
+            host_descriptor["registered_at"] = iso_format()
+            host_descriptor["last_seen"] = iso_format()
             host_descriptor["health_score"] = 1.0
             
             # If this is an update, preserve some historical data
@@ -152,7 +153,7 @@ class Registry:
         old_status = host.get("status")
         
         host["status"] = status
-        host["last_seen"] = datetime.utcnow().isoformat()
+        host["last_seen"] = iso_format()
         
         if health_metrics:
             host["health_metrics"] = health_metrics
@@ -360,7 +361,7 @@ class Registry:
         Returns:
             Number of hosts removed
         """
-        now = datetime.utcnow()
+        now = utc_now()
         timeout_threshold = now - timedelta(seconds=self.host_timeout)
         
         stale_hosts = []
@@ -459,7 +460,7 @@ class Registry:
         try:
             data = {
                 "hosts": self.hosts,
-                "last_updated": datetime.utcnow().isoformat()
+                "last_updated": iso_format()
             }
             with open(self.storage_path, 'w') as f:
                 json.dump(data, f, indent=2)

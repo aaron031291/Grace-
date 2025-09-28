@@ -11,6 +11,7 @@ import hashlib
 import shutil
 import gzip
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
@@ -50,7 +51,7 @@ class OrchSnapshot:
     def __init__(self, snapshot_id: str, snapshot_type: SnapshotType = SnapshotType.MANUAL):
         self.snapshot_id = snapshot_id
         self.snapshot_type = snapshot_type
-        self.created_at = datetime.now()
+        self.created_at = utc_now()
         self.status = SnapshotStatus.CREATING
         
         # Snapshot content
@@ -133,7 +134,7 @@ class RollbackOperation:
     def __init__(self, operation_id: str, target_snapshot_id: str):
         self.operation_id = operation_id
         self.target_snapshot_id = target_snapshot_id
-        self.started_at = datetime.now()
+        self.started_at = utc_now()
         self.completed_at = None
         self.status = RollbackStatus.PREPARING
         
@@ -245,7 +246,7 @@ class SnapshotManager:
                             snapshot_type: SnapshotType = SnapshotType.MANUAL,
                             tags: Set[str] = None) -> str:
         """Create and export a system state snapshot."""
-        snapshot_id = f"orch_{int(datetime.now().timestamp())}_{len(self.snapshots)}"
+        snapshot_id = f"orch_{int(utc_now().timestamp())}_{len(self.snapshots)}"
         
         logger.info(f"Creating snapshot {snapshot_id}")
         
@@ -305,7 +306,7 @@ class SnapshotManager:
         if target_snapshot.status != SnapshotStatus.COMPLETED:
             raise ValueError(f"Cannot rollback to incomplete snapshot: {to_snapshot}")
         
-        operation_id = f"rollback_{int(datetime.now().timestamp())}"
+        operation_id = f"rollback_{int(utc_now().timestamp())}"
         rollback_op = RollbackOperation(operation_id, to_snapshot)
         rollback_op.total_steps = 6  # Number of rollback steps
         
@@ -356,7 +357,7 @@ class SnapshotManager:
             
             # Complete rollback
             rollback_op.status = RollbackStatus.COMPLETED
-            rollback_op.completed_at = datetime.now()
+            rollback_op.completed_at = utc_now()
             rollback_op.current_step = "Completed"
             
             self.total_rollbacks_performed += 1
@@ -368,7 +369,7 @@ class SnapshotManager:
                 await self.event_publisher("ROLLBACK_COMPLETED", {
                     "target": "orchestration",
                     "snapshot_id": to_snapshot,
-                    "at": datetime.now().isoformat()
+                    "at": iso_format()
                 })
             
             return operation_id
@@ -376,7 +377,7 @@ class SnapshotManager:
         except Exception as e:
             rollback_op.status = RollbackStatus.FAILED
             rollback_op.errors.append(str(e))
-            rollback_op.completed_at = datetime.now()
+            rollback_op.completed_at = utc_now()
             
             logger.error(f"Rollback operation {operation_id} failed: {e}")
             raise
@@ -446,7 +447,7 @@ class SnapshotManager:
         try:
             # Basic system metrics (can be extended)
             snapshot.system_metrics = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": iso_format(),
                 "total_components": len(snapshot.component_states),
                 "active_loops": len(snapshot.loops),
                 "active_tasks": len(snapshot.active_tasks),
@@ -486,7 +487,7 @@ class SnapshotManager:
                 snapshot.status = SnapshotStatus.COMPLETED
                 logger.debug(f"Snapshot {snapshot.snapshot_id} validation passed")
             
-            snapshot.validated_at = datetime.now()
+            snapshot.validated_at = utc_now()
             
         except Exception as e:
             snapshot.validation_errors.append(f"Validation error: {e}")
@@ -653,7 +654,7 @@ class SnapshotManager:
         if not last_snapshot:
             return True
         
-        time_since_last = (datetime.now() - last_snapshot).total_seconds() / 60
+        time_since_last = (utc_now() - last_snapshot).total_seconds() / 60
         return time_since_last >= interval_minutes
     
     async def _create_scheduled_snapshot(self, schedule_name: str, config: Dict[str, Any]):
@@ -668,7 +669,7 @@ class SnapshotManager:
                 tags=tags
             )
             
-            config["last_created"] = datetime.now()
+            config["last_created"] = utc_now()
             logger.info(f"Created scheduled snapshot {snapshot_id} for schedule {schedule_name}")
             
         except Exception as e:

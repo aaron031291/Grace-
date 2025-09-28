@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import numpy as np
 
+from ...utils.datetime_utils import utc_now, iso_format
+
 logger = logging.getLogger(__name__)
 
 
@@ -133,7 +135,7 @@ class MonitoringCollector:
             """, (
                 model_key, version, deployment_id, metric_type, metric_name,
                 metric_value, json.dumps(dimensions or {}),
-                datetime.now().isoformat(), datetime.now().isoformat()
+                utc_now().isoformat(), utc_now().isoformat()
             ))
             
             self.conn.commit()

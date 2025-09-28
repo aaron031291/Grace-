@@ -8,6 +8,7 @@ import sqlite3
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ class SnapshotManager:
             Snapshot information
         """
         try:
-            snapshot_id = f"mldl_{datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            snapshot_id = f"mldl_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
             
             # Collect current system state
             registry_index = await self._collect_registry_state()
@@ -99,7 +100,7 @@ class SnapshotManager:
                 "calibration": calibration_config,
                 "fairness": fairness_config,
                 "deployment_policy": deployment_policy,
-                "created_at": datetime.now().isoformat(),
+                "created_at": iso_format(),
                 "snapshot_type": snapshot_type
             }
             
@@ -119,10 +120,10 @@ class SnapshotManager:
                     deployment_policy, state_hash, created_at, size_bytes, metadata
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                snapshot_id, snapshot_type, description or f"Snapshot created at {datetime.now().isoformat()}",
+                snapshot_id, snapshot_type, description or f"Snapshot created at {iso_format()}",
                 json.dumps(registry_index), json.dumps(search_spaces),
                 json.dumps(calibration_config), json.dumps(fairness_config),
-                json.dumps(deployment_policy), state_hash, datetime.now().isoformat(),
+                json.dumps(deployment_policy), state_hash, iso_format(),
                 size_bytes, json.dumps({"payload_size": size_bytes})
             ))
             
@@ -135,8 +136,8 @@ class SnapshotManager:
                 "uri": f"mldl://snapshots/{snapshot_id}",
                 "state_hash": f"sha256:{state_hash}",
                 "size_bytes": size_bytes,
-                "created_at": datetime.now().isoformat(),
-                "description": description or f"Snapshot created at {datetime.now().isoformat()}"
+                "created_at": iso_format(),
+                "description": description or f"Snapshot created at {iso_format()}"
             }
             
         except Exception as e:
@@ -178,7 +179,7 @@ class SnapshotManager:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 rollback_id, current_snapshot["snapshot_id"], to_snapshot,
-                reason, triggered_by, "in_progress", datetime.now().isoformat()
+                reason, triggered_by, "in_progress", iso_format()
             ))
             
             self.conn.commit()
@@ -192,7 +193,7 @@ class SnapshotManager:
                     UPDATE rollback_history 
                     SET status = ?, completed_at = ?
                     WHERE rollback_id = ?
-                """, ("completed", datetime.now().isoformat(), rollback_id))
+                """, ("completed", iso_format(), rollback_id))
                 
                 status = "completed"
                 logger.info(f"Rollback {rollback_id} completed successfully")
@@ -201,7 +202,7 @@ class SnapshotManager:
                     UPDATE rollback_history 
                     SET status = ?, error_message = ?, completed_at = ?
                     WHERE rollback_id = ?
-                """, ("failed", "Rollback execution failed", datetime.now().isoformat(), rollback_id))
+                """, ("failed", "Rollback execution failed", iso_format(), rollback_id))
                 
                 status = "failed"
                 logger.error(f"Rollback {rollback_id} failed")
@@ -215,7 +216,7 @@ class SnapshotManager:
                 "status": status,
                 "reason": reason,
                 "triggered_by": triggered_by,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             }
             
         except Exception as e:
@@ -226,7 +227,7 @@ class SnapshotManager:
                     UPDATE rollback_history 
                     SET status = ?, error_message = ?, completed_at = ?
                     WHERE rollback_id = ?
-                """, ("failed", str(e), datetime.now().isoformat(), rollback_id))
+                """, ("failed", str(e), iso_format(), rollback_id))
                 self.conn.commit()
             except:
                 pass
@@ -440,7 +441,7 @@ class SnapshotManager:
                 "snapshot_types": type_counts,
                 "total_size_bytes": total_size,
                 "recent_rollbacks": recent_rollbacks,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
         except Exception as e:

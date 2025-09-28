@@ -4,6 +4,7 @@ Adaptation Planner - Converts insights into concrete adaptation plans with speci
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import (
     Insight, AdaptationPlan, Action, ActionType, InsightType, 
@@ -61,7 +62,7 @@ class AdaptationPlanner:
                 actions=actions,
                 expected_effect=expected_effects,
                 risk_controls=risk_controls,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
             
             self.plans.append(plan)

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 
@@ -152,7 +153,7 @@ class IngressKernel:
             # Initialize health tracking
             self.health_status[source_config.source_id] = {
                 "status": "registered",
-                "last_check": datetime.utcnow(),
+                "last_check": utc_now(),
                 "error_count": 0
             }
             
@@ -196,7 +197,7 @@ class IngressKernel:
             kind=source_config.parser.value,
             payload=payload,
             headers=headers,
-            offset=f"manual_{datetime.utcnow().isoformat()}",
+            offset=f"manual_{iso_format()}",
             hash=self._compute_content_hash(payload)
         )
         
@@ -235,21 +236,21 @@ class IngressKernel:
         """Export system snapshot for rollback using unified snapshot manager."""
         # Create snapshot payload with current system state
         snapshot_payload = {
-            "snapshot_id": f"ing_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            "snapshot_id": f"ing_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}",
             "active_sources": list(self.sources.keys()),
             "registry_hash": self._compute_registry_hash(),
             "parser_versions": {"html": "1.3.0", "pdf": "2.1.4", "asr.en": "2.4.1"},
             "dedupe_threshold": self.config["dedupe"]["threshold"],
             "pii_policy_defaults": "mask",
-            "offsets": {src_id: f"current_{datetime.utcnow().isoformat()}" 
+            "offsets": {src_id: f"current_{iso_format()}" 
                        for src_id in self.sources.keys()},
-            "watermarks": {src_id: datetime.utcnow().isoformat()
+            "watermarks": {src_id: iso_format()
                           for src_id in self.sources.keys()},
             "gold_views_version": "1.2.0",
             "version": "1.0.0",
             "config": self.config,
             "runtime_info": {
-                "uptime_seconds": (datetime.utcnow() - self.start_time).total_seconds() if hasattr(self, 'start_time') else 0,
+                "uptime_seconds": (utc_now() - self.start_time).total_seconds() if hasattr(self, 'start_time') else 0,
                 "active_sources_count": len(self.sources),
                 "events_processed": getattr(self, 'events_processed', 0)
             }
@@ -266,7 +267,7 @@ class IngressKernel:
             return await self.snapshot_manager.export_snapshot(
                 component_type="ingress",
                 payload=snapshot_payload,
-                description=f"Ingress kernel snapshot at {datetime.utcnow().isoformat()}",
+                description=f"Ingress kernel snapshot at {iso_format()}",
                 created_by="ingress_kernel"
             )
         else:
@@ -457,7 +458,7 @@ class IngressKernel:
             try:
                 for source_id in self.sources.keys():
                     self.health_status[source_id].update({
-                        "last_check": datetime.utcnow(),
+                        "last_check": utc_now(),
                         "status": "ok"
                     })
                 

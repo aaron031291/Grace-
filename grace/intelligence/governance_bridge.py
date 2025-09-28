@@ -10,6 +10,7 @@ Handles:
 import logging
 from typing import Dict, Optional, Any
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,7 @@ class GovernanceBridge:
                 "governance_decision_id": decision.get("decision_id"),
                 "policy_violations": decision.get("violations", []),
                 "confidence": decision.get("confidence", 0.5),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             # Add additional context if approval failed
@@ -286,7 +287,7 @@ class GovernanceBridge:
             "reason": "; ".join(violations) if violations else "Basic policy checks passed",
             "violations": violations,
             "fallback_mode": True,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
     
     def _get_remediation_suggestions(self, failure_modes: list[str]) -> list[str]:
@@ -310,7 +311,7 @@ class GovernanceBridge:
     def _log_approval(self, plan: Dict[str, Any], approval_result: Dict[str, Any]):
         """Log approval decision for audit trail."""
         log_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "plan_id": plan.get("plan_id"),
             "req_id": plan.get("req_id"),
             "approved": approval_result["approved"],

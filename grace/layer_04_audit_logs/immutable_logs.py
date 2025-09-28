@@ -5,6 +5,7 @@ import hashlib
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import sqlite3
 from pathlib import Path
 import logging
@@ -24,7 +25,7 @@ class LogEntry:
         self.category = category
         self.data = data
         self.transparency_level = transparency_level
-        self.timestamp = datetime.now()
+        self.timestamp = utc_now()
         self.hash = self._calculate_hash()
         self.previous_hash = None  # Set by ImmutableLogs
         self.chain_hash = None     # Set by ImmutableLogs
@@ -258,7 +259,7 @@ class ImmutableLogs:
                               transparency_level: str) -> str:
         """Create and store an immutable log entry."""
         # Generate unique entry ID
-        entry_id = f"{category}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.log_chain):06d}"
+        entry_id = f"{category}_{format_for_filename()}_{len(self.log_chain):06d}"
         
         # Validate transparency level
         if transparency_level not in self.transparency_levels:
@@ -316,7 +317,7 @@ class ImmutableLogs:
                     ?,
                     ?
                 )
-            """, (category, category, datetime.now().isoformat(), transparency_level))
+            """, (category, category, iso_format(), transparency_level))
             conn.commit()
     
     async def verify_chain_integrity(self, start_position: int = 0,
@@ -384,7 +385,7 @@ class ImmutableLogs:
             """, (
                 results["start_position"], results["end_position"],
                 self.log_chain[-1].chain_hash if self.log_chain else "empty",
-                datetime.now().isoformat(),
+                iso_format(),
                 json.dumps(results)
             ))
             conn.commit()
@@ -515,7 +516,7 @@ class ImmutableLogs:
     
     async def cleanup_old_entries(self):
         """Clean up old entries based on retention policies."""
-        current_time = datetime.now()
+        current_time = utc_now()
         cleanup_results = {"removed_count": 0, "categories": {}}
         
         for level, config in self.transparency_levels.items():
@@ -563,7 +564,7 @@ class ImmutableLogs:
         )
         
         export_data = {
-            "export_timestamp": datetime.now().isoformat(),
+            "export_timestamp": iso_format(),
             "total_entries": len(entries),
             "filters": {
                 "category": category,

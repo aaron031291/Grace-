@@ -15,6 +15,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import hashlib
@@ -38,7 +39,7 @@ class FusionEntry:
         self.content_type = content_type
         self.tags = tags or []
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
+        self.created_at = utc_now()
         
         # Calculate size and hash
         self.value_json = json.dumps(value, default=str)
@@ -111,7 +112,7 @@ class FusionMemory:
             "total_size_bytes": 0,
             "compressed_size_bytes": 0,
             "archived_entries": 0,
-            "start_time": datetime.utcnow()
+            "start_time": utc_now()
         }
         
         logger.info(f"Fusion Memory initialized at {storage_path}")
@@ -348,7 +349,7 @@ class FusionMemory:
         
         try:
             with self._lock:
-                cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+                cutoff_date = utc_now() - timedelta(days=older_than_days)
                 
                 with sqlite3.connect(self.db_path) as conn:
                     # Get entries to archive
@@ -363,7 +364,7 @@ class FusionMemory:
                         return 0
                     
                     # Create archive file
-                    archive_filename = f"archive_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json.gz"
+                    archive_filename = f"archive_{format_for_filename()}.json.gz"
                     archive_path = self.storage_path / "archives" / archive_filename
                     archive_path.parent.mkdir(exist_ok=True)
                     
@@ -374,7 +375,7 @@ class FusionMemory:
                             "entry_id": row[0],
                             "key": row[1],
                             "value_json": row[2],
-                            "archived_at": datetime.utcnow().isoformat()
+                            "archived_at": iso_format()
                         })
                     
                     with gzip.open(archive_path, 'wt') as f:
@@ -418,7 +419,7 @@ class FusionMemory:
                 db_stats = cursor.fetchone()
                 
                 # Add runtime stats
-                uptime = (datetime.utcnow() - self._stats["start_time"]).total_seconds()
+                uptime = (utc_now() - self._stats["start_time"]).total_seconds()
                 
                 return {
                     "total_entries": db_stats[0] or 0,
@@ -474,7 +475,7 @@ class FusionMemory:
                     "verified_entries": verified_count,
                     "corrupted_entries": len(corrupted_entries),
                     "corruption_details": corrupted_entries,
-                    "verified_at": datetime.utcnow().isoformat()
+                    "verified_at": iso_format()
                 }
                 
         except Exception as e:

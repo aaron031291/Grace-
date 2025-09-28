@@ -4,6 +4,7 @@ import json
 import sqlite3
 import random
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 
 
@@ -15,7 +16,7 @@ class AugmentationPipelines:
     
     def apply_spec(self, dataset_id: str, version: str, spec: Dict[str, Any]) -> Dict[str, Any]:
         """Apply augmentation specification to a dataset."""
-        spec_id = spec.get("spec_id", f"aug_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        spec_id = spec.get("spec_id", f"aug_{format_for_filename()}")
         modality = spec.get("modality")
         ops = spec.get("ops", [])
         
@@ -261,7 +262,7 @@ class AugmentationPipelines:
         """Record augmentation application in database."""
         conn = sqlite3.connect(self.db_path)
         try:
-            application_id = f"aug_app_{dataset_id}_{version}_{datetime.now().strftime('%H%M%S')}"
+            application_id = f"aug_app_{dataset_id}_{version}_{utc_now().strftime('%H%M%S')}"
             
             conn.execute("""
                 INSERT INTO augment_applications (

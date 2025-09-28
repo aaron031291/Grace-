@@ -4,6 +4,7 @@ Trust Core Kernel - Trust and credibility weighting system for sources, claims, 
 import asyncio
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import statistics
 import math
 import logging
@@ -23,7 +24,7 @@ class TrustProfile:
         self.base_trust = 0.5  # Initial trust score
         self.current_trust = 0.5
         self.history = []  # List of trust events
-        self.last_updated = datetime.now()
+        self.last_updated = utc_now()
         self.interaction_count = 0
         self.positive_outcomes = 0
         self.negative_outcomes = 0
@@ -58,13 +59,13 @@ class TrustProfile:
         
         # Record trust event
         self.history.append({
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "outcome_score": outcome_score,
             "new_trust": self.current_trust,
             "context": context
         })
         
-        self.last_updated = datetime.now()
+        self.last_updated = utc_now()
     
     def _update_derived_metrics(self):
         """Update derived trust metrics."""
@@ -398,7 +399,7 @@ class TrustCoreKernel:
                 "interaction_count": self.trust_profiles[entity_id].interaction_count
             },
             success_score=outcome_score,
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
         
         self.memory_core.store_experience(experience)
@@ -415,7 +416,7 @@ class TrustCoreKernel:
         while True:
             await asyncio.sleep(24 * 3600)  # Run daily
             
-            current_time = datetime.now()
+            current_time = utc_now()
             
             for profile in self.trust_profiles.values():
                 # Calculate days since last update
@@ -483,7 +484,7 @@ class TrustCoreKernel:
     
     async def cleanup_stale_profiles(self, days_threshold: int = 90):
         """Remove trust profiles that haven't been updated in a long time."""
-        current_time = datetime.now()
+        current_time = utc_now()
         stale_profiles = []
         
         for entity_id, profile in self.trust_profiles.items():

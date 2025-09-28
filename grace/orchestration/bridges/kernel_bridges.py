@@ -8,6 +8,7 @@ including governance, memory, learning, intelligence, interface, ingress, etc.
 import asyncio
 import json
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Callable, Set
 from enum import Enum
 import logging
@@ -34,7 +35,7 @@ class KernelInfo:
         self.endpoints = endpoints or {}
         
         self.status = KernelStatus.REGISTERING
-        self.registered_at = datetime.now()
+        self.registered_at = utc_now()
         self.last_heartbeat = self.registered_at
         self.version = "unknown"
         self.capabilities: Set[str] = set()
@@ -47,7 +48,7 @@ class KernelInfo:
     
     def update_heartbeat(self):
         """Update the last heartbeat timestamp."""
-        self.last_heartbeat = datetime.now()
+        self.last_heartbeat = utc_now()
     
     def record_message_sent(self):
         """Record a message sent to this kernel."""
@@ -217,7 +218,7 @@ class KernelBridges:
                 await self.event_publisher("KERNEL_REGISTERED", {
                     "kernel_name": kernel_name,
                     "capabilities": list(kernel_info.capabilities),
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": iso_format()
                 })
             
             return True
@@ -240,7 +241,7 @@ class KernelBridges:
             if self.event_publisher:
                 await self.event_publisher("KERNEL_UNREGISTERED", {
                     "kernel_name": kernel_name,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": iso_format()
                 })
             
             return True
@@ -385,7 +386,7 @@ class KernelBridges:
     
     async def _check_kernel_heartbeats(self):
         """Check heartbeats of all registered kernels."""
-        current_time = datetime.now()
+        current_time = utc_now()
         
         for kernel_name, kernel_info in self.kernels.items():
             heartbeat_age = (current_time - kernel_info.last_heartbeat).total_seconds()

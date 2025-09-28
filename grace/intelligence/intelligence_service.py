@@ -7,6 +7,7 @@ and operational management including snapshots and rollbacks.
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import json
 import hashlib
 
@@ -105,7 +106,7 @@ class IntelligenceService:
         """Process task request and return request ID."""
         try:
             # Generate request ID
-            req_id = f"req_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(str(task_req)) % 10000:04d}"
+            req_id = f"req_{format_for_filename()}_{hash(str(task_req)) % 10000:04d}"
             
             # Validate request
             if not self._validate_request(task_req):
@@ -113,7 +114,7 @@ class IntelligenceService:
             
             # Store request
             task_req["req_id"] = req_id
-            task_req["timestamp"] = datetime.now().isoformat()
+            task_req["timestamp"] = iso_format()
             self.active_requests[req_id] = task_req
             
             # Emit INTEL_REQUESTED event
@@ -156,7 +157,7 @@ class IntelligenceService:
         """Export current Intelligence Kernel state snapshot."""
         try:
             snapshot_data = {
-                "snapshot_id": f"intel_{datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}",
+                "snapshot_id": f"intel_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}",
                 "router": self.router.get_state(),
                 "ensembler": self.meta_ensembler.get_state(),
                 "policies": self.config["policy"],
@@ -193,7 +194,7 @@ class IntelligenceService:
             self._emit_event("ROLLBACK_COMPLETED", {
                 "target": "intelligence",
                 "snapshot_id": to_snapshot,
-                "at": datetime.now().isoformat()
+                "at": iso_format()
             })
             
             return {"status": "completed", "snapshot_id": to_snapshot}
@@ -327,7 +328,7 @@ class IntelligenceService:
         return HealthResponse(
             status="healthy",
             version=self.version,
-            timestamp=datetime.now().isoformat(),
+            timestamp=iso_format(),
             components=components
         )
 

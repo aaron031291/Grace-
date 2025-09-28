@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import uuid
@@ -150,7 +151,7 @@ class MultiOSService:
                 return {
                     "status": "ok",
                     "version": "1.0.0",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": iso_format(),
                     "components": stats
                 }
             except Exception as e:
@@ -396,9 +397,9 @@ class MultiOSService:
                 return
             
             # Execute task
-            start_time = datetime.utcnow()
+            start_time = utc_now()
             result = await adapter.exec(task)
-            end_time = datetime.utcnow()
+            end_time = utc_now()
             
             duration_ms = int((end_time - start_time).total_seconds() * 1000)
             

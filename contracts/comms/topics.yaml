@@ -1,0 +1,77 @@
+namespace: grace
+qos_classes:
+  realtime: {max_latency_ms: 50, drop_policy: "backpressure"}
+  standard: {max_latency_ms: 500}
+  bulk:     {max_latency_ms: 5000, batch: true}
+
+lanes:
+  - name: lane.P0
+    priority: P0
+    partitions: 8
+  - name: lane.P1
+    priority: P1
+    partitions: 8
+  - name: lane.P2
+    priority: P2
+    partitions: 6
+  - name: lane.P3
+    priority: P3
+    partitions: 4
+
+routing:
+  # MLDL domain events
+  MLDL_TRAINING_STARTED:   {lane: lane.P2, topic: "grace.mldl.train.start"}
+  MLDL_CANDIDATE_READY:    {lane: lane.P1, topic: "grace.mldl.candidate.ready"}
+  MLDL_DEPLOYMENT_REQUESTED:{lane: lane.P0, topic: "grace.mldl.deploy.request"}
+  MLDL_EVALUATED:          {lane: lane.P2, topic: "grace.mldl.eval.complete"}
+  
+  # Intelligence domain events
+  INTEL_REQUESTED:         {lane: lane.P0, topic: "grace.intel.request"}
+  INTEL_INFER_COMPLETED:   {lane: lane.P0, topic: "grace.intel.result"}
+  INTEL_POLICY_VIOLATION:  {lane: lane.P0, topic: "grace.intel.violation"}
+  
+  # Ingress domain events
+  ING_CAPTURED_RAW:        {lane: lane.P2, topic: "grace.ingress.raw"}
+  ING_NORMALIZED:          {lane: lane.P2, topic: "grace.ingress.norm"}
+  ING_PUBLISHED:           {lane: lane.P1, topic: "grace.ingress.published"}
+  
+  # Memory domain events
+  MEM_WRITTEN:             {lane: lane.P2, topic: "grace.memory.written"}
+  MEM_READ:                {lane: lane.P2, topic: "grace.memory.read"}
+  MEM_RESULT:              {lane: lane.P2, topic: "grace.memory.result"}
+  
+  # Orchestration domain events
+  ORCH_TASK_DISPATCHED:    {lane: lane.P1, topic: "grace.orch.task.dispatch"}
+  ORCH_TASK_COMPLETED:     {lane: lane.P1, topic: "grace.orch.task.complete"}
+  
+  # Resilience domain events
+  RES_INCIDENT_OPENED:     {lane: lane.P0, topic: "grace.res.incident"}
+  RES_ACTION_APPLIED:      {lane: lane.P1, topic: "grace.res.action"}
+  RES_SIGNAL:              {lane: lane.P0, topic: "grace.res.signal"}
+  RES_DEGRADATION_ENTERED: {lane: lane.P1, topic: "grace.res.degraded"}
+  
+  # Multi-OS domain events
+  MOS_TASK_STARTED:        {lane: lane.P2, topic: "grace.mos.task.start"}
+  MOS_TASK_COMPLETED:      {lane: lane.P2, topic: "grace.mos.task.complete"}
+  MOS_HOST_HEALTH:         {lane: lane.P2, topic: "grace.mos.host.health"}
+  
+  # Interface domain events
+  UI_ACTION:               {lane: lane.P2, topic: "grace.ui.action"}
+  UI_NOTIFICATION:         {lane: lane.P2, topic: "grace.ui.notification"}
+  UI_SESSION_STARTED:      {lane: lane.P2, topic: "grace.ui.session"}
+  
+  # Governance domain events
+  GOVERNANCE_APPROVED:     {lane: lane.P0, topic: "grace.gov.approved"}
+  GOVERNANCE_REJECTED:     {lane: lane.P0, topic: "grace.gov.rejected"}
+  GOVERNANCE_NEEDS_REVIEW: {lane: lane.P1, topic: "grace.gov.review"}
+  
+  # MLT domain events
+  MLT_INSIGHT_READY:       {lane: lane.P1, topic: "grace.mlt.insight"}
+  MLT_PLAN_PROPOSED:       {lane: lane.P1, topic: "grace.mlt.plan"}
+  MLT_EXPERIENCE:          {lane: lane.P2, topic: "grace.mlt.experience"}
+
+# Conventions:
+# - Topic format: grace.<domain>.<noun>.<verb>
+# - Commands use .cmd. if over bus
+# - Queries/replies use .qry. and .rpl. if over bus
+# - Keep each segment <20 chars for efficiency

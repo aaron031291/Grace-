@@ -6,7 +6,7 @@ import sys
 import os
 
 # Add grace to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 try:
     from grace.governance.governance_api import GovernanceAPIService, GovernanceRequest, GovernanceDecision

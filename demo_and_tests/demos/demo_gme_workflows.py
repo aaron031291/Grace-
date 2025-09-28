@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 # Add Grace to Python path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from grace.comms import create_envelope, MessageKind, Priority, QoSClass, validate_envelope
 from grace.core.event_bus import EventBus

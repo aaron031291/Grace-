@@ -8,7 +8,7 @@ import tempfile
 import time
 
 # Add grace to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 try:
     from grace.memory.lightning import LightningMemory

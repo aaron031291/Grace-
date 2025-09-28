@@ -1,0 +1,413 @@
+openapi: 3.0.3
+info:
+  title: Multi-OS Kernel API
+  description: Unified execution layer across Linux/Windows/macOS with sandboxing, RBAC, and telemetry
+  version: "1.0.0"
+  contact:
+    name: Multi-OS Kernel Team
+    url: https://github.com/grace-platform/multi-os-kernel
+
+servers:
+  - url: /api/mos/v1
+    description: Multi-OS Kernel API v1
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Get system health and version information
+      responses:
+        '200':
+          description: System health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded, error]
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /hosts:
+    get:
+      summary: List registered hosts
+      description: Get list of all registered hosts and their capabilities
+      responses:
+        '200':
+          description: List of hosts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HostDescriptor'
+
+  /hosts/register:
+    post:
+      summary: Register host
+      description: Register a new host with the multi-OS system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HostDescriptor'
+      responses:
+        '201':
+          description: Host registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  host_id:
+                    type: string
+
+  /task/submit:
+    post:
+      summary: Submit task for execution
+      description: Submit a task to be scheduled and executed on an appropriate host
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecTask'
+      responses:
+        '202':
+          description: Task submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  host_id:
+                    type: string
+
+  /task/{task_id}/status:
+    get:
+      summary: Get task status
+      description: Get current status and results of a task
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    enum: [pending, running, completed, failed, timeout]
+                  exit_code:
+                    type: integer
+                  logs_uri:
+                    type: string
+
+  /fs:
+    post:
+      summary: Execute filesystem action
+      description: Execute a filesystem operation on a target host
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FSAction'
+      responses:
+        '200':
+          description: Filesystem action result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+
+  /net:
+    post:
+      summary: Execute network action
+      description: Execute a network operation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetAction'
+      responses:
+        '200':
+          description: Network action result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+
+  /runtime/ensure:
+    post:
+      summary: Ensure runtime environment
+      description: Ensure a runtime environment is available and configured
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeSpec'
+      responses:
+        '202':
+          description: Runtime setup job started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+
+  /agent/rollout:
+    post:
+      summary: Start agent rollout
+      description: Start blue/green agent update rollout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  enum: [blue, green]
+                to:
+                  type: string
+      responses:
+        '202':
+          description: Rollout started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    enum: [blue, green]
+                  to:
+                    type: string
+
+  /snapshot/export:
+    post:
+      summary: Export system snapshot
+      description: Create and export a system snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  enum: [agent, image, vm, container]
+      responses:
+        '200':
+          description: Snapshot exported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  snapshot_id:
+                    type: string
+                  uri:
+                    type: string
+                  scope:
+                    enum: [agent, image, vm, container]
+
+  /rollback:
+    post:
+      summary: Rollback to snapshot
+      description: Rollback system to a previous snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to_snapshot:
+                  type: string
+      responses:
+        '202':
+          description: Rollback started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  to_snapshot:
+                    type: string
+
+components:
+  schemas:
+    HostDescriptor:
+      type: object
+      required: [host_id, os, arch, agent_version, capabilities, labels, status]
+      properties:
+        host_id:
+          type: string
+        os:
+          enum: [linux, windows, macos]
+        arch:
+          enum: [x86_64, arm64]
+        agent_version:
+          type: string
+        capabilities:
+          type: array
+          items:
+            enum: [process, fs, net, pkg, gpu, container, vm, sandbox]
+        labels:
+          type: array
+          items:
+            type: string
+        status:
+          enum: [online, degraded, offline]
+        endpoints:
+          type: object
+          properties:
+            control:
+              type: string
+            metrics:
+              type: string
+
+    RuntimeSpec:
+      type: object
+      required: [runtime, version]
+      properties:
+        runtime:
+          enum: [python, conda, node, java, system]
+        version:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        packages:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              version:
+                type: string
+              manager:
+                enum: [pip, conda, apt, yum, brew, winget, choco, npm, msi]
+
+    ExecTask:
+      type: object
+      required: [task_id, command, runtime, io, constraints]
+      properties:
+        task_id:
+          type: string
+        command:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        cwd:
+          type: string
+        runtime:
+          $ref: '#/components/schemas/RuntimeSpec'
+        io:
+          type: object
+          properties:
+            stdin:
+              type: string
+              nullable: true
+            files_in:
+              type: array
+              items:
+                type: string
+            files_out:
+              type: array
+              items:
+                type: string
+        constraints:
+          type: object
+          properties:
+            os:
+              type: array
+              items:
+                enum: [linux, windows, macos]
+            arch:
+              type: array
+              items:
+                enum: [x86_64, arm64]
+            gpu_required:
+              type: boolean
+            mem_mb:
+              type: integer
+            cpu_cores:
+              type: integer
+            max_runtime_s:
+              type: integer
+            network_policy:
+              enum: [none, allowlist, deny_all]
+            sandbox:
+              enum: [none, nsjail, firejail, appcontainer, sandboxd]
+            privilege:
+              enum: [user, elevated]
+
+    FSAction:
+      type: object
+      required: [action_id, type, path]
+      properties:
+        action_id:
+          type: string
+        type:
+          enum: [read, write, list, move, copy, delete, hash]
+        path:
+          type: string
+        content_b64:
+          type: string
+          nullable: true
+        recursive:
+          type: boolean
+
+    NetAction:
+      type: object
+      required: [action_id, type]
+      properties:
+        action_id:
+          type: string
+        type:
+          enum: [fetch, post, port_check]
+        url:
+          type: string
+        body:
+          type: string
+          nullable: true
+        timeout_s:
+          type: integer
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer

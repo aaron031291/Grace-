@@ -1,0 +1,200 @@
+events:
+  - name: MOS_HOST_REGISTERED
+    description: "Host has registered with the multi-OS system"
+    payload:
+      type: object
+      required: [host]
+      properties:
+        host:
+          $ref: "#/definitions/HostDescriptor"
+
+  - name: MOS_TASK_SUBMITTED
+    description: "Task has been submitted for execution"
+    payload:
+      type: object
+      required: [task, host_id]
+      properties:
+        task:
+          $ref: "#/definitions/ExecTask"
+        host_id:
+          type: string
+
+  - name: MOS_TASK_STARTED
+    description: "Task execution has started"
+    payload:
+      type: object
+      required: [task_id, pid, host_id]
+      properties:
+        task_id:
+          type: string
+        pid:
+          type: integer
+        host_id:
+          type: string
+
+  - name: MOS_TASK_COMPLETED
+    description: "Task execution has completed"
+    payload:
+      type: object
+      required: [task_id, status, exit_code, duration_ms]
+      properties:
+        task_id:
+          type: string
+        status:
+          enum: [success, failed, timeout, killed]
+        exit_code:
+          type: integer
+        outputs:
+          type: array
+          items:
+            type: string
+        logs_uri:
+          type: string
+        duration_ms:
+          type: integer
+
+  - name: MOS_FS_APPLIED
+    description: "Filesystem action has been applied"
+    payload:
+      type: object
+      required: [action_id, result]
+      properties:
+        action_id:
+          type: string
+        result:
+          type: object
+
+  - name: MOS_NET_APPLIED
+    description: "Network action has been applied"
+    payload:
+      type: object
+      required: [action_id, result]
+      properties:
+        action_id:
+          type: string
+        result:
+          type: object
+
+  - name: MOS_HOST_HEALTH
+    description: "Host health status update"
+    payload:
+      type: object
+      required: [host_id, status]
+      properties:
+        host_id:
+          type: string
+        status:
+          enum: [online, degraded, offline]
+        cpu:
+          type: number
+        mem_used_mb:
+          type: integer
+        gpu_util:
+          type: number
+        disk_free_mb:
+          type: integer
+
+  - name: MOS_AGENT_ROLLING_UPDATE
+    description: "Agent rolling update progress"
+    payload:
+      type: object
+      required: [from, to, mode, progress]
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        mode:
+          enum: [blue, green]
+        progress:
+          type: integer
+
+  - name: MOS_SNAPSHOT_CREATED
+    description: "System snapshot has been created"
+    payload:
+      type: object
+      required: [snapshot_id, scope, uri]
+      properties:
+        snapshot_id:
+          type: string
+        scope:
+          enum: [agent, image, vm, container]
+        host_id:
+          type: string
+        uri:
+          type: string
+
+  - name: ROLLBACK_REQUESTED
+    description: "Rollback operation requested"
+    payload:
+      type: object
+      required: [target, to_snapshot]
+      properties:
+        target:
+          type: string
+        to_snapshot:
+          type: string
+
+  - name: ROLLBACK_COMPLETED
+    description: "Rollback operation completed"
+    payload:
+      type: object
+      required: [target, snapshot_id, at]
+      properties:
+        target:
+          type: string
+        snapshot_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+
+  - name: MOS_EXPERIENCE
+    description: "Multi-OS experience for meta-learning"
+    payload:
+      type: object
+      required: [schema_version, experience]
+      properties:
+        schema_version:
+          type: string
+        experience:
+          $ref: "#/definitions/MultiOSExperience"
+
+definitions:
+  MultiOSExperience:
+    type: object
+    required: [exp_id, host_id, stage, metrics, timestamp]
+    properties:
+      exp_id:
+        type: string
+      host_id:
+        type: string
+      stage:
+        enum: [schedule, pkg_setup, exec, fs, net, sandbox, snapshot, rollback]
+      metrics:
+        type: object
+        properties:
+          placement_success:
+            type: number
+          cold_start_ms:
+            type: number
+          p95_task_ms:
+            type: number
+          failure_rate:
+            type: number
+          sandbox_violations:
+            type: number
+          pkg_idempotency_rate:
+            type: number
+          image_drift_events:
+            type: number
+          gpu_util_mean:
+            type: number
+          cost_units:
+            type: number
+      labels:
+        type: object
+        description: "OS, arch, region labels"
+      timestamp:
+        type: string
+        format: date-time

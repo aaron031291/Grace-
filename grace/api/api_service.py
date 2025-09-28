@@ -128,19 +128,67 @@ def create_app() -> FastAPI:
         return {"sessions": [], "message": "Sessions endpoint - to be implemented"}
     
     @app.get("/api/v1/search")
-    async def search_knowledge(q: str = "", filters: str = ""):
+    async def search_knowledge(q: str = "", filters: str = "", trust_threshold: float = 0.5, limit: int = 10):
         """Search knowledge base with vector and keyword filters."""
-        return {
-            "query": q,
-            "filters": filters,
-            "results": [],
-            "message": "Search endpoint - to be implemented"
-        }
+        if not q.strip():
+            return {"results": [], "message": "Empty query"}
+        
+        from ..memory_ingestion.pipeline import get_memory_ingestion_pipeline
+        pipeline = get_memory_ingestion_pipeline(settings.vector_url)
+        
+        try:
+            results = await pipeline.search_memory(
+                query=q,
+                trust_threshold=trust_threshold,
+                limit=limit
+            )
+            
+            return {
+                "query": q,
+                "filters": filters,
+                "trust_threshold": trust_threshold,
+                "results": results,
+                "count": len(results)
+            }
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
     
     @app.post("/api/v1/memory/ingest")
-    async def ingest_memory(file_data: dict):
+    async def ingest_memory(request_data: dict):
         """Ingest file into memory system."""
-        return {"status": "queued", "message": "Memory ingestion - to be implemented"}
+        from ..memory_ingestion.pipeline import get_memory_ingestion_pipeline
+        pipeline = get_memory_ingestion_pipeline(settings.vector_url)
+        
+        try:
+            # Handle different ingestion types
+            if 'file_path' in request_data:
+                # File ingestion
+                result = await pipeline.ingest_file(
+                    file_path=request_data['file_path'],
+                    session_id=request_data.get('session_id'),
+                    user_id=request_data.get('user_id', 'anonymous'),
+                    tags=request_data.get('tags'),
+                    trust_score=request_data.get('trust_score', 0.7)
+                )
+            elif 'text' in request_data:
+                # Direct text ingestion
+                result = await pipeline.ingest_text_content(
+                    text=request_data['text'],
+                    title=request_data.get('title', 'Text Content'),
+                    session_id=request_data.get('session_id'),
+                    user_id=request_data.get('user_id', 'anonymous'),
+                    tags=request_data.get('tags'),
+                    trust_score=request_data.get('trust_score', 0.7)
+                )
+            else:
+                raise HTTPException(status_code=400, detail="Either 'file_path' or 'text' is required")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Memory ingestion failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
     
     return app
 

@@ -3,7 +3,7 @@
 import json
 import random
 import sqlite3
-import numpy as np
+import math
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -56,7 +56,7 @@ def _margin_sampling(uncertainty: List[float], batch_size: int, min_confidence: 
 def _entropy_sampling(uncertainty: List[float], batch_size: int, min_confidence: float = 0.0) -> List[str]:
     """Select items with highest prediction entropy."""
     # Simulate entropy calculation
-    entropies = [-u * np.log2(u + 1e-10) - (1-u) * np.log2(1-u + 1e-10) for u in uncertainty]
+    entropies = [-u * math.log2(u + 1e-10) - (1-u) * math.log2(1-u + 1e-10) for u in uncertainty]
     candidates = [(i, e) for i, e in enumerate(entropies) if (1.0 - uncertainty[i]) >= min_confidence]
     candidates.sort(key=lambda x: x[1], reverse=True)
     

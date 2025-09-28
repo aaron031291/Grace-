@@ -16,6 +16,11 @@ services:
       - ./init_db:/docker-entrypoint-initdb.d
     networks:
       - grace_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grace_user -d grace_governance"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Redis for caching and event coordination  
   redis:
@@ -28,46 +33,151 @@ services:
       - redis_data:/data
     networks:
       - grace_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # ChromaDB for vector storage and similarity search
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: grace_chroma
+  # MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: grace_minio
+    command: server /data --console-address ":9001"
     ports:
-      - "8000:8000"
+      - "9000:9000"
+      - "9001:9001"
     environment:
-      - CHROMA_SERVER_HOST=0.0.0.0
-      - CHROMA_SERVER_HTTP_PORT=8000
+      - MINIO_ROOT_USER=grace_minio_user
+      - MINIO_ROOT_PASSWORD=grace_minio_pass
     volumes:
-      - chroma_data:/chroma/chroma
+      - minio_data:/data
+    networks:
+      - grace_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Qdrant for vector storage and similarity search
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: grace_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - grace_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: grace_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
     networks:
       - grace_network
 
-  # Grace Core Services (optional - can run locally too)
-  grace_orchestrator:
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grace_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grace_grafana_pass
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - grace_network
+    depends_on:
+      - prometheus
+
+  # Grace API Service
+  api:
     build: .
-    container_name: grace_orchestrator
+    container_name: grace_api
     depends_on:
       - postgres
       - redis
-      - chromadb
+      - minio
+      - qdrant
     environment:
       - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace_governance
       - REDIS_URL=redis://:grace_redis_pass@redis:6379
-      - CHROMA_URL=http://chromadb:8000
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=grace_minio_user
+      - S3_SECRET_KEY=grace_minio_pass
+      - VECTOR_URL=http://qdrant:6333
+      - SERVICE_MODE=api
     ports:
-      - "8080:8080"  # API endpoint
+      - "8080:8080"
     volumes:
       - ./grace:/app/grace
       - ./logs:/app/logs
     networks:
       - grace_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grace Worker Service
+  worker:
+    build: .
+    container_name: grace_worker
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - qdrant
+    environment:
+      - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace_governance
+      - REDIS_URL=redis://:grace_redis_pass@redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=grace_minio_user
+      - S3_SECRET_KEY=grace_minio_pass
+      - VECTOR_URL=http://qdrant:6333
+      - SERVICE_MODE=worker
+      - WORKER_QUEUES=ingestion,embeddings,media
+    volumes:
+      - ./grace:/app/grace
+      - ./logs:/app/logs
+    networks:
+      - grace_network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
 
 volumes:
   postgres_data:
   redis_data:  
-  chroma_data:
+  minio_data:
+  qdrant_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   grace_network:

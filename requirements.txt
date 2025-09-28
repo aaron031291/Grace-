@@ -1,0 +1,17 @@
+# Grace Governance Kernel Requirements
+
+# Core dependencies
+asyncio  # Built-in
+sqlite3  # Built-in
+json     # Built-in
+hashlib  # Built-in
+datetime # Built-in
+logging  # Built-in
+statistics # Built-in
+
+# Optional system monitoring (install if needed)
+# psutil>=5.8.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0

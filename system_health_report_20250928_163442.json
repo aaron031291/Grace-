@@ -1,0 +1,232 @@
+{
+  "timestamp": "2025-09-28T16:34:42.563530",
+  "overall_status": "unhealthy",
+  "components": [
+    {
+      "name": "EventBus",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core.event_bus",
+        "class_name": "EventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.05084490776062012
+    },
+    {
+      "name": "MemoryCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core",
+        "class_name": "MemoryCore",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 5.4836273193359375e-06
+    },
+    {
+      "name": "EventMesh",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.layer_02_event_mesh",
+        "class_name": "GraceEventBus"
+      },
+      "error": "Import error: No module named 'pydantic'",
+      "response_time": null
+    },
+    {
+      "name": "AuditLogs",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_04_audit_logs.immutable_logs",
+        "class_name": "ImmutableLogs",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.004835367202758789
+    },
+    {
+      "name": "GovernanceKernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.governance.grace_governance_kernel",
+        "class_name": "GraceGovernanceKernel"
+      },
+      "error": "Import error: No module named 'pydantic'",
+      "response_time": null
+    },
+    {
+      "name": "VerificationEngine",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.verification_engine",
+        "class_name": "VerificationEngine",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 5.7220458984375e-06
+    },
+    {
+      "name": "TrustCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.trust_core_kernel",
+        "class_name": "TrustCoreKernel",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.86102294921875e-06
+    },
+    {
+      "name": "Parliament",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.parliament",
+        "class_name": "Parliament",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.6226043701171875e-06
+    },
+    {
+      "name": "GovernanceAPI",
+      "status": "unhealthy",
+      "details": {
+        "module_path": "grace.governance.governance_api",
+        "class_name": "GovernanceAPIService"
+      },
+      "error": "Unexpected error: <lambda>() takes 0 positional arguments but 1 was given",
+      "response_time": null
+    },
+    {
+      "name": "MTL_Kernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.mtl_kernel.kernel",
+        "class_name": "MTLKernel"
+      },
+      "error": "Import error: No module named 'pydantic'",
+      "response_time": null
+    },
+    {
+      "name": "TrustService",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.mtl_kernel.trust_service",
+        "class_name": "TrustService"
+      },
+      "error": "Import error: No module named 'pydantic'",
+      "response_time": null
+    },
+    {
+      "name": "ImmutableLogService",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.mtl_kernel.immutable_log_service",
+        "class_name": "ImmutableLogService"
+      },
+      "error": "Import error: No module named 'pydantic'",
+      "response_time": null
+    },
+    {
+      "name": "SecurityVault",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.contracts.message_envelope_simple",
+        "class_name": "RBACContext",
+        "importable": true,
+        "description": "Role-based access control context."
+      },
+      "error": null,
+      "response_time": 3.814697265625e-06
+    },
+    {
+      "name": "StatusService",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.interface.status_service",
+        "class_name": "GraceStatusService"
+      },
+      "error": "Import error: No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "InterfaceKernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.interface_kernel.kernel",
+        "class_name": "InterfaceKernel"
+      },
+      "error": "Import error: No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "OrchestrationService",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.orchestration.orchestration_service",
+        "class_name": "OrchestrationService"
+      },
+      "error": "Import error: No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "OODA_Loop",
+      "status": "unhealthy",
+      "details": {},
+      "error": "No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "Contradiction_Detection",
+      "status": "unhealthy",
+      "details": {},
+      "error": "invalid group reference 1 at position 8",
+      "response_time": null
+    },
+    {
+      "name": "Decision_Narration",
+      "status": "degraded",
+      "details": {
+        "decision_type": "<class 'grace.core.contracts.UnifiedDecision'>"
+      },
+      "error": "Invalid decision structure or empty decision",
+      "response_time": null
+    },
+    {
+      "name": "Trust_Scoring",
+      "status": "unhealthy",
+      "details": {},
+      "error": "No module named 'pydantic'",
+      "response_time": null
+    }
+  ],
+  "layers_status": {
+    "EventBus": "healthy",
+    "MemoryCore": "healthy",
+    "EventMesh": "missing",
+    "AuditLogs": "healthy"
+  },
+  "vaults_status": {
+    "MTL_Kernel": "missing",
+    "TrustService": "missing",
+    "ImmutableLogService": "missing",
+    "SecurityVault": "healthy"
+  },
+  "telemetry_active": false,
+  "ooda_loop_functional": false,
+  "governance_functional": false,
+  "recommendations": [
+    "Missing components detected (8). Check installation and imports.",
+    "Unhealthy components detected (4). Review component errors.",
+    "Telemetry systems not fully operational. Monitor system visibility may be limited.",
+    "OODA loop not functional. System may not respond properly to events.",
+    "Governance system not fully functional. Security and decision-making may be compromised."
+  ]
+}

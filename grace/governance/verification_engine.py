@@ -9,7 +9,7 @@ from datetime import datetime
 import logging
 from dataclasses import dataclass
 
-from core.contracts import Claim, VerifiedClaims, LogicReport, Experience, generate_decision_id
+from ..core.contracts import Claim, VerifiedClaims, LogicReport, Experience, generate_decision_id
 
 
 logger = logging.getLogger(__name__)

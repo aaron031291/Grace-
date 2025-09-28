@@ -7,7 +7,7 @@ from datetime import datetime
 import logging
 import statistics
 
-from core.contracts import (
+from ..core.contracts import (
     UnifiedDecision, ComponentSignal, Experience, 
     generate_decision_id, VerifiedClaims
 )

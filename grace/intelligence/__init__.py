@@ -9,3 +9,24 @@ Purpose:
 - Guarantee policy safety, traceability, and adaptability
 - Serve online inference and batch jobs with canary/shadow + rollback
 """
+
+# Import new Grace Intelligence components
+from .grace_intelligence import (
+    GraceIntelligence, 
+    ReasoningContext, 
+    ReasoningResult, 
+    ReasoningStage,
+    TaskSubtask,
+    ActionPlan,
+    VerificationResult
+)
+
+__all__ = [
+    'GraceIntelligence',
+    'ReasoningContext', 
+    'ReasoningResult',
+    'ReasoningStage',
+    'TaskSubtask',
+    'ActionPlan', 
+    'VerificationResult'
+]

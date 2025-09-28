@@ -210,3 +210,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+grace_data.db
+grace_p0_demo.html
+__pycache__/
+*.pyc

@@ -10,10 +10,16 @@ GOVERNANCE_THRESHOLDS = {
     "anomaly_tolerance": 0.1
 }
 
-# Database paths
+# Database paths and connection configuration
 DATABASE_CONFIG = {
-    "memory_db_path": "grace_governance.db",
-    "audit_db_path": "governance_audit.db"
+    "memory_db_path": "grace_governance.db",  # SQLite fallback
+    "audit_db_path": "governance_audit.db",  # SQLite fallback
+    "postgres_url": "postgresql://grace_user:grace_pass@localhost:5432/grace_governance",
+    "redis_url": "redis://:grace_redis_pass@localhost:6379",
+    "chroma_url": "http://localhost:8000",
+    "use_postgres": True,  # Use PostgreSQL in production
+    "use_redis_cache": True,
+    "use_chroma_vectors": True
 }
 
 # Event routing configuration
@@ -140,6 +146,42 @@ CONSTITUTIONAL_PRINCIPLES = {
     }
 }
 
+# AI Provider configuration
+AI_CONFIG = {
+    "openai": {
+        "api_key": None,  # Set via environment variable
+        "org_id": None,   # Set via environment variable
+        "model_default": "gpt-4",
+        "max_tokens": 4096
+    },
+    "anthropic": {
+        "api_key": None,  # Set via environment variable  
+        "model_default": "claude-3-sonnet-20240229",
+        "max_tokens": 4096
+    }
+}
+
+# Environment integration
+ENVIRONMENT_CONFIG = {
+    "instance_id": "grace_main_001",
+    "version": "1.0.0",
+    "log_level": "INFO",
+    "debug_mode": False,
+    "api_host": "0.0.0.0",
+    "api_port": 8080,
+    "orchestrator_port": 8081
+}
+
+# Infrastructure configuration  
+INFRASTRUCTURE_CONFIG = {
+    "enable_telemetry": True,
+    "enable_health_monitoring": True,
+    "metrics_export_interval": 30,
+    "auto_rollback_enabled": True,
+    "governance_strict_mode": True,
+    "constitutional_enforcement": True
+}
+
 # Complete configuration
 GRACE_CONFIG = {
     "governance_thresholds": GOVERNANCE_THRESHOLDS,
@@ -150,5 +192,8 @@ GRACE_CONFIG = {
     "trust_config": TRUST_CONFIG,
     "health_config": HEALTH_CONFIG,
     "audit_config": AUDIT_CONFIG,
-    "constitutional_principles": CONSTITUTIONAL_PRINCIPLES
+    "constitutional_principles": CONSTITUTIONAL_PRINCIPLES,
+    "ai_config": AI_CONFIG,
+    "environment_config": ENVIRONMENT_CONFIG,
+    "infrastructure_config": INFRASTRUCTURE_CONFIG
 }

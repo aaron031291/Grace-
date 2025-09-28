@@ -1,19 +1,25 @@
 """Synthesizer - merges governance results into final decisions."""
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+import logging
 
-from ..contracts.governed_request import GovernedRequest
-from ..contracts.governed_decision import GovernedDecision
-from .types import PolicyResult, VerificationResult, QuorumConsensus
+# Try to import the contracts for compatibility
+try:
+    from ..contracts.governed_decision import GovernedDecision
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 class Synthesizer:
     """Synthesizes policy, verification, and quorum results into governance decisions."""
     
     def merge(self, 
-              request: GovernedRequest,
-              policy_results: List[PolicyResult],
-              verification_result: VerificationResult,
-              quorum_consensus: Optional[QuorumConsensus] = None) -> GovernedDecision:
+              request,
+              policy_results: List[Dict[str, Any]],
+              verification_result: Dict[str, Any],
+              quorum_consensus: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Merge all governance results into a final decision."""
         
         # Analyze policy results
@@ -35,49 +41,62 @@ class Synthesizer:
         )
         
         # Determine execution approval (more restrictive)
-        execution_approved = approved and policy_analysis["all_passed"] and verification_result.verified
+        execution_approved = approved and policy_analysis["all_passed"] and verification_result.get("verified", False)
         
         # Generate conditions if needed
         conditions = self._generate_conditions(policy_analysis, verification_result)
         
-        return GovernedDecision(
-            request_id=request.id,
-            approved=approved,
-            confidence=confidence,
-            reasoning=reasoning,
-            policy_results={
+        # Extract request ID
+        request_id = self._extract_request_id(request)
+        
+        decision_data = {
+            "request_id": request_id,
+            "approved": approved,
+            "confidence": confidence,
+            "reasoning": reasoning,
+            "policy_results": {
                 "total_policies": len(policy_results),
                 "passed_policies": policy_analysis["passed_count"],
                 "failed_policies": policy_analysis["failed_count"],
-                "details": [
-                    {
-                        "policy_id": pr.policy_id,
-                        "passed": pr.passed,
-                        "confidence": pr.confidence,
-                        "reasoning": pr.reasoning
-                    } for pr in policy_results
-                ]
+                "details": policy_results
             },
-            verification_results={
-                "verified": verification_result.verified,
-                "confidence": verification_result.confidence,
-                "method": verification_result.verification_method,
-                "details": verification_result.details
-            },
-            quorum_results=self._format_quorum_results(quorum_consensus) if quorum_consensus else None,
-            execution_approved=execution_approved,
-            conditions=conditions
-        )
+            "verification_results": verification_result,
+            "quorum_results": quorum_consensus,
+            "execution_approved": execution_approved,
+            "conditions": conditions,
+            "decision_maker": "grace-governance"
+        }
+        
+        # Return Pydantic model if available for compatibility, otherwise dict
+        if PYDANTIC_AVAILABLE:
+            try:
+                return GovernedDecision(**decision_data)
+            except Exception as e:
+                logger.warning(f"Failed to create GovernedDecision model: {e}, returning dict")
+                return decision_data
+        else:
+            return decision_data
     
-    def _analyze_policies(self, policy_results: List[PolicyResult]) -> Dict:
+    def _extract_request_id(self, request) -> str:
+        """Extract request ID from request regardless of format."""
+        if hasattr(request, 'id'):
+            return str(request.id)
+        elif hasattr(request, 'request_id'):
+            return str(request.request_id)
+        elif isinstance(request, dict):
+            return str(request.get('id', request.get('request_id', 'unknown')))
+        else:
+            return 'unknown'
+    
+    def _analyze_policies(self, policy_results: List[Dict[str, Any]]) -> Dict:
         """Analyze policy results."""
         total = len(policy_results)
-        passed = sum(1 for pr in policy_results if pr.passed)
+        passed = sum(1 for pr in policy_results if pr.get("passed", False))
         failed = total - passed
         
         # Calculate weighted confidence
         if total > 0:
-            total_confidence = sum(pr.confidence for pr in policy_results)
+            total_confidence = sum(pr.get("confidence", 0.0) for pr in policy_results)
             avg_confidence = total_confidence / total
         else:
             avg_confidence = 0.0
@@ -85,7 +104,7 @@ class Synthesizer:
         # Check for critical failures
         critical_failures = [
             pr for pr in policy_results 
-            if not pr.passed and pr.policy_type.value in ["content_filter", "access_control"]
+            if not pr.get("passed", False) and pr.get("policy_type") in ["content_filter", "access_control"]
         ]
         
         return {
@@ -100,12 +119,12 @@ class Synthesizer:
     
     def _determine_approval(self, 
                            policy_analysis: Dict,
-                           verification_result: VerificationResult,
-                           quorum_consensus: Optional[QuorumConsensus]) -> bool:
+                           verification_result: Dict[str, Any],
+                           quorum_consensus: Optional[Dict[str, Any]]) -> bool:
         """Determine overall approval based on all factors."""
         
         # Must pass verification
-        if not verification_result.verified:
+        if not verification_result.get("verified", False):
             return False
         
         # Must not have critical policy failures
@@ -113,7 +132,7 @@ class Synthesizer:
             return False
         
         # If quorum was required, must have consensus
-        if quorum_consensus and not quorum_consensus.consensus_reached:
+        if quorum_consensus and not quorum_consensus.get("consensus_reached", False):
             return False
         
         # General policy compliance (allow some non-critical failures)
@@ -125,8 +144,8 @@ class Synthesizer:
     
     def _calculate_confidence(self,
                             policy_analysis: Dict,
-                            verification_result: VerificationResult,
-                            quorum_consensus: Optional[QuorumConsensus]) -> float:
+                            verification_result: Dict[str, Any],
+                            quorum_consensus: Optional[Dict[str, Any]]) -> float:
         """Calculate overall confidence in the decision."""
         components = []
         
@@ -134,11 +153,11 @@ class Synthesizer:
         components.append(policy_analysis["avg_confidence"] * 0.4)
         
         # Verification confidence
-        components.append(verification_result.confidence * 0.3)
+        components.append(verification_result.get("confidence", 0.0) * 0.3)
         
         # Quorum confidence (if available)
         if quorum_consensus:
-            components.append(quorum_consensus.confidence * 0.3)
+            components.append(quorum_consensus.get("confidence", 0.0) * 0.3)
         else:
             # Boost other components if no quorum needed
             components = [c * 1.2 for c in components]
@@ -148,8 +167,8 @@ class Synthesizer:
     def _generate_reasoning(self,
                            approved: bool,
                            policy_analysis: Dict,
-                           verification_result: VerificationResult,
-                           quorum_consensus: Optional[QuorumConsensus]) -> str:
+                           verification_result: Dict[str, Any],
+                           quorum_consensus: Optional[Dict[str, Any]]) -> str:
         """Generate human-readable reasoning for the decision."""
         parts = []
         
@@ -168,15 +187,16 @@ class Synthesizer:
             parts.append(f"{int(pass_rate * 100)}% of policies passed.")
         
         # Verification reasoning
-        if verification_result.verified:
+        if verification_result.get("verified", False):
             parts.append("Request verification successful.")
         else:
             parts.append("Request verification failed.")
         
         # Quorum reasoning
         if quorum_consensus:
-            if quorum_consensus.consensus_reached:
-                parts.append(f"Quorum consensus reached ({quorum_consensus.agreement_level:.1%} agreement).")
+            if quorum_consensus.get("consensus_reached", False):
+                agreement_level = quorum_consensus.get("agreement_level", 0.0)
+                parts.append(f"Quorum consensus reached ({agreement_level:.1%} agreement).")
             else:
                 parts.append("Quorum consensus not reached.")
         
@@ -184,31 +204,15 @@ class Synthesizer:
     
     def _generate_conditions(self,
                            policy_analysis: Dict,
-                           verification_result: VerificationResult) -> List[str]:
+                           verification_result: Dict[str, Any]) -> List[str]:
         """Generate execution conditions if needed."""
         conditions = []
         
         # Add conditions based on non-critical policy failures
-        non_critical_failures = [
-            pr for pr in policy_analysis.get("failed_policies", [])
-            if pr.policy_type.value not in ["content_filter", "access_control"]
-        ]
-        
-        if non_critical_failures:
+        if policy_analysis["failed_count"] > 0 and not policy_analysis["has_critical_failures"]:
             conditions.append("Monitor for compliance with failed non-critical policies")
         
-        if verification_result.confidence < 0.8:
+        if verification_result.get("confidence", 0.0) < 0.8:
             conditions.append("Additional verification may be required")
         
         return conditions
-    
-    def _format_quorum_results(self, quorum_consensus: QuorumConsensus) -> Dict:
-        """Format quorum results for decision record."""
-        return {
-            "consensus_reached": quorum_consensus.consensus_reached,
-            "agreement_level": quorum_consensus.agreement_level,
-            "participant_count": len(quorum_consensus.participating_memories),
-            "consensus_view": quorum_consensus.consensus_view,
-            "confidence": quorum_consensus.confidence,
-            "dissenting_views_count": len(quorum_consensus.dissenting_views)
-        }

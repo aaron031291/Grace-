@@ -215,8 +215,10 @@ Grace supports blue/green governance deployment:
 Grace-/
 ├── core/                    # Core infrastructure
 ├── grace/                   # Grace kernels and components
-│   ├── governance/          # Governance components  
-│   └── governance_kernel/   # Governance kernel components
+│   ├── governance/          # Unified governance system (merged)
+│   ├── intelligence_kernel/ # Intelligence and consensus
+│   ├── mtl_kernel/          # Memory, trust, and logging
+│   └── ...                  # Other kernel components
 ├── layer_02_event_mesh/     # Event routing
 ├── layer_04_audit_logs/     # Audit system
 ├── immune/                  # Health monitoring

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
@@ -65,7 +66,7 @@ class ChaosExperiment:
             logger.info(f"Starting chaos experiment {self.experiment_id} on {self.target}")
             
             self.status = ExperimentStatus.RUNNING
-            self.started_at = datetime.now()
+            self.started_at = utc_now()
             
             # Collect baseline metrics
             self.metrics_before = await self._collect_metrics()
@@ -86,7 +87,7 @@ class ChaosExperiment:
             self.results = await self._analyze_results()
             
             self.status = ExperimentStatus.COMPLETED
-            self.completed_at = datetime.now()
+            self.completed_at = utc_now()
             
             logger.info(f"Chaos experiment {self.experiment_id} completed successfully")
             
@@ -100,7 +101,7 @@ class ChaosExperiment:
         except Exception as e:
             logger.error(f"Chaos experiment {self.experiment_id} failed: {e}")
             self.status = ExperimentStatus.FAILED
-            self.completed_at = datetime.now()
+            self.completed_at = utc_now()
             
             return {
                 "experiment_id": self.experiment_id,

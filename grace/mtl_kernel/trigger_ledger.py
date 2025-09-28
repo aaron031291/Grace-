@@ -1,5 +1,6 @@
 """Trigger ledger - event recording and notification system."""
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional
 
 from ..contracts.dto_common import TriggerEvent
@@ -38,7 +39,7 @@ class TriggerLedger:
     
     def clear_old_events(self, max_age_days: int = 30) -> int:
         """Clear old events (optional cleanup)."""
-        cutoff = datetime.utcnow().timestamp() - (max_age_days * 24 * 60 * 60)
+        cutoff = utc_now().timestamp() - (max_age_days * 24 * 60 * 60)
         
         old_events = [
             event for event in self.store.trigger_events 

@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import Experience, Insight, AdaptationPlan
 
@@ -97,7 +98,7 @@ class MLTService:
                     status="running" if all(components.values()) else "degraded",
                     components=components,
                     stats=stats,
-                    timestamp=datetime.now().isoformat()
+                    timestamp=iso_format()
                 )
                 
             except Exception as e:
@@ -135,7 +136,7 @@ class MLTService:
                 return InsightResponse(
                     insights=[insight.to_dict() for insight in insights],
                     total=len(insights),
-                    generated_at=datetime.now().isoformat()
+                    generated_at=iso_format()
                 )
                 
             except Exception as e:
@@ -171,13 +172,13 @@ class MLTService:
                     "action": request.action,
                     "job_id": request.job_id,
                     "job_type": request.job_type,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": iso_format(),
                     "status": "proposed"
                 }
                 
                 # In a real implementation, this would go through governance
                 return {
-                    "proposal_id": f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    "proposal_id": f"job_{format_for_filename()}",
                     "status": "proposed_to_governance",
                     "proposal": proposal
                 }
@@ -263,12 +264,12 @@ class MLTService:
                 # This is a proposal - actual snapshot creation requires governance approval
                 proposal = {
                     "action": "create_snapshot",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": iso_format(),
                     "rationale": "Manual snapshot request"
                 }
                 
                 return {
-                    "proposal_id": f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    "proposal_id": f"snap_{format_for_filename()}",
                     "status": "proposed_to_governance",
                     "proposal": proposal
                 }
@@ -284,7 +285,7 @@ class MLTService:
             
             return {
                 "status": "ok",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": iso_format(),
                 "version": "1.0.0"
             }
     

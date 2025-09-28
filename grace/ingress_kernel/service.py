@@ -5,6 +5,7 @@ Provides REST API endpoints for ingress operations.
 import asyncio
 import logging
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -189,7 +190,7 @@ class IngressService:
         async def replay_from_snapshot(request: ReplayRequest):
             """Replay data from snapshot offsets."""
             try:
-                job_id = f"replay_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                job_id = f"replay_{format_for_filename()}"
                 
                 # Mock implementation - would start replay process
                 return ReplayResponse(job_id=job_id)
@@ -234,7 +235,7 @@ class IngressService:
                 # Mock metrics data
                 timeseries = [
                     {
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": iso_format(),
                         "source_id": source_id or "all",
                         "events_processed": 100,
                         "success_rate": 0.95,

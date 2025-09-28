@@ -4,6 +4,7 @@ Experience Collector - Subscribes to events and normalizes experiences from vari
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import Experience, ExperienceSource, TaskType, generate_experience_id
 
@@ -68,7 +69,7 @@ class ExperienceCollector:
                 "compliance": raw_data.get("compliance", {"constitutional": 1.0})
             },
             ground_truth_lag_s=raw_data.get("ground_truth_lag_s", 86400),
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     def _normalize_inference_experience(self, raw_data: Dict[str, Any]) -> Experience:
@@ -83,7 +84,7 @@ class ExperienceCollector:
                 "version": raw_data.get("version", "1.0.0"),
                 "conditions": {
                     "segment": raw_data.get("segment", "default"),
-                    "time": raw_data.get("time", datetime.now().isoformat())
+                    "time": raw_data.get("time", iso_format())
                 }
             },
             signals={
@@ -98,7 +99,7 @@ class ExperienceCollector:
                 "compliance": raw_data.get("compliance", {"constitutional": 1.0})
             },
             ground_truth_lag_s=raw_data.get("ground_truth_lag_s", 3600),  # Shorter for inference
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     def _normalize_governance_experience(self, raw_data: Dict[str, Any]) -> Experience:
@@ -128,7 +129,7 @@ class ExperienceCollector:
                 "compliance": raw_data.get("compliance", {"constitutional": 1.0})
             },
             ground_truth_lag_s=raw_data.get("ground_truth_lag_s", 86400),
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     def _normalize_ops_experience(self, raw_data: Dict[str, Any]) -> Experience:
@@ -158,7 +159,7 @@ class ExperienceCollector:
                 "compliance": {"constitutional": 1.0}
             },
             ground_truth_lag_s=raw_data.get("ground_truth_lag_s", 300),  # Short for ops
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     def get_recent_experiences(self, limit: int = 100, source: Optional[ExperienceSource] = None) -> List[Experience]:

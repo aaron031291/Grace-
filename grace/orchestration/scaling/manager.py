@@ -9,6 +9,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
 from dataclasses import dataclass
@@ -71,7 +72,7 @@ class OrchestrationInstance:
         self.parent_id = parent_id
         
         self.status = InstanceStatus.STARTING
-        self.created_at = datetime.now()
+        self.created_at = utc_now()
         self.started_at = None
         self.stopped_at = None
         
@@ -82,7 +83,7 @@ class OrchestrationInstance:
             completed_tasks=0,
             response_time_avg=0.0,
             error_rate=0.0,
-            last_heartbeat=datetime.now()
+            last_heartbeat=utc_now()
         )
         
         # Configuration
@@ -108,7 +109,7 @@ class OrchestrationInstance:
         if self.status != InstanceStatus.ACTIVE:
             return False
         
-        heartbeat_age = (datetime.now() - self.metrics.last_heartbeat).total_seconds()
+        heartbeat_age = (utc_now() - self.metrics.last_heartbeat).total_seconds()
         return (
             heartbeat_age < 120 and  # 2 minutes
             self.metrics.error_rate < 0.1 and
@@ -121,9 +122,9 @@ class OrchestrationInstance:
         self.status = new_status
         
         if new_status == InstanceStatus.ACTIVE:
-            self.started_at = datetime.now()
+            self.started_at = utc_now()
         elif new_status in [InstanceStatus.STOPPED, InstanceStatus.FAILED]:
-            self.stopped_at = datetime.now()
+            self.stopped_at = utc_now()
         
         if self.on_status_change:
             await self.on_status_change(self, old_status, new_status)
@@ -347,7 +348,7 @@ class ScalingManager:
             await self.event_publisher("ORCH_INSTANCE_RETIRED", {
                 "instance_id": instance_id,
                 "loop_id": instance.loop_id,
-                "ts": datetime.now().isoformat()
+                "ts": iso_format()
             })
         
         return True
@@ -449,7 +450,7 @@ class ScalingManager:
         last_action = self._last_scaling_actions.get(loop_id)
         if last_action:
             cooldown = timedelta(minutes=policy["cooldown_minutes"])
-            if datetime.now() - last_action < cooldown:
+            if utc_now() - last_action < cooldown:
                 return
         
         # Scale up decision
@@ -468,7 +469,7 @@ class ScalingManager:
         
         if should_scale_up:
             await self.spawn_instance(loop_id)
-            self._last_scaling_actions[loop_id] = datetime.now()
+            self._last_scaling_actions[loop_id] = utc_now()
             self.total_scaling_actions += 1
             logger.info(f"Scaled up loop {loop_id}: CPU={avg_cpu:.1f}%, tasks={avg_task_load:.1f}")
             
@@ -476,7 +477,7 @@ class ScalingManager:
             # Find least loaded instance to retire
             instance_to_retire = min(active_instances, key=lambda i: i.metrics.get_load_score())
             await self.retire_instance(instance_to_retire.instance_id)
-            self._last_scaling_actions[loop_id] = datetime.now()
+            self._last_scaling_actions[loop_id] = utc_now()
             self.total_scaling_actions += 1
             logger.info(f"Scaled down loop {loop_id}: CPU={avg_cpu:.1f}%, tasks={avg_task_load:.1f}")
     

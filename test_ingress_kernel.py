@@ -6,6 +6,7 @@ import json
 import sys
 import os
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from pathlib import Path
 
 # Add the project root to Python path
@@ -75,7 +76,7 @@ async def test_ingress_kernel():
             "author": "John Doe",
             "content": "This is test article content for the ingress system.",
             "url": "https://example.com/article/123",
-            "published_at": datetime.utcnow().isoformat(),
+            "published_at": iso_format(),
             "language": "en",
             "topics": ["technology", "ai", "data"]
         }
@@ -91,7 +92,7 @@ async def test_ingress_kernel():
         text_payload = {
             "content": "Contact us at support@company.com or call 555-123-4567 for more information.",
             "source": "customer_inquiry",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         }
         
         pii_event_id = await kernel.capture(

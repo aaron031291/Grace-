@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Dict, Set, Optional, List
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -285,7 +286,7 @@ class DegradationManager:
     def _record_mode_change(self, service_id: str, mode_id: str, action: str, reason: str):
         """Record a mode change in history."""
         self._mode_history.append({
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "service_id": service_id,
             "mode_id": mode_id,
             "action": action,

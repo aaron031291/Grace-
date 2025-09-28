@@ -10,6 +10,7 @@ Provides:
 
 import logging
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Any, Dict, List, Optional
 
 try:
@@ -142,7 +143,7 @@ class GraceMemoryAPI:
                 
                 else:
                     # Direct storage for non-text content
-                    cache_key = request.source_id or f"direct_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                    cache_key = request.source_id or f"direct_{format_for_filename()}"
                     
                     # Store in cache
                     cache_success = self.lightning.put(
@@ -283,7 +284,7 @@ class GraceMemoryAPI:
                     success=True,
                     message="Memory statistics retrieved",
                     data={
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": iso_format(),
                         "lightning_cache": {
                             "stats": lightning_stats,
                             "health": lightning_health
@@ -360,7 +361,7 @@ class GraceMemoryAPI:
                         "overall_healthy": overall_healthy,
                         "fusion_integrity": fusion_integrity,
                         "cache_health": cache_health,
-                        "verified_at": datetime.utcnow().isoformat()
+                        "verified_at": iso_format()
                     }
                 )
                 
@@ -418,7 +419,7 @@ class GraceMemoryAPI:
             "lightning": self.lightning.get_stats(),
             "fusion": self.fusion.get_stats(),
             "librarian": self.librarian.get_stats(),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         }
 
 

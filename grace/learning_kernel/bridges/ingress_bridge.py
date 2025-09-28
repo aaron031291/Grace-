@@ -1,6 +1,7 @@
 """Ingress bridge for data source integration and dataset creation."""
 
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 
 
@@ -14,14 +15,14 @@ class IngressBridge:
     def request_dataset_creation(self, source_config: Dict[str, Any], 
                                dataset_config: Dict[str, Any]) -> str:
         """Request dataset creation from data sources."""
-        job_id = f"ingress_job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        job_id = f"ingress_job_{format_for_filename()}"
         
         job = {
             "job_id": job_id,
             "source_config": source_config,
             "dataset_config": dataset_config,
             "status": "requested",
-            "requested_at": datetime.now().isoformat()
+            "requested_at": iso_format()
         }
         
         self.ingestion_jobs.append(job)
@@ -66,7 +67,7 @@ class IngressBridge:
                     job["status"] = "processing"
                 elif current_status == "processing":
                     job["status"] = "completed"
-                    job["completed_at"] = datetime.now().isoformat()
+                    job["completed_at"] = iso_format()
                     job["output_refs"] = [f"ingress://output/{job_id}/data.parquet"]
                 
                 return job
@@ -92,7 +93,7 @@ class MemoryBridge:
             "dataset_id": dataset_id,
             "version": version,
             "metadata": metadata,
-            "stored_at": datetime.now().isoformat()
+            "stored_at": iso_format()
         }
         
         self.stored_objects.append(stored_object)
@@ -116,7 +117,7 @@ class MemoryBridge:
             "version": version,
             "view_uri": view_uri,
             "schema": schema,
-            "stored_at": datetime.now().isoformat()
+            "stored_at": iso_format()
         }
         
         self.stored_objects.append(stored_object)

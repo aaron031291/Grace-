@@ -4,6 +4,7 @@ Trigger Mesh - Event router for governance messages and system-wide event routin
 import asyncio
 from typing import Dict, List, Callable, Any, Optional, Set
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import json
 import logging
 from enum import Enum
@@ -49,7 +50,7 @@ class RoutingMetrics:
     successful_deliveries: int = 0
     failed_deliveries: int = 0
     avg_latency_ms: float = 0.0
-    last_updated: datetime = datetime.now()
+    last_updated: datetime = utc_now()
 
 
 class TriggerMesh:
@@ -174,9 +175,9 @@ class TriggerMesh:
                 routing_task = await queue.get()
                 
                 # Process the routing
-                start_time = datetime.now()
+                start_time = utc_now()
                 await self._execute_routing(routing_task)
-                processing_time = (datetime.now() - start_time).total_seconds() * 1000
+                processing_time = (utc_now() - start_time).total_seconds() * 1000
                 
                 # Update metrics
                 await self._update_routing_metrics(
@@ -231,7 +232,7 @@ class TriggerMesh:
                     "correlation_id": correlation_id,
                     "source_component": source_component,
                     "rule": rule,
-                    "created_at": datetime.now()
+                    "created_at": utc_now()
                 }
                 
                 # Add to appropriate priority queue
@@ -484,9 +485,9 @@ class TriggerMesh:
                 "type": event_type,
                 "payload": payload,
                 "correlation_id": correlation_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": iso_format(),
                 "target_component": component_id,
-                "delivery_id": f"del_{datetime.now().strftime('%H%M%S')}_{component_id}"
+                "delivery_id": f"del_{utc_now().strftime('%H%M%S')}_{component_id}"
             }
             
             # Use event bus for delivery (assuming GraceEventBus)
@@ -526,8 +527,8 @@ class TriggerMesh:
             "component_type": component_type,
             "event_subscriptions": event_subscriptions,
             "metadata": metadata or {},
-            "registered_at": datetime.now().isoformat(),
-            "last_seen": datetime.now().isoformat()
+            "registered_at": iso_format(),
+            "last_seen": iso_format()
         }
         
         logger.info(f"Registered component {component_id} ({component_type})")
@@ -583,7 +584,7 @@ class TriggerMesh:
         else:
             metrics.avg_latency_ms = alpha * latency_ms + (1 - alpha) * metrics.avg_latency_ms
         
-        metrics.last_updated = datetime.now()
+        metrics.last_updated = utc_now()
     
     def get_routing_metrics(self) -> Dict[str, Any]:
         """Get routing performance metrics."""

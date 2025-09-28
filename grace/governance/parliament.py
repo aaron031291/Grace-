@@ -4,6 +4,7 @@ Parliament - Democratic review system for major governance decisions.
 import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from enum import Enum
 import logging
 
@@ -61,7 +62,7 @@ class ReviewProposal:
         self.description = description
         self.proposal_type = proposal_type  # "policy", "constitutional", "operational"
         self.urgency = urgency  # "low", "normal", "high", "critical"
-        self.submitted_at = datetime.now()
+        self.submitted_at = utc_now()
         self.status = ReviewStatus.PENDING
         self.votes = {}
         self.discussion = []
@@ -165,7 +166,7 @@ class Parliament:
         Returns:
             Proposal ID
         """
-        proposal_id = f"prop_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.active_proposals)}"
+        proposal_id = f"prop_{format_for_filename()}_{len(self.active_proposals)}"
         
         proposal = ReviewProposal(
             proposal_id=proposal_id,
@@ -265,7 +266,7 @@ class Parliament:
         proposal.votes[member_id] = {
             "vote": vote.value,
             "rationale": rationale,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "weight": member.weight
         }
         
@@ -273,7 +274,7 @@ class Parliament:
         member.vote_history.append({
             "proposal_id": proposal_id,
             "vote": vote.value,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         })
         
         # Check if voting is complete
@@ -321,7 +322,7 @@ class Parliament:
         elif rejection_ratio >= 0.4 and participation_ratio >= 0.6:
             proposal.status = ReviewStatus.REJECTED
             await self._finalize_proposal(proposal, "rejected", rejection_ratio)
-        elif datetime.now() >= proposal.deadline:
+        elif utc_now() >= proposal.deadline:
             # Deadline reached
             if approval_ratio > rejection_ratio:
                 proposal.status = ReviewStatus.APPROVED
@@ -338,7 +339,7 @@ class Parliament:
             "proposal": proposal.to_dict(),
             "outcome": outcome,
             "final_ratio": final_ratio,
-            "finalized_at": datetime.now().isoformat(),
+            "finalized_at": iso_format(),
             "votes": proposal.votes
         })
         
@@ -361,7 +362,7 @@ class Parliament:
                 "vote_count": len(proposal.votes)
             },
             success_score=final_ratio if outcome.startswith("approved") else 1.0 - final_ratio,
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
         
         self.memory_core.store_experience(experience)

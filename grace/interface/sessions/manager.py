@@ -2,6 +2,7 @@
 import asyncio
 import time
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional
 import logging
 
@@ -31,8 +32,8 @@ class SessionManager:
                 session_id=session_id,
                 user=user_identity,
                 client=client_info,
-                created_at=datetime.utcnow(),
-                last_seen=datetime.utcnow()
+                created_at=utc_now(),
+                last_seen=utc_now()
             )
             
             self.sessions[session_id] = session
@@ -48,7 +49,7 @@ class SessionManager:
     def touch(self, session_id: str) -> None:
         """Update session last_seen timestamp."""
         if session_id in self.sessions:
-            self.sessions[session_id].last_seen = datetime.utcnow()
+            self.sessions[session_id].last_seen = utc_now()
     
     def get_session(self, session_id: str) -> Optional[UISession]:
         """Get session by ID."""
@@ -97,7 +98,7 @@ class SessionManager:
         """Background task to remove expired sessions."""
         while True:
             try:
-                current_time = datetime.utcnow()
+                current_time = utc_now()
                 expired_sessions = []
                 
                 for session_id, session in self.sessions.items():
@@ -122,7 +123,7 @@ class SessionManager:
     
     def get_stats(self) -> Dict:
         """Get session manager statistics."""
-        current_time = datetime.utcnow()
+        current_time = utc_now()
         
         # Calculate session age distribution
         session_ages = []

@@ -10,6 +10,7 @@ Handles:
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import json
 import math
 
@@ -132,7 +133,7 @@ class MetaEnsembler:
             result["meta_info"] = {
                 "ensemble_type": ensemble_type,
                 "num_models": len(model_outputs),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             return result
@@ -421,7 +422,7 @@ class MetaEnsembler:
     def _update_performance_history(self, reports: List[Dict], predictions: List[float]):
         """Update performance tracking history."""
         history_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "num_specialists": len(reports),
             "prediction_variance": ((sum((p - sum(predictions)/len(predictions))**2 for p in predictions) / len(predictions)) if predictions and len(predictions) > 1 else 0.0),
             "ensemble_type": self.config.get("type", "stack")

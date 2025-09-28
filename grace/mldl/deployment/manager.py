@@ -8,6 +8,7 @@ import json
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,7 @@ class DeploymentManager:
                 deployment_id, model_key, version, target_env,
                 DeploymentStatus.CANARY.value if not shadow else DeploymentStatus.SHADOW.value,
                 json.dumps(deployment_spec), canary_pct, shadow,
-                datetime.now().isoformat(),
+                iso_format(),
                 json.dumps({"guardrails": guardrails})
             ))
             
@@ -165,7 +166,7 @@ class DeploymentManager:
                 "status": DeploymentStatus.SHADOW.value if shadow else DeploymentStatus.CANARY.value,
                 "canary_pct": canary_pct if not shadow else 0,
                 "shadow_mode": shadow,
-                "started_at": datetime.now().isoformat()
+                "started_at": iso_format()
             }
             
             self.active_deployments[deployment_id] = deployment_info
@@ -231,7 +232,7 @@ class DeploymentManager:
                 UPDATE deployments 
                 SET canary_pct = ?, updated_at = ?
                 WHERE deployment_id = ?
-            """, (next_pct, datetime.now().isoformat(), deployment_id))
+            """, (next_pct, iso_format(), deployment_id))
             
             # Record canary progress
             self.conn.execute("""
@@ -243,7 +244,7 @@ class DeploymentManager:
                 len(self.default_canary_steps), 
                 next_pct, 
                 True,
-                datetime.now().isoformat()
+                iso_format()
             ))
             
             self.conn.commit()
@@ -271,7 +272,7 @@ class DeploymentManager:
                 "previous_pct": current_pct,
                 "current_pct": next_pct,
                 "status": "promoted",
-                "promoted_at": datetime.now().isoformat()
+                "promoted_at": iso_format()
             }
             
         except Exception as e:
@@ -334,8 +335,8 @@ class DeploymentManager:
             """, (
                 DeploymentStatus.ROLLED_BACK.value,
                 reason,
-                datetime.now().isoformat(),
-                datetime.now().isoformat(),
+                iso_format(),
+                iso_format(),
                 deployment_id
             ))
             
@@ -346,7 +347,7 @@ class DeploymentManager:
                 ) VALUES (?, ?, ?, ?, ?)
             """, (
                 deployment_id, rollback_id, reason, triggered_by,
-                datetime.now().isoformat()
+                iso_format()
             ))
             
             self.conn.commit()
@@ -374,7 +375,7 @@ class DeploymentManager:
                 "rollback_id": rollback_id,
                 "reason": reason,
                 "triggered_by": triggered_by,
-                "rolled_back_at": datetime.now().isoformat()
+                "rolled_back_at": iso_format()
             }
             
         except Exception as e:
@@ -459,7 +460,7 @@ class DeploymentManager:
                         ) VALUES (?, ?, ?, ?, ?, ?)
                     """, (
                         deployment_id, step, target_pct, target_pct, True,
-                        datetime.now().isoformat()
+                        iso_format()
                     ))
                     
                     # Update deployment percentage
@@ -467,7 +468,7 @@ class DeploymentManager:
                         UPDATE deployments 
                         SET canary_pct = ?, updated_at = ?
                         WHERE deployment_id = ?
-                    """, (target_pct, datetime.now().isoformat(), deployment_id))
+                    """, (target_pct, iso_format(), deployment_id))
                     
                     self.conn.commit()
                     
@@ -520,7 +521,7 @@ class DeploymentManager:
                     UPDATE deployments 
                     SET status = ?, completed_at = ?
                     WHERE deployment_id = ?
-                """, (DeploymentStatus.ACTIVE.value, datetime.now().isoformat(), deployment_id))
+                """, (DeploymentStatus.ACTIVE.value, iso_format(), deployment_id))
                 
                 self.conn.commit()
                 
@@ -551,7 +552,7 @@ class DeploymentManager:
         # Check if enough time has passed since last promotion
         if deployment["updated_at"]:
             last_update = datetime.fromisoformat(deployment["updated_at"])
-            if datetime.now() - last_update < timedelta(minutes=10):
+            if utc_now() - last_update < timedelta(minutes=10):
                 return {"eligible": False, "reason": "Insufficient time since last promotion"}
         
         return {"eligible": True}
@@ -569,7 +570,7 @@ class DeploymentManager:
             UPDATE deployments 
             SET status = ?, completed_at = ?
             WHERE deployment_id = ?
-        """, (DeploymentStatus.ACTIVE.value, datetime.now().isoformat(), deployment_id))
+        """, (DeploymentStatus.ACTIVE.value, iso_format(), deployment_id))
         
         self.conn.commit()
         

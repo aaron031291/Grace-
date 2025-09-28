@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union, List
 import numpy as np
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class BaseModelAdapter(ABC):
         self.target_names = None
         self.fitted = False
         self.metadata = {
-            "created_at": datetime.now().isoformat(),
+            "created_at": iso_format(),
             "training_params": {},
             "performance_metrics": {}
         }
@@ -183,7 +184,7 @@ class BaseModelAdapter(ABC):
             "model_key": self.model_key,
             "explained_samples": len(X) if hasattr(X, '__len__') else 1,
             "feature_importance": self._get_feature_importance(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
         
         return explanations
@@ -214,7 +215,7 @@ class BaseModelAdapter(ABC):
     def update_metadata(self, **kwargs):
         """Update model metadata."""
         self.metadata.update(kwargs)
-        self.metadata["updated_at"] = datetime.now().isoformat()
+        self.metadata["updated_at"] = iso_format()
     
     def validate_input(self, X) -> bool:
         """Validate input data format."""

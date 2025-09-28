@@ -6,6 +6,7 @@ import hashlib
 import random
 import math
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter
 
@@ -18,7 +19,7 @@ class QualityEvaluator:
     
     def generate_report(self, dataset_id: str, version: Optional[str] = None) -> Dict[str, Any]:
         """Generate comprehensive data quality report."""
-        report_id = f"qr_{dataset_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        report_id = f"qr_{dataset_id}_{format_for_filename()}"
         
         # Get dataset info
         dataset_info = self._get_dataset_info(dataset_id, version)
@@ -45,7 +46,7 @@ class QualityEvaluator:
             "report_id": report_id,
             "dataset_id": dataset_id,
             "version": version,
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": iso_format(),
             "overall_quality_score": quality_score,
             "metrics": {
                 "leakage": {

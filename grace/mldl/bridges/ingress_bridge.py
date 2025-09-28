@@ -3,6 +3,7 @@ MLDL-Ingress Bridge - Connects MLDL to Ingress Kernel for data quality monitorin
 """
 import logging
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class MLDLIngressBridge:
                 "completeness": 0.98,
                 "consistency": 0.95,
                 "validity": 0.87,
-                "generated_at": datetime.now().isoformat()
+                "generated_at": iso_format()
             }
         except Exception as e:
             logger.error(f"Data quality request failed: {e}")

@@ -4,6 +4,7 @@ import json
 import sqlite3
 import random
 from datetime import datetime
+from ....utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Tuple
 
 
@@ -67,7 +68,7 @@ class WeakSupervision:
             raise ValueError(f"Invalid labeler_type. Must be one of: {valid_types}")
         
         # Generate labeler ID
-        labeler_id = f"{labeler_type}_{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        labeler_id = f"{labeler_type}_{name}_{format_for_filename()}"
         
         conn = sqlite3.connect(self.db_path)
         try:
@@ -198,7 +199,7 @@ class WeakSupervision:
     
     def _store_prediction(self, labeler_id: str, item_id: str, prediction: Dict[str, Any]):
         """Store weak labeler prediction in database."""
-        prediction_id = f"pred_{labeler_id}_{item_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        prediction_id = f"pred_{labeler_id}_{item_id}_{format_for_filename()}"
         
         conn = sqlite3.connect(self.db_path)
         try:

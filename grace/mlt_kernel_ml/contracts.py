@@ -4,6 +4,7 @@ Core data contracts for MLT Kernel ML components.
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from enum import Enum
 import uuid
 
@@ -227,5 +228,5 @@ def generate_plan_id() -> str:
 
 def generate_snapshot_id() -> str:
     """Generate unique snapshot ID."""
-    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
     return f"mlt_{timestamp}"

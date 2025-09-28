@@ -5,6 +5,7 @@ Integrated with MTL Kernel for memory, trust, and audit capabilities.
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import AdaptationPlan, Action, ActionType
 from ..contracts.dto_common import MemoryEntry
@@ -22,7 +23,7 @@ class GovernanceProposal:
         self.plan = plan
         self.priority = priority
         self.status = "pending"
-        self.submitted_at = datetime.now()
+        self.submitted_at = utc_now()
         self.approved_at: Optional[datetime] = None
         self.rejection_reason: Optional[str] = None
         self.memory_id: Optional[str] = None  # MTL kernel memory reference
@@ -120,7 +121,7 @@ class MLTGovernanceBridge:
     async def submit_plan_for_approval(self, plan: AdaptationPlan, priority: str = "normal") -> str:
         """Submit an adaptation plan to governance for approval."""
         try:
-            proposal_id = f"mlt_proposal_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            proposal_id = f"mlt_proposal_{utc_now().strftime('%Y%m%d_%H%M%S_%f')}"
             
             proposal = GovernanceProposal(proposal_id, plan, priority)
             self.pending_proposals[proposal_id] = proposal
@@ -195,7 +196,7 @@ class MLTGovernanceBridge:
             
             if event_type == "GOVERNANCE_APPROVED":
                 proposal.status = "approved"
-                proposal.approved_at = datetime.now()
+                proposal.approved_at = utc_now()
                 self.approved_proposals[proposal_id] = proposal
                 
                 # Store decision in MTL memory system
@@ -208,7 +209,7 @@ class MLTGovernanceBridge:
                         "confidence": 1.0,
                         "source": "governance_system",
                         "hash": f"{proposal_id}_approved",
-                        "decision_timestamp": datetime.now().isoformat()
+                        "decision_timestamp": iso_format()
                     })
                 
                 # Apply the plan atomically
@@ -233,7 +234,7 @@ class MLTGovernanceBridge:
                         "source": "governance_system",
                         "hash": f"{proposal_id}_rejected",
                         "rejection_reason": proposal.rejection_reason,
-                        "decision_timestamp": datetime.now().isoformat()
+                        "decision_timestamp": iso_format()
                     })
                 
                 logger.info(f"Governance rejected proposal {proposal_id}: {proposal.rejection_reason}")
@@ -256,7 +257,7 @@ class MLTGovernanceBridge:
                     "plan_id": proposal.plan.plan_id,
                     "decision": decision,
                     "rationale": rationale,
-                    "decided_at": datetime.now().isoformat(),
+                    "decided_at": iso_format(),
                     "type": "governance_decision",
                     "original_proposal_memory_id": getattr(proposal, 'memory_id', None),
                     "risk_level": proposal._assess_risk().get("risk_level", "unknown"),
@@ -290,7 +291,7 @@ class MLTGovernanceBridge:
                 applied_actions.append({
                     "action": action.to_dict(),
                     "result": result,
-                    "applied_at": datetime.now().isoformat()
+                    "applied_at": iso_format()
                 })
             
             # Store applied plan in MTL memory system
@@ -330,7 +331,7 @@ class MLTGovernanceBridge:
                 metadata={
                     "proposal_id": proposal.proposal_id,
                     "plan_id": proposal.plan.plan_id,
-                    "applied_at": datetime.now().isoformat(),
+                    "applied_at": iso_format(),
                     "type": "applied_adaptation_plan",
                     "actions_count": len(applied_actions),
                     "actions_summary": applied_actions,
@@ -347,7 +348,7 @@ class MLTGovernanceBridge:
                 "confidence": 1.0,
                 "source": "mlt_governance_bridge",
                 "hash": f"{proposal.proposal_id}_applied",
-                "application_timestamp": datetime.now().isoformat()
+                "application_timestamp": iso_format()
             })
             
             return memory_id
@@ -381,7 +382,7 @@ class MLTGovernanceBridge:
             "target": action.target,
             "budget": action.budget,
             "status": "job_scheduled",
-            "job_id": f"hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            "job_id": f"hpo_{format_for_filename()}"
         }
     
     async def _apply_reweight_action(self, action: Action) -> Dict[str, Any]:

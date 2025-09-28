@@ -14,6 +14,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
@@ -37,7 +38,7 @@ class TextChunk:
         self.source_id = source_id
         self.position = position
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
+        self.created_at = utc_now()
         
         # Calculate characteristics
         self.word_count = len(content.split())
@@ -300,7 +301,7 @@ class EnhancedLibrarian:
             # Step 5: Store document metadata
             doc_metadata = {
                 "source_id": source_id,
-                "ingested_at": datetime.utcnow().isoformat(),
+                "ingested_at": iso_format(),
                 "total_chunks": len(processed_chunks),
                 "failed_chunks": failed_chunks,
                 "constitutional_score": constitutional_result["constitutional_score"],

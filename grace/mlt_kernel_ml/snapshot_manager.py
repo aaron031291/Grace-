@@ -6,6 +6,7 @@ import json
 import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from pathlib import Path
 
 from .contracts import MLTSnapshot, generate_snapshot_id
@@ -49,7 +50,7 @@ class SnapshotManager:
                 policies=self.current_state["policies"].copy(),
                 active_jobs=self.current_state["active_jobs"].copy(),
                 hash=state_hash,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
             
             # Store snapshot in memory
@@ -238,7 +239,7 @@ class SnapshotManager:
             "total_snapshots": len(self.snapshots),
             "storage_path": str(self.storage_path),
             "latest_snapshot_age": (
-                (datetime.now() - self.get_latest_snapshot().timestamp).total_seconds() / 3600
+                (utc_now() - self.get_latest_snapshot().timestamp).total_seconds() / 3600
                 if self.get_latest_snapshot() else None
             ),
             "current_state_hash": hashlib.sha256(json.dumps(self.current_state, sort_keys=True).encode()).hexdigest()[:12]

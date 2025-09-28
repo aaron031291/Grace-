@@ -10,6 +10,7 @@ Handles:
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class PlanBuilder:
         """
         try:
             # Generate plan ID
-            plan_id = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+            plan_id = f"plan_{format_for_filename()}_{uuid.uuid4().hex[:8]}"
             
             # Extract request info
             req_id = task_req.get("req_id", "unknown")
@@ -65,7 +66,7 @@ class PlanBuilder:
                 "req_id": req_id,
                 "route": optimized_route,
                 "policy": policy,
-                "created_at": datetime.now().isoformat(),
+                "created_at": iso_format(),
                 "status": "ready"
             }
             
@@ -268,7 +269,7 @@ class PlanBuilder:
         """Update plan execution status."""
         if plan_id in self.active_plans:
             self.active_plans[plan_id]["status"] = status
-            self.active_plans[plan_id]["updated_at"] = datetime.now().isoformat()
+            self.active_plans[plan_id]["updated_at"] = iso_format()
             
             if details:
                 self.active_plans[plan_id]["execution_details"] = details
@@ -277,7 +278,7 @@ class PlanBuilder:
     
     def cleanup_completed_plans(self, max_age_hours: int = 24):
         """Clean up old completed plans."""
-        current_time = datetime.now()
+        current_time = utc_now()
         plans_to_remove = []
         
         for plan_id, plan in self.active_plans.items():

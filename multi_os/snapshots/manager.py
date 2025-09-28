@@ -7,6 +7,7 @@ import json
 import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import uuid
 
 
@@ -89,7 +90,7 @@ class SnapshotManager:
             Snapshot information
         """
         try:
-            snapshot_id = f"mos_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            snapshot_id = f"mos_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
             
             # Create snapshot payload based on scope
             if scope == "agent":
@@ -108,7 +109,7 @@ class SnapshotManager:
                 "snapshot_id": snapshot_id,
                 "scope": scope,
                 "host_id": host_id,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": iso_format(),
                 "metadata": metadata or {},
                 "version": "1.0.0"
             })
@@ -184,7 +185,7 @@ class SnapshotManager:
                 "steps_completed": results.get("steps_completed", []),
                 "errors": results.get("errors", []),
                 "duration_seconds": results.get("duration_seconds", 0),
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": iso_format()
             }
             
         except Exception as e:
@@ -194,7 +195,7 @@ class SnapshotManager:
                 "snapshot_id": snapshot_id,
                 "success": False,
                 "error": str(e),
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": iso_format()
             }
     
     def list_snapshots(self, scope: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
@@ -415,7 +416,7 @@ class SnapshotManager:
     
     async def _execute_rollback(self, snapshot: Dict[str, Any], plan: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the rollback plan."""
-        start_time = datetime.utcnow()
+        start_time = utc_now()
         results = {
             "success": True,
             "steps_completed": [],
@@ -438,7 +439,7 @@ class SnapshotManager:
                 results["steps_completed"].append({
                     "step": step_name,
                     "description": step_info["description"],
-                    "completed_at": datetime.utcnow().isoformat(),
+                    "completed_at": iso_format(),
                     "success": True
                 })
                 
@@ -450,7 +451,7 @@ class SnapshotManager:
             results["errors"].append(str(e))
         
         # Calculate duration
-        end_time = datetime.utcnow()
+        end_time = utc_now()
         results["duration_seconds"] = (end_time - start_time).total_seconds()
         
         return results

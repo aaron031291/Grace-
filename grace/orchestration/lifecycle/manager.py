@@ -10,6 +10,7 @@ import time
 import signal
 import sys
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Callable, Set
 from enum import Enum
 from dataclasses import dataclass
@@ -99,7 +100,7 @@ class ManagedComponent:
                     start_func()
             
             self.status = ComponentStatus.HEALTHY
-            self.started_at = datetime.now()
+            self.started_at = utc_now()
             logger.info(f"Successfully started component: {self.name}")
             return True
             
@@ -123,7 +124,7 @@ class ManagedComponent:
                     stop_func()
             
             self.status = ComponentStatus.STOPPED
-            self.stopped_at = datetime.now()
+            self.stopped_at = utc_now()
             logger.info(f"Successfully stopped component: {self.name}")
             return True
             
@@ -143,7 +144,7 @@ class ManagedComponent:
                 else:
                     result = health_func()
                 
-                self.last_health_check = datetime.now()
+                self.last_health_check = utc_now()
                 return result
             
             return {"status": "unknown", "message": "No health check method"}
@@ -186,7 +187,7 @@ class LifecycleManager:
         
         # Lifecycle state
         self.phase = LifecyclePhase.INITIALIZING
-        self.phase_since = datetime.now()
+        self.phase_since = utc_now()
         
         # Components
         self.components: Dict[str, ManagedComponent] = {}
@@ -276,7 +277,7 @@ class LifecycleManager:
             await self._transition_phase(LifecyclePhase.RUNNING)
             
             self.startup_time = time.time() - start_time
-            self.uptime_start = datetime.now()
+            self.uptime_start = utc_now()
             self.running = True
             
             logger.info(f"Orchestration system started successfully in {self.startup_time:.2f}s")
@@ -286,7 +287,7 @@ class LifecycleManager:
                 await self.event_publisher("ORCH_SYSTEM_STARTED", {
                     "startup_time_seconds": self.startup_time,
                     "components_started": len(self.startup_order),
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": iso_format()
                 })
             
             return True
@@ -324,8 +325,8 @@ class LifecycleManager:
             # Publish shutdown event
             if self.event_publisher:
                 await self.event_publisher("ORCH_SYSTEM_STOPPED", {
-                    "timestamp": datetime.now().isoformat(),
-                    "uptime_seconds": (datetime.now() - self.uptime_start).total_seconds() if self.uptime_start else 0
+                    "timestamp": iso_format(),
+                    "uptime_seconds": (utc_now() - self.uptime_start).total_seconds() if self.uptime_start else 0
                 })
             
             return True
@@ -381,7 +382,7 @@ class LifecycleManager:
             if self.event_publisher:
                 await self.event_publisher("ORCH_SYSTEM_UPGRADED", {
                     "upgrade_plan": upgrade_plan,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": iso_format()
                 })
             
             return True
@@ -506,7 +507,7 @@ class LifecycleManager:
             else:
                 result = check.check_function()
             
-            check.last_check = datetime.now()
+            check.last_check = utc_now()
             
             if result:
                 check.last_result = True
@@ -521,13 +522,13 @@ class LifecycleManager:
             check.last_result = False
             check.consecutive_failures += 1
             check.total_failures += 1
-            check.last_check = datetime.now()
+            check.last_check = utc_now()
     
     async def _transition_phase(self, new_phase: LifecyclePhase):
         """Transition to a new lifecycle phase."""
         old_phase = self.phase
         self.phase = new_phase
-        self.phase_since = datetime.now()
+        self.phase_since = utc_now()
         
         logger.info(f"Lifecycle phase transition: {old_phase.value} -> {new_phase.value}")
         
@@ -536,14 +537,14 @@ class LifecycleManager:
             await self.event_publisher("ORCH_PHASE_TRANSITION", {
                 "from_phase": old_phase.value,
                 "to_phase": new_phase.value,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             })
     
     def get_status(self) -> Dict[str, Any]:
         """Get comprehensive lifecycle status."""
         uptime_seconds = 0
         if self.uptime_start:
-            uptime_seconds = (datetime.now() - self.uptime_start).total_seconds()
+            uptime_seconds = (utc_now() - self.uptime_start).total_seconds()
         
         return {
             "phase": self.phase.value,

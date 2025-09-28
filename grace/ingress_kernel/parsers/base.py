@@ -6,6 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import uuid
 
 from grace.contracts.ingress_contracts import RawEvent
@@ -202,7 +203,7 @@ class HTMLParser(BaseParser):
         return {
             "charset": "utf-8",
             "language": "en",
-            "parsed_at": datetime.utcnow().isoformat()
+            "parsed_at": iso_format()
         }
 
 
@@ -222,7 +223,7 @@ class PDFParser(BaseParser):
                 "metadata": {
                     "title": "Sample PDF Document",
                     "author": "Unknown",
-                    "creation_date": datetime.utcnow().isoformat()
+                    "creation_date": iso_format()
                 },
                 "extraction_method": "mock"
             }

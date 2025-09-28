@@ -1,6 +1,7 @@
 """Main Interface Service implementation matching problem statement specification."""
 import asyncio
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -78,7 +79,7 @@ class InterfaceService:
             return {
                 "status": "ok",
                 "version": "1.0.0",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": iso_format()
             }
         
         # Session management
@@ -244,7 +245,7 @@ class InterfaceService:
         context = {
             "user_id": session.user.user_id,
             "labels": session.user.labels or [],
-            "current_time": datetime.utcnow()
+            "current_time": utc_now()
         }
         
         return self.rbac_evaluator.evaluate(
@@ -265,7 +266,7 @@ class InterfaceService:
                 # Keep connection alive
                 await websocket.send_json({
                     "type": "heartbeat",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": iso_format()
                 })
                 await asyncio.sleep(20)  # Heartbeat every 20 seconds
                 
@@ -332,7 +333,7 @@ class InterfaceService:
         event_data = {
             "type": event_type,
             "payload": payload,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         }
         
         # Send to all connected WebSocket clients

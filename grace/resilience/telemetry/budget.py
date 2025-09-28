@@ -2,6 +2,7 @@
 
 import time
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional
 import logging
 
@@ -56,7 +57,7 @@ class ErrorBudgetTracker:
         
         # Record the consumption
         consumption_record = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "sli_type": sli_type,
             "breach_amount": breach_amount,
             "duration_s": duration_s,
@@ -66,7 +67,7 @@ class ErrorBudgetTracker:
         self.budget_consumption[service_id].append(consumption_record)
         
         # Trim old records (keep last 30 days)
-        cutoff = datetime.now() - timedelta(days=30)
+        cutoff = utc_now() - timedelta(days=30)
         self.budget_consumption[service_id] = [
             record for record in self.budget_consumption[service_id]
             if datetime.fromisoformat(record["timestamp"]) >= cutoff
@@ -99,7 +100,7 @@ class ErrorBudgetTracker:
         total_budget = budget_per_period * (window_days / 30)  # Normalize to window
         
         # Calculate consumed budget in the window
-        cutoff = datetime.now() - timedelta(days=window_days)
+        cutoff = utc_now() - timedelta(days=window_days)
         recent_consumption = [
             record for record in self.budget_consumption.get(service_id, [])
             if datetime.fromisoformat(record["timestamp"]) >= cutoff
@@ -128,7 +129,7 @@ class ErrorBudgetTracker:
             "remaining_pct": remaining_pct,
             "window_days": window_days,
             "breach_count": len(recent_consumption),
-            "calculated_at": datetime.now().isoformat()
+            "calculated_at": iso_format()
         }
     
     def should_block_deployment(self, service_id: str, risk_threshold_pct: float = 10.0) -> Dict:
@@ -174,7 +175,7 @@ class ErrorBudgetTracker:
                 "projected_exhaustion_hours": float('inf')
             }
         
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = utc_now() - timedelta(hours=hours)
         recent_consumption = [
             record for record in self.budget_consumption[service_id]
             if datetime.fromisoformat(record["timestamp"]) >= cutoff
@@ -206,7 +207,7 @@ class ErrorBudgetTracker:
             "recent_consumption_days": total_consumed,
             "projected_exhaustion_hours": projected_exhaustion_hours,
             "window_hours": hours,
-            "calculated_at": datetime.now().isoformat()
+            "calculated_at": iso_format()
         }
     
     def get_budget_summary(self, service_ids: Optional[List[str]] = None) -> Dict:
@@ -218,7 +219,7 @@ class ErrorBudgetTracker:
             "total_services": len(service_ids),
             "services": {},
             "overall_status": "healthy",
-            "generated_at": datetime.now().isoformat()
+            "generated_at": iso_format()
         }
         
         status_counts = {"healthy": 0, "warning": 0, "critical": 0, "exhausted": 0}

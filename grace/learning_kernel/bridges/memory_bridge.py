@@ -1,6 +1,7 @@
 """Memory bridge for storage and indexing integration."""
 
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 
 
@@ -22,7 +23,7 @@ class MemoryBridge:
             "dataset_id": dataset_id,
             "version": version,
             "metadata": metadata,
-            "stored_at": datetime.now().isoformat()
+            "stored_at": iso_format()
         }
         
         self.stored_objects.append(stored_object)
@@ -46,7 +47,7 @@ class MemoryBridge:
             "version": version,
             "view_uri": view_uri,
             "schema": schema,
-            "stored_at": datetime.now().isoformat()
+            "stored_at": iso_format()
         }
         
         self.stored_objects.append(stored_object)
@@ -89,13 +90,13 @@ class MemoryBridge:
         stored_ids = []
         
         for artifact in artifacts:
-            memory_id = f"learning_artifact_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            memory_id = f"learning_artifact_{utc_now().strftime('%Y%m%d_%H%M%S_%f')}"
             
             stored_object = {
                 "memory_id": memory_id,
                 "type": "learning_artifact",
                 "artifact": artifact,
-                "stored_at": datetime.now().isoformat()
+                "stored_at": iso_format()
             }
             
             self.stored_objects.append(stored_object)

@@ -5,6 +5,7 @@ import random
 import sqlite3
 import math
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Tuple
 
 
@@ -115,7 +116,7 @@ class ActiveLearningStrategies:
             raise ValueError("dataset_id is required")
         
         # Generate query ID
-        query_id = f"aq_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}"
+        query_id = f"aq_{format_for_filename()}_{random.randint(1000, 9999)}"
         
         # Simulate getting unlabeled data and model predictions
         # In practice, this would integrate with actual ML models and data storage

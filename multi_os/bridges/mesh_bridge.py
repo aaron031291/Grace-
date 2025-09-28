@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 # Import Grace Communications Module
 try:
@@ -138,7 +139,7 @@ class MeshBridge:
                     "payload": payload,
                     "host_id": host_id,
                     "metadata": metadata or {},
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": iso_format(),
                     "source": "multi_os_kernel"
                 }
                 
@@ -331,7 +332,7 @@ class MeshBridge:
             {
                 "target": target,
                 "snapshot_id": snapshot_id,
-                "at": datetime.utcnow().isoformat()
+                "at": iso_format()
             }
         )
     

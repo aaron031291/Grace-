@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import Experience, Insight, AdaptationPlan, ExperienceSource
 from .experience_collector import ExperienceCollector
@@ -208,7 +209,7 @@ class MLTKernelML:
                 if success and self.event_bus:
                     await self.event_bus.publish("ROLLBACK_COMPLETED", {
                         "snapshot_id": latest_snapshot.snapshot_id,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": iso_format()
                     })
                     
                     logger.info(f"Rollback completed to snapshot {latest_snapshot.snapshot_id}")
@@ -232,7 +233,7 @@ class MLTKernelML:
     async def force_learning_cycle(self) -> Dict[str, Any]:
         """Force immediate execution of learning cycle."""
         await self._process_learning_cycle()
-        return {"status": "learning_cycle_completed", "timestamp": datetime.now().isoformat()}
+        return {"status": "learning_cycle_completed", "timestamp": iso_format()}
     
     async def create_manual_snapshot(self) -> str:
         """Create a manual snapshot."""
@@ -257,7 +258,7 @@ class MLTKernelML:
             "policy_tuner": self.policy_tuner.get_stats(),
             "snapshot_manager": self.snapshot_manager.get_stats(),
             "governance_bridge": self.gov_bridge.get_stats(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
     
     def get_service_app(self):
@@ -287,7 +288,7 @@ class MLTKernelML:
         health = {
             "status": "healthy",
             "components": {},
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
         
         try:

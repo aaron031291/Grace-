@@ -4,6 +4,7 @@ Policy Tuner - Recommends changes to governance policies and thresholds based on
 import logging
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 from .contracts import Insight, InsightType
 
@@ -21,7 +22,7 @@ class PolicyRecommendation:
         self.recommended_value = recommended_value
         self.rationale = rationale
         self.confidence = confidence
-        self.timestamp = datetime.now()
+        self.timestamp = utc_now()
     
     def to_dict(self) -> Dict[str, Any]:
         return {

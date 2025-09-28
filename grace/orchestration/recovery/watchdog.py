@@ -8,6 +8,7 @@ and manages kernel lifecycle for resilient operation.
 import asyncio
 import time
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 
 # Optional psutil import for system metrics
 try:
@@ -57,7 +58,7 @@ class HealthMetrics:
             self.memory_usage <= thresholds.get("memory_max", 85.0) and
             self.response_time_ms <= thresholds.get("response_time_max", 5000.0) and
             self.error_rate <= thresholds.get("error_rate_max", 0.05) and
-            (datetime.now() - self.last_heartbeat).total_seconds() <= thresholds.get("heartbeat_max", 60.0)
+            (utc_now() - self.last_heartbeat).total_seconds() <= thresholds.get("heartbeat_max", 60.0)
         )
 
 
@@ -71,7 +72,7 @@ class MonitoredTask:
         self.kernel = kernel
         self.timeout_minutes = timeout_minutes
         
-        self.started_at = datetime.now()
+        self.started_at = utc_now()
         self.last_heartbeat = self.started_at
         self.status = "running"
         self.failure_count = 0
@@ -80,15 +81,15 @@ class MonitoredTask:
     
     def is_expired(self) -> bool:
         """Check if task has exceeded timeout."""
-        return (datetime.now() - self.started_at).total_seconds() > (self.timeout_minutes * 60)
+        return (utc_now() - self.started_at).total_seconds() > (self.timeout_minutes * 60)
     
     def is_stale(self, heartbeat_timeout: int = 120) -> bool:
         """Check if task heartbeat is stale."""
-        return (datetime.now() - self.last_heartbeat).total_seconds() > heartbeat_timeout
+        return (utc_now() - self.last_heartbeat).total_seconds() > heartbeat_timeout
     
     def heartbeat(self):
         """Update last heartbeat."""
-        self.last_heartbeat = datetime.now()
+        self.last_heartbeat = utc_now()
     
     def add_callback(self, callback: Callable):
         """Add callback for task events."""
@@ -120,7 +121,7 @@ class KernelMonitor:
         }
         
         self.status = KernelStatus.HEALTHY
-        self.last_health_check = datetime.now()
+        self.last_health_check = utc_now()
         self.failure_count = 0
         self.consecutive_failures = 0
         self.total_restarts = 0
@@ -140,7 +141,7 @@ class KernelMonitor:
         if len(self.health_history) > self.max_history_size:
             self.health_history = self.health_history[-self.max_history_size:]
         
-        self.last_health_check = datetime.now()
+        self.last_health_check = utc_now()
         
         # Update status based on metrics
         if metrics.is_healthy(self.health_thresholds):
@@ -174,7 +175,7 @@ class KernelMonitor:
     def isolate(self, reason: str):
         """Isolate the kernel."""
         self.status = KernelStatus.ISOLATED
-        self.isolated_since = datetime.now()
+        self.isolated_since = utc_now()
         self.isolation_reason = reason
         logger.warning(f"Isolated kernel {self.kernel_name}: {reason}")
     
@@ -331,7 +332,7 @@ class Watchdog:
                 "kernel": kernel,
                 "strategy": strategy.value,
                 "reason": reason,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             })
         
         logger.warning(f"Isolated kernel {kernel} with strategy {strategy.value}: {reason}")
@@ -367,7 +368,7 @@ class Watchdog:
                 await self.event_publisher("KERNEL_RESPAWNED", {
                     "kernel": kernel,
                     "restart_count": monitor.total_restarts,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": iso_format()
                 })
             
             self.total_recoveries += 1
@@ -389,7 +390,7 @@ class Watchdog:
         """Monitor tasks for failures and timeouts."""
         try:
             while self.running:
-                current_time = datetime.now()
+                current_time = utc_now()
                 expired_tasks = []
                 stale_tasks = []
                 
@@ -448,7 +449,7 @@ class Watchdog:
         """Manage isolated kernels and recovery attempts."""
         try:
             while self.running:
-                current_time = datetime.now()
+                current_time = utc_now()
                 
                 for kernel_name, monitor in self.kernel_monitors.items():
                     if monitor.is_isolated():
@@ -503,7 +504,7 @@ class Watchdog:
                 "loop_id": task.loop_id,
                 "kernel": task.kernel,
                 "timeout_minutes": task.timeout_minutes,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             })
     
     async def _handle_stale_task(self, task_id: str):
@@ -550,7 +551,7 @@ class Watchdog:
                 response_time_ms=response_time,
                 error_rate=error_rate,
                 throughput=throughput,
-                last_heartbeat=datetime.now()
+                last_heartbeat=utc_now()
             )
         
         except Exception as e:
@@ -562,7 +563,7 @@ class Watchdog:
                 response_time_ms=10000.0,
                 error_rate=1.0,
                 throughput=0.0,
-                last_heartbeat=datetime.now() - timedelta(minutes=10)
+                last_heartbeat=utc_now() - timedelta(minutes=10)
             )
     
     def get_status(self) -> Dict[str, Any]:

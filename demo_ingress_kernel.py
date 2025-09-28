@@ -4,6 +4,7 @@ Grace Ingress Kernel Demo - Showcasing key capabilities
 import asyncio
 import json
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from grace.ingress_kernel import IngressKernel, create_ingress_app
 
 async def demo_ingress_capabilities():
@@ -70,7 +71,7 @@ async def demo_ingress_capabilities():
         "author": "Dr. Sarah Chen",
         "content": "Researchers have developed a new AI system that can detect early signs of diseases...",
         "url": "https://news.example.com/ai-medical-breakthrough",
-        "published_at": datetime.utcnow().isoformat(),
+        "published_at": iso_format(),
         "language": "en",
         "topics": ["AI", "healthcare", "technology"]
     }
@@ -82,7 +83,7 @@ async def demo_ingress_capabilities():
     api_data = {
         "user_feedback": "Great service! You can reach me at john.doe@email.com or 555-0123",
         "rating": 5,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": iso_format(),
         "source": "customer_survey"
     }
     

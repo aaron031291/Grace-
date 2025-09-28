@@ -4,6 +4,7 @@ Unified Logic - Cross-layer synthesis and arbitration for Grace governance kerne
 import asyncio
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import logging
 import statistics
 
@@ -82,7 +83,7 @@ class UnifiedLogic:
             inputs: Dictionary containing all component inputs
             mldl_consensus_id: Optional ID from MLDL consensus system
         """
-        synthesis_start = datetime.now()
+        synthesis_start = utc_now()
         decision_id = generate_decision_id()
         
         try:
@@ -120,14 +121,14 @@ class UnifiedLogic:
                 rationale=rationale,
                 confidence=confidence,
                 trust_score=trust_score,
-                timestamp=datetime.now()
+                timestamp=utc_now()
             )
             
             # Record experience for meta-learning
             await self._record_synthesis_experience(
                 len(component_signals), len(arbitrated_signals), 
                 recommendation, confidence,
-                (datetime.now() - synthesis_start).total_seconds()
+                (utc_now() - synthesis_start).total_seconds()
             )
             
             logger.info(f"Synthesized decision {decision_id}: {recommendation} (conf: {confidence:.3f})")
@@ -402,7 +403,7 @@ class UnifiedLogic:
             rationale=f"Synthesis error: {error_msg}. Manual review required.",
             confidence=0.0,
             trust_score=0.0,
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     async def _record_synthesis_experience(self, input_count: int, signal_count: int,
@@ -427,7 +428,7 @@ class UnifiedLogic:
                 "delta_vs_thresholds": confidence - self.decision_thresholds["min_confidence_approve"]
             },
             success_score=success_score,
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
         
         self.memory_core.store_experience(experience)

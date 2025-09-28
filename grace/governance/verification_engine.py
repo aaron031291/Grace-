@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import re
 import hashlib
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import logging
 from dataclasses import dataclass
 
@@ -73,7 +74,7 @@ class VerificationEngine:
             claims: List of claims to verify
             level: Verification level ("basic", "standard", "comprehensive")
         """
-        verification_start = datetime.now()
+        verification_start = utc_now()
         
         try:
             verified_claims = []
@@ -110,7 +111,7 @@ class VerificationEngine:
             # Record experience for learning
             await self._record_verification_experience(
                 len(claims), verification_status, overall_confidence,
-                (datetime.now() - verification_start).total_seconds()
+                (utc_now() - verification_start).total_seconds()
             )
             
             return result
@@ -421,7 +422,7 @@ class VerificationEngine:
                 "confidence": confidence
             },
             success_score=confidence,  # Use confidence as success metric
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
         
         self.memory_core.store_experience(experience)

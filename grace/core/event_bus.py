@@ -6,6 +6,7 @@ from typing import Dict, List, Callable, Any, Optional
 import json
 from dataclasses import asdict
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 import logging
 
 from .contracts import EventType, generate_correlation_id
@@ -54,7 +55,7 @@ class EventBus:
             "type": event_type,
             "payload": payload,
             "correlation_id": correlation_id,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "id": f"evt_{len(self.message_history):06d}"
         }
         

@@ -10,6 +10,7 @@ import asyncio
 import time
 import json
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Callable, Set
 from enum import Enum
 import logging
@@ -123,7 +124,7 @@ class RoutingMessage:
         self.targets = targets or []
         self.priority = priority
         self.correlation_id = correlation_id or f"msg_{int(time.time() * 1000)}"
-        self.created_at = datetime.now()
+        self.created_at = utc_now()
         self.attempts = 0
         self.max_retries = 3
         self.status = "pending"
@@ -458,7 +459,7 @@ class Router:
                         route.total_latency_ms += latency_ms
                     else:
                         route.messages_failed += 1
-                    route.last_used = datetime.now()
+                    route.last_used = utc_now()
     
     def _update_average_latency(self, latency_ms: float):
         """Update average latency with exponential moving average."""

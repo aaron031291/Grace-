@@ -4,6 +4,7 @@ import json
 import sqlite3
 import os
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
@@ -51,7 +52,7 @@ class FeatureStore:
         
         # Update status
         status = "ready" if success else "failed"
-        built_at = datetime.now().isoformat() if success else None
+        built_at = iso_format() if success else None
         
         conn = sqlite3.connect(self.db_path)
         try:
@@ -91,7 +92,7 @@ class FeatureStore:
                     "version": version,
                     "feature_count": 50,
                     "sample_count": 10000,
-                    "created_at": datetime.now().isoformat()
+                    "created_at": iso_format()
                 },
                 "schema": {
                     "features": [
@@ -225,7 +226,7 @@ class FeatureStore:
             "train_serve_parity": {
                 "pipeline_path": f"models/{dataset_id}_{version}_pipeline.pkl",
                 "validation_data_hash": "sha256:def456...",
-                "last_validated": datetime.now().isoformat()
+                "last_validated": iso_format()
             }
         }
     
@@ -263,7 +264,7 @@ class FeatureStore:
             "version": version,
             "validation_details": validation_results,
             "issues": issues,
-            "validated_at": datetime.now().isoformat()
+            "validated_at": iso_format()
         }
     
     def create_feature_view_snapshot(self, dataset_id: str, version: str) -> Dict[str, Any]:
@@ -272,7 +273,7 @@ class FeatureStore:
         if not view:
             raise ValueError("Feature view not found")
         
-        snapshot_id = f"fv_snapshot_{dataset_id}_{version}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        snapshot_id = f"fv_snapshot_{dataset_id}_{version}_{format_for_filename()}"
         
         # Mock snapshot creation
         snapshot_data = {
@@ -280,7 +281,7 @@ class FeatureStore:
             "source_view": view,
             "feature_schema": self.get_feature_schema(dataset_id, version),
             "parity_validation": self.validate_train_serve_parity(dataset_id, version),
-            "created_at": datetime.now().isoformat()
+            "created_at": iso_format()
         }
         
         # In practice, would store snapshot to persistent storage
@@ -321,7 +322,7 @@ class FeatureStore:
                 "missing_value_rate": random.uniform(0.0, 0.05),
                 "outlier_rate": random.uniform(0.01, 0.1)
             },
-            "computed_at": datetime.now().isoformat()
+            "computed_at": iso_format()
         }
     
     def rebuild_view(self, dataset_id: str, version: str) -> Dict[str, Any]:

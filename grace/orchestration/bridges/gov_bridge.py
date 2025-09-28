@@ -8,6 +8,7 @@ compliance checking, and governance-driven orchestration decisions.
 import asyncio
 import json
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Callable
 import logging
 
@@ -53,12 +54,12 @@ class GovernanceBridge:
     
     async def validate_orchestration_decision(self, decision_context: Dict[str, Any]) -> Dict[str, Any]:
         """Validate an orchestration decision against governance policies."""
-        request_id = f"gov_req_{int(datetime.now().timestamp() * 1000)}"
+        request_id = f"gov_req_{int(utc_now().timestamp() * 1000)}"
         
         validation_request = {
             "request_id": request_id,
             "context": decision_context,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "status": "pending"
         }
         
@@ -78,7 +79,7 @@ class GovernanceBridge:
             self.validation_results.append({
                 "request_id": request_id,
                 "result": result,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             })
             
             # Keep only recent results
@@ -176,7 +177,7 @@ class GovernanceBridge:
         return {
             "compliant": len(violations) == 0,
             "violations": violations,
-            "validated_at": datetime.now().isoformat(),
+            "validated_at": iso_format(),
             "validator": "orchestration_governance_bridge"
         }
     
@@ -211,7 +212,7 @@ class GovernanceBridge:
             "decision_type": "loop_execution",
             "loop_id": loop_id,
             "loop_config": loop_config,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "source": "orchestration_scheduler"
         }
         
@@ -225,7 +226,7 @@ class GovernanceBridge:
             "task_id": task_id,
             "loop_id": loop_id,
             "inputs": inputs,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "source": "orchestration_scheduler"
         }
         
@@ -241,7 +242,7 @@ class GovernanceBridge:
             "loop_id": loop_id,
             "current_instances": current_instances,
             "requested_instances": target_instances,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "source": "orchestration_scaling_manager"
         }
         
@@ -256,7 +257,7 @@ class GovernanceBridge:
             "snapshot_id": snapshot_id,
             "reason": reason,
             "authorization": authorized_by,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "source": "orchestration_snapshot_manager"
         }
         

@@ -1,5 +1,6 @@
 """Consent and autonomy flow management."""
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional
 import logging
 import uuid
@@ -21,14 +22,14 @@ class ConsentService:
         
         expires_at = None
         if expires_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_days)
+            expires_at = utc_now() + timedelta(days=expires_days)
         
         consent = ConsentRecord(
             consent_id=consent_id,
             user_id=user_id,
             scope=scope,
             status="granted",
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             expires_at=expires_at,
             evidence_uri=evidence_uri
         )
@@ -58,7 +59,7 @@ class ConsentService:
             user_id=user_id,
             scope=scope,
             status="denied",
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             evidence_uri=evidence_uri
         )
         
@@ -69,7 +70,7 @@ class ConsentService:
     
     def check_consent(self, user_id: str, scope: str) -> bool:
         """Check if user has valid consent for scope."""
-        current_time = datetime.utcnow()
+        current_time = utc_now()
         
         user_consents = [
             c for c in self.consents.values()
@@ -111,7 +112,7 @@ class ConsentService:
     
     def get_expiring_consents(self, days_ahead: int = 30) -> List[ConsentRecord]:
         """Get consents expiring within specified days."""
-        cutoff_date = datetime.utcnow() + timedelta(days=days_ahead)
+        cutoff_date = utc_now() + timedelta(days=days_ahead)
         
         return [
             c for c in self.consents.values()
@@ -122,7 +123,7 @@ class ConsentService:
     
     def cleanup_expired_consents(self) -> int:
         """Mark expired consents as revoked and return count."""
-        current_time = datetime.utcnow()
+        current_time = utc_now()
         expired_count = 0
         
         for consent in self.consents.values():
@@ -170,7 +171,7 @@ class ConsentService:
             user_id=user_id,
             scope=scope,
             status="pending",
-            created_at=datetime.utcnow()
+            created_at=utc_now()
         )
         
         self.consents[consent_id] = consent

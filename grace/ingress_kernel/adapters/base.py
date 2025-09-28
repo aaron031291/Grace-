@@ -7,6 +7,7 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Any, Dict, Optional, AsyncIterator
 import urllib.parse
 import uuid
@@ -68,7 +69,7 @@ class BaseAdapter(ABC):
             kind=self.source_config.parser.value,
             payload=payload,
             headers=headers,
-            offset=offset or f"auto_{datetime.utcnow().isoformat()}",
+            offset=offset or f"auto_{iso_format()}",
             hash=content_hash
         )
     
@@ -103,13 +104,13 @@ class HTTPAdapter(BaseAdapter):
             mock_data = {
                 "title": "Sample HTTP Content",
                 "content": f"Content from {self.source_config.uri}",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": iso_format()
             }
             
             yield self._create_raw_event(
                 payload=mock_data,
                 headers={"content-type": "application/json"},
-                offset=f"http_{datetime.utcnow().isoformat()}"
+                offset=f"http_{iso_format()}"
             )
             
         except Exception as e:
@@ -146,14 +147,14 @@ class RSSAdapter(BaseAdapter):
                     "title": "Sample RSS Item 1",
                     "description": "First RSS item description",
                     "link": f"{self.source_config.uri}/item1",
-                    "pubDate": datetime.utcnow().isoformat(),
+                    "pubDate": iso_format(),
                     "guid": str(uuid.uuid4())
                 },
                 {
                     "title": "Sample RSS Item 2", 
                     "description": "Second RSS item description",
                     "link": f"{self.source_config.uri}/item2",
-                    "pubDate": datetime.utcnow().isoformat(),
+                    "pubDate": iso_format(),
                     "guid": str(uuid.uuid4())
                 }
             ]
@@ -208,12 +209,12 @@ class S3Adapter(BaseAdapter):
                 {
                     "key": f"{self.prefix}/file1.json",
                     "content": {"data": "S3 file 1 content"},
-                    "last_modified": datetime.utcnow().isoformat()
+                    "last_modified": iso_format()
                 },
                 {
                     "key": f"{self.prefix}/file2.json",
                     "content": {"data": "S3 file 2 content"},
-                    "last_modified": datetime.utcnow().isoformat()
+                    "last_modified": iso_format()
                 }
             ]
             
@@ -273,7 +274,7 @@ class GitHubAdapter(BaseAdapter):
                     "title": "Sample Issue",
                     "body": "This is a sample GitHub issue",
                     "state": "open",
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": iso_format()
                 },
                 {
                     "type": "pull_request",
@@ -281,7 +282,7 @@ class GitHubAdapter(BaseAdapter):
                     "title": "Sample PR",
                     "body": "This is a sample pull request",
                     "state": "open",
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": iso_format()
                 }
             ]
             

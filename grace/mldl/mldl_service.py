@@ -4,6 +4,7 @@ MLDL Service - FastAPI facade for the Model Lifecycle (train, evaluate, deploy).
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import uvicorn
@@ -135,7 +136,7 @@ class MLDLService:
             return HealthResponse(
                 status="ok",
                 version="1.0.0",
-                timestamp=datetime.now().isoformat()
+                timestamp=iso_format()
             )
         
         @self.app.post("/api/mldl/v1/train")
@@ -153,7 +154,7 @@ class MLDLService:
                 
                 self.active_jobs[job_id] = {
                     "status": "queued",
-                    "created_at": datetime.now().isoformat(),
+                    "created_at": iso_format(),
                     "spec": request.spec.dict()
                 }
                 
@@ -312,7 +313,7 @@ class MLDLService:
             self.active_jobs[job_id].update({
                 "status": "completed",
                 "result": result,
-                "completed_at": datetime.now().isoformat()
+                "completed_at": iso_format()
             })
             
             # Submit completion event
@@ -329,7 +330,7 @@ class MLDLService:
             self.active_jobs[job_id].update({
                 "status": "failed",
                 "error": str(e),
-                "failed_at": datetime.now().isoformat()
+                "failed_at": iso_format()
             })
     
     async def _run_evaluation(self, eval_spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -358,7 +359,7 @@ class MLDLService:
                 "kl_threshold": 0.1
             },
             "slices": [],
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }
         
         # Submit evaluation event

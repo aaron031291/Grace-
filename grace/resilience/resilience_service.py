@@ -9,6 +9,7 @@ and self-healing capabilities.
 import json
 import logging
 from datetime import datetime
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Union
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
@@ -199,7 +200,7 @@ class ResilienceService:
         async def open_incident(incident: IncidentRequest):
             try:
                 incident_dict = incident.dict()
-                incident_dict["started_at"] = datetime.now().isoformat()
+                incident_dict["started_at"] = iso_format()
                 incident_dict["status"] = "open"
                 
                 self.incidents[incident.incident_id] = incident_dict
@@ -355,7 +356,7 @@ class ResilienceService:
                     "experiment_id": experiment_id,
                     "outcome": "pass",  # Would be determined by experiment runner
                     "findings": {"status": "completed"},
-                    "completed_at": datetime.now().isoformat()
+                    "completed_at": iso_format()
                 }
                 
                 return result
@@ -404,7 +405,7 @@ class ResilienceService:
                 await self.mesh_bridge.publish_event("ROLLBACK_COMPLETED", {
                     "target": "resilience",
                     "snapshot_id": request.to_snapshot,
-                    "at": datetime.now().isoformat()
+                    "at": iso_format()
                 })
                 
                 return result
@@ -470,7 +471,7 @@ class ResilienceService:
     def open_incident(self, incident: dict) -> str:
         """Open new incident."""
         incident_id = incident["incident_id"]
-        incident["started_at"] = datetime.now().isoformat()
+        incident["started_at"] = iso_format()
         incident["status"] = "open"
         self.incidents[incident_id] = incident
         return incident_id
@@ -483,7 +484,7 @@ class ResilienceService:
     
     def export_snapshot(self) -> dict:
         """Export current resilience state snapshot."""
-        snapshot_id = f"res_{datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        snapshot_id = f"res_{utc_now().strftime('%Y-%m-%dT%H:%M:%SZ')}"
         snapshot = {
             "snapshot_id": snapshot_id,
             "services": {

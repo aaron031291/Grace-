@@ -4,6 +4,7 @@ import time
 import statistics
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 import logging
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ def _evaluate_latency_p95(samples: dict, objective: float, window: str) -> dict:
         "window": window,
         "sample_count": len(latency_samples),
         "breach_margin": max(0, p95_latency - objective),
-        "evaluated_at": datetime.now().isoformat()
+        "evaluated_at": iso_format()
     }
 
 
@@ -111,7 +112,7 @@ def _evaluate_availability(samples: dict, objective: float, window: str) -> dict
         "success_count": success_count,
         "total_count": total_count,
         "breach_margin": max(0, objective - availability_pct),
-        "evaluated_at": datetime.now().isoformat()
+        "evaluated_at": iso_format()
     }
 
 
@@ -148,7 +149,7 @@ def _evaluate_error_rate(samples: dict, objective: float, window: str) -> dict:
         "error_count": error_count,
         "total_count": total_count,
         "breach_margin": max(0, error_rate_pct - objective),
-        "evaluated_at": datetime.now().isoformat()
+        "evaluated_at": iso_format()
     }
 
 
@@ -187,7 +188,7 @@ def _evaluate_drift_psi(samples: dict, objective: float, window: str) -> dict:
         "objective": objective,
         "window": window,
         "breach_margin": max(0, psi - objective),
-        "evaluated_at": datetime.now().isoformat()
+        "evaluated_at": iso_format()
     }
 
 
@@ -224,7 +225,7 @@ class SLIMonitor:
         if service_id not in self.sample_buffers:
             self.sample_buffers[service_id] = []
         
-        timestamp = datetime.now()
+        timestamp = utc_now()
         sample_entry = {
             "timestamp": timestamp.isoformat(),
             "samples": samples
@@ -288,12 +289,12 @@ class SLIMonitor:
             "service_id": service_id,
             "status": overall_status,
             "evaluations": evaluations,
-            "evaluated_at": datetime.now().isoformat()
+            "evaluated_at": iso_format()
         }
     
     def get_breach_summary(self, service_id: Optional[str] = None, hours: int = 24) -> Dict:
         """Get summary of SLO breaches."""
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = utc_now() - timedelta(hours=hours)
         
         recent_evaluations = [
             e for e in self.evaluation_history
@@ -333,7 +334,7 @@ class SLIMonitor:
             "total_breaches": len(breaches),
             "services_affected": len(breach_summary),
             "breach_summary": breach_summary,
-            "generated_at": datetime.now().isoformat()
+            "generated_at": iso_format()
         }
     
     def _get_windowed_samples(self, service_id: str, window: str) -> Dict:
@@ -343,7 +344,7 @@ class SLIMonitor:
         
         # Parse window (e.g., "7d", "30d", "1h")
         window_seconds = self._parse_window(window)
-        cutoff_time = datetime.now() - timedelta(seconds=window_seconds)
+        cutoff_time = utc_now() - timedelta(seconds=window_seconds)
         
         recent_samples = [
             entry for entry in self.sample_buffers[service_id]

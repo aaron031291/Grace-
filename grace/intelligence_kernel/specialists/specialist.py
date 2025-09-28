@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import statistics
 from datetime import datetime
 
+from ...utils.datetime_utils import utc_now
 from ...contracts.quorum_feed import QuorumFeedItem
 
 
@@ -20,7 +21,7 @@ class BaseSpecialist:
     def analyze(self, feed_items: List[QuorumFeedItem], context: Optional[Dict] = None) -> Dict:
         """Base analysis with common preprocessing."""
         self.analysis_count += 1
-        self.last_analysis = datetime.utcnow()
+        self.last_analysis = utc_now()
         
         if not feed_items:
             return self._empty_analysis()

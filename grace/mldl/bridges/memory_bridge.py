@@ -3,6 +3,7 @@ MLDL-Memory Bridge - Connects MLDL to Memory Kernel for feature management.
 """
 import logging
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class MLDLMemoryBridge:
                     "feature_2": "int64",
                     "feature_3": "string"
                 },
-                "updated_at": datetime.now().isoformat()
+                "updated_at": iso_format()
             }
         except Exception as e:
             logger.error(f"Feature view request failed: {e}")

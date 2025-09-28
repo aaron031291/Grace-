@@ -1,5 +1,6 @@
 """TaskCard model and lifecycle management."""
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Literal
 import uuid
 import logging
@@ -27,7 +28,7 @@ class TaskCardManager:
                 owner=owner,
                 state="open",
                 context=ctx or {},
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 thread=[],
                 metrics=TaskMetrics(),
                 approvals=[]
@@ -58,7 +59,7 @@ class TaskCardManager:
             msg_id=message.get("msg_id", str(uuid.uuid4())),
             role=message["role"],
             author=message["author"],
-            at=datetime.utcnow(),
+            at=utc_now(),
             content=MessageContent(**message.get("content", {}))
         )
         

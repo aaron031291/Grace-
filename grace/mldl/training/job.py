@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -43,7 +45,7 @@ class TrainingJobRunner:
             # Initialize job tracking
             self.active_jobs[job_id] = {
                 "status": "initializing",
-                "start_time": datetime.now(),
+                "start_time": utc_now(),
                 "trials": 0,
                 "best_score": None
             }
@@ -83,7 +85,7 @@ class TrainingJobRunner:
                 "status": "completed",
                 "trials": trials,
                 "best_score": best_score,
-                "end_time": datetime.now()
+                "end_time": utc_now()
             })
             
             # Create TrainedBundle
@@ -100,7 +102,7 @@ class TrainingJobRunner:
             self.active_jobs[job_id].update({
                 "status": "failed",
                 "error": str(e),
-                "end_time": datetime.now()
+                "end_time": utc_now()
             })
             raise
     
@@ -314,7 +316,7 @@ class TrainingJobRunner:
         model_spec = job_spec["spec"]
         
         # Create artifact URI (mock path)
-        artifact_uri = f"/models/{adapter.model_key}/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        artifact_uri = f"/models/{adapter.model_key}/{format_for_filename()}"
         
         # Save model
         try:
@@ -389,7 +391,7 @@ class TrainingJobRunner:
             "data_schema": data_schema,
             "lineage": lineage,
             "validation_hash": validation_hash,
-            "created_at": datetime.now().isoformat()
+            "created_at": iso_format()
         }
         
         return trained_bundle

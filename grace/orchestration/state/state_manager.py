@@ -10,6 +10,7 @@ import json
 import sqlite3
 import hashlib
 from datetime import datetime, timedelta
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
 from pathlib import Path
@@ -56,7 +57,7 @@ class Policy:
         self.rules = rules
         self.enabled = enabled
         self.priority = priority
-        self.created_at = datetime.now()
+        self.created_at = utc_now()
         self.updated_at = self.created_at
         self.applied_count = 0
         self.violation_count = 0
@@ -111,7 +112,7 @@ class StateTransition:
         self.to_state = to_state
         self.trigger = trigger
         self.context = context or {}
-        self.timestamp = datetime.now()
+        self.timestamp = utc_now()
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -133,7 +134,7 @@ class StateManager:
         
         # Current state
         self.current_state = OrchestrationState.INITIALIZING
-        self.state_since = datetime.now()
+        self.state_since = utc_now()
         self.state_context = {}
         
         # Policies
@@ -289,7 +290,7 @@ class StateManager:
         # Update current state
         old_state = self.current_state
         self.current_state = to_state
-        self.state_since = datetime.now()
+        self.state_since = utc_now()
         self.state_context = context or {}
         
         # Add to history
@@ -372,7 +373,7 @@ class StateManager:
                 if hasattr(policy, key):
                     setattr(policy, key, value)
             
-            policy.updated_at = datetime.now()
+            policy.updated_at = utc_now()
             
             # Clear cache
             self._clear_policy_cache(policy.policy_type, policy.scope)
@@ -444,7 +445,7 @@ class StateManager:
         # Check cache (with TTL)
         if cache_key in self.policy_cache:
             cached_policies, cache_time = self.policy_cache[cache_key]
-            if (datetime.now() - cache_time).total_seconds() < self.policy_cache_ttl:
+            if (utc_now() - cache_time).total_seconds() < self.policy_cache_ttl:
                 return cached_policies
         
         # Filter policies
@@ -467,7 +468,7 @@ class StateManager:
         applicable.sort(key=lambda p: p.priority, reverse=True)
         
         # Cache result
-        self.policy_cache[cache_key] = (applicable, datetime.now())
+        self.policy_cache[cache_key] = (applicable, utc_now())
         
         return applicable
     
@@ -571,7 +572,7 @@ class StateManager:
             "current_state": self.current_state.value,
             "state_since": self.state_since.isoformat(),
             "context": self.state_context,
-            "uptime_seconds": (datetime.now() - self.state_since).total_seconds(),
+            "uptime_seconds": (utc_now() - self.state_since).total_seconds(),
             "transition_count": len(self.state_history),
             "policy_count": len(self.policies)
         }

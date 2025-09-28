@@ -12,6 +12,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Any, Dict, List, Optional, Union
 
 try:
@@ -251,9 +252,9 @@ class GovernanceAPIService:
                 "requester": governance_request.requester,
                 "reason": governance_request.reason,
                 "status": "pending",
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(seconds=governance_request.timeout_seconds),
+                "created_at": utc_now(),
+                "updated_at": utc_now(),
+                "expires_at": utc_now() + timedelta(seconds=governance_request.timeout_seconds),
                 "approvals_required": self._get_required_approvals(governance_request.action_type),
                 "approvals_received": 0,
                 "rejections_received": 0,
@@ -270,7 +271,7 @@ class GovernanceAPIService:
                 "request_id": governance_request.request_id,
                 "action_type": governance_request.action_type,
                 "requester": governance_request.requester,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": iso_format(),
                 "rbac_context": rbac_context.to_dict()
             })
             
@@ -323,7 +324,7 @@ class GovernanceAPIService:
                 raise HTTPException(status_code=400, detail=f"Request is {request_record['status']}, not pending")
             
             # Check if request has expired
-            if datetime.utcnow() > request_record["expires_at"]:
+            if utc_now() > request_record["expires_at"]:
                 request_record["status"] = "expired"
                 raise HTTPException(status_code=400, detail="Request has expired")
             
@@ -341,14 +342,14 @@ class GovernanceAPIService:
                 "approver": decision.approver,
                 "reason": decision.reason,
                 "conditions": decision.conditions,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": iso_format(),
                 "rbac_context": rbac_context.to_dict()
             }
             
             request_record["approvals_received"] += 1
             request_record["approvers"].append(rbac_context.user_id)
             request_record["decision_log"].append(approval_record)
-            request_record["updated_at"] = datetime.utcnow()
+            request_record["updated_at"] = utc_now()
             
             # Check if we have enough approvals
             if request_record["approvals_received"] >= request_record["approvals_required"]:
@@ -364,7 +365,7 @@ class GovernanceAPIService:
                     "action_type": request_record["action_type"],
                     "approver": decision.approver,
                     "final_decision": True,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": iso_format(),
                     "approvals_received": request_record["approvals_received"]
                 })
                 
@@ -431,14 +432,14 @@ class GovernanceAPIService:
                 "decision": "rejected",
                 "approver": decision.approver,
                 "reason": decision.reason,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": iso_format(),
                 "rbac_context": rbac_context.to_dict()
             }
             
             request_record["status"] = "rejected"
             request_record["rejections_received"] += 1
             request_record["decision_log"].append(rejection_record)
-            request_record["updated_at"] = datetime.utcnow()
+            request_record["updated_at"] = utc_now()
             
             # Move to history
             self.request_history[decision.request_id] = self.pending_requests.pop(decision.request_id)
@@ -450,7 +451,7 @@ class GovernanceAPIService:
                 "action_type": request_record["action_type"],
                 "approver": decision.approver,
                 "reason": decision.reason,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": iso_format()
             })
             
             # Publish rejection event
@@ -567,13 +568,13 @@ class GovernanceAPIService:
                 "decision": "override_approved",
                 "approver": rbac_context.user_id,
                 "reason": reason,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": iso_format(),
                 "rbac_context": rbac_context.to_dict()
             }
             
             request_record["status"] = "approved"
             request_record["decision_log"].append(override_record)
-            request_record["updated_at"] = datetime.utcnow()
+            request_record["updated_at"] = utc_now()
             
             # Move to history
             self.request_history[request_id] = self.pending_requests.pop(request_id)
@@ -585,7 +586,7 @@ class GovernanceAPIService:
                 "action_type": request_record["action_type"],
                 "approver": rbac_context.user_id,
                 "reason": reason,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": iso_format()
             })
             
             return {
@@ -637,7 +638,7 @@ class GovernanceAPIService:
     
     async def cleanup_expired_requests(self):
         """Clean up expired requests (should be run periodically)."""
-        now = datetime.utcnow()
+        now = utc_now()
         expired_requests = []
         
         for request_id, record in list(self.pending_requests.items()):
@@ -660,7 +661,7 @@ class GovernanceAPIService:
             "approval_rates": self._calculate_approval_rates(),
             "average_approval_time": self._calculate_average_approval_time(),
             "requests_by_type": self._get_requests_by_type(),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         }
     
     def _calculate_approval_rates(self) -> Dict[str, float]:

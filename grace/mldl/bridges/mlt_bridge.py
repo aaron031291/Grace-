@@ -3,6 +3,7 @@ MLDL-MLT Bridge - Connects MLDL Kernel to MLT (Meta-Learning Tuning) Kernel.
 """
 import logging
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, Any, Optional, List
 import uuid
 
@@ -39,7 +40,7 @@ class MLDLMLTBridge:
                     "dataset_size": training_params.get("dataset_size", 0),
                     "hyperparams": training_params.get("best_params", {})
                 },
-                "timestamp": datetime.now().isoformat()
+                "timestamp": iso_format()
             }
             
             # Send to MLT kernel

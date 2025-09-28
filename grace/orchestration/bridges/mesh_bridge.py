@@ -8,6 +8,7 @@ Grace event mesh for reliable event publishing and consumption.
 import asyncio
 import json
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Any, Callable
 import logging
 
@@ -69,8 +70,8 @@ class MeshBridge:
             "event_name": event_name,
             "payload": payload,
             "source": "orchestration_kernel",
-            "timestamp": datetime.now().isoformat(),
-            "event_id": f"orch_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            "timestamp": iso_format(),
+            "event_id": f"orch_{utc_now().strftime('%Y%m%d_%H%M%S_%f')}"
         }
         
         # Store for debugging

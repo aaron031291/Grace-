@@ -1,6 +1,7 @@
 """Notification service with multiple dispatch methods."""
 import asyncio
 from datetime import datetime
+from ...utils.datetime_utils import utc_now, iso_format, format_for_filename
 from typing import Dict, List, Optional, Callable
 import logging
 import uuid
@@ -41,7 +42,7 @@ class NotificationService:
             message=message,
             actions=notification_actions,
             read=False,
-            created_at=datetime.utcnow()
+            created_at=utc_now()
         )
         
         self.notifications[notif_id] = notification
@@ -152,7 +153,7 @@ class NotificationService:
     
     def cleanup_old_notifications(self, days_to_keep: int = 30) -> int:
         """Clean up old notifications and return count removed."""
-        cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+        cutoff_date = utc_now() - timedelta(days=days_to_keep)
         
         old_notif_ids = [
             notif_id for notif_id, notification in self.notifications.items()

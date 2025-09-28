@@ -19,38 +19,27 @@ websockets>=12.0
 # Database
 sqlalchemy>=2.0.0
 alembic>=1.12.0
-psycopg2-binary>=2.9.0
+asyncpg>=0.29.0
 
 # Redis and workers
 redis>=4.5.0
 celery[redis]>=5.3.0
 arq>=0.25.0
 
-# Storage and media
-minio>=7.0.0
-boto3>=1.26.0
-pillow>=10.0.0
+# Authentication and security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.0
+python-multipart>=0.0.6
 
-# Vector database
+# Vector database and AI
 chromadb>=0.4.0
-qdrant-client>=1.6.0
+sentence-transformers>=2.2.0
+openai>=1.0.0
 
 # Document processing
 pypdf2>=3.0.0
 python-docx>=1.1.0
 beautifulsoup4>=4.12.0
-python-multipart>=0.0.6
-
-# Security and auth
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.0
-python-magic>=0.4.0
-
-# Observability
-prometheus-client>=0.17.0
-opentelemetry-api>=1.20.0
-opentelemetry-sdk>=1.20.0
-opentelemetry-instrumentation-fastapi>=0.41b0
 
 # MLDL Kernel dependencies
 numpy>=1.21.0

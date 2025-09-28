@@ -9,7 +9,7 @@ import sqlite3
 from pathlib import Path
 import logging
 
-from core.contracts import Experience
+from ..core.contracts import Experience
 
 
 logger = logging.getLogger(__name__)

@@ -8,7 +8,7 @@ try:
     PYDANTIC_CONTRACTS = True
 except ImportError:
     # Fallback for core contracts
-    from core.contracts import DecisionSubject
+    from ..core.contracts import DecisionSubject
     PYDANTIC_CONTRACTS = False
 
 logger = logging.getLogger(__name__)

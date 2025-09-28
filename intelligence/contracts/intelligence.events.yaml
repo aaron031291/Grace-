@@ -1,0 +1,101 @@
+events:
+  - name: INTEL_REQUESTED
+    description: "Intelligence task request received"
+    payload:
+      type: object
+      required: [request]
+      properties:
+        request:
+          $ref: "intelligence.request.schema.json#/TaskRequest"
+
+  - name: INTEL_PLANNED
+    description: "Intelligence execution plan created"
+    payload:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          $ref: "intelligence.core.schema.json#/Plan"
+
+  - name: INTEL_INFER_STARTED
+    description: "Intelligence inference process started"
+    payload:
+      type: object
+      required: [plan_id, req_id]
+      properties:
+        plan_id: {type: string}
+        req_id: {type: string}
+
+  - name: INTEL_INFER_COMPLETED
+    description: "Intelligence inference process completed"
+    payload:
+      type: object
+      required: [req_id, result]
+      properties:
+        req_id: {type: string}
+        result:
+          $ref: "intelligence.core.schema.json#/InferenceResult"
+
+  - name: INTEL_POLICY_VIOLATION
+    description: "Intelligence policy violation detected"
+    payload:
+      type: object
+      required: [req_id, reasons, severity]
+      properties:
+        req_id: {type: string}
+        reasons:
+          type: array
+          items: {type: string}
+        severity: {enum: [warn, error]}
+
+  - name: INTEL_EXPERIENCE
+    description: "Intelligence experience for meta-learning"
+    payload:
+      type: object
+      required: [schema_version, experience]
+      properties:
+        schema_version: {type: string, default: "1.0.0"}
+        experience:
+          $ref: "#/IntelligenceExperience"
+
+  - name: ROLLBACK_REQUESTED
+    description: "Intelligence rollback requested"
+    payload:
+      type: object
+      required: [target, to_snapshot]
+      properties:
+        target: {const: intelligence}
+        to_snapshot: {type: string}
+
+  - name: ROLLBACK_COMPLETED
+    description: "Intelligence rollback completed"
+    payload:
+      type: object
+      required: [target, snapshot_id, at]
+      properties:
+        target: {const: intelligence}
+        snapshot_id: {type: string}
+        at: {type: string, format: date-time}
+
+# Additional schema definitions
+IntelligenceExperience:
+  type: object
+  required: [exp_id, stage, metrics, timestamp]
+  properties:
+    exp_id: {type: string}
+    stage:
+      enum: [route, plan, infer, explain, eval, canary, shadow]
+    metrics:
+      type: object
+      properties:
+        p95_latency_ms: {type: number}
+        success_rate: {type: number}
+        calibration: {type: number}
+        drift_score: {type: number}
+        fairness_delta: {type: number}
+        regret_est: {type: number}
+        canary_pass: {type: number}
+        shadow_agreement: {type: number}
+        cost_units: {type: number}
+    segment: {type: string}
+    timestamp: {type: string, format: date-time}

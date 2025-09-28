@@ -1,0 +1,1 @@
+"""Snapshot and rollback management."""

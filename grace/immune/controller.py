@@ -16,7 +16,9 @@ import uuid
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Callable
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
+
+from ..utils.datetime_utils import utc_now, iso_format
 
 from ..contracts.message_envelope_simple import GraceMessageEnvelope, EventTypes
 from ..resilience_kernel.kernel import ResilienceKernel
@@ -66,7 +68,7 @@ class ImmuneAction:
     parameters: Dict[str, Any]
     duration_seconds: Optional[int] = None
     triggered_by: str = None
-    created_at: datetime = datetime.utcnow()
+    created_at: datetime = field(default_factory=utc_now)
 
 
 @dataclass
@@ -161,7 +163,7 @@ class GraceImmuneController:
                 severity=ThreatLevel(payload.get("severity", 2)),
                 confidence=payload.get("confidence", 0.8),
                 evidence=payload.get("evidence", {}),
-                timestamp=datetime.utcnow(),
+                timestamp=utc_now(),
                 remediation_suggestions=payload.get("remediation_suggestions", [])
             )
             
@@ -186,7 +188,7 @@ class GraceImmuneController:
                 severity=self._map_severity(payload.get("severity", "medium")),
                 confidence=payload.get("confidence", 0.7),
                 evidence=payload.get("details", {}),
-                timestamp=datetime.utcnow()
+                timestamp=utc_now()
             )
             
             await self._process_adversarial_signal(signal)
@@ -263,7 +265,7 @@ class GraceImmuneController:
         self.threat_patterns[pattern_key].append(signal)
         
         # Keep only recent patterns
-        time_cutoff = datetime.utcnow() - timedelta(
+        time_cutoff = utc_now() - timedelta(
             seconds=self.config["threat_correlation"]["time_window_seconds"]
         )
         
@@ -359,7 +361,7 @@ class GraceImmuneController:
         
         breaker = self.circuit_breakers[component]
         breaker.failure_count += 1
-        breaker.last_failure = datetime.utcnow()
+        breaker.last_failure = utc_now()
         
         if breaker.failure_count >= breaker.failure_threshold:
             breaker.state = "open"
@@ -384,7 +386,7 @@ class GraceImmuneController:
         
         sandbox_config = {
             "component": component,
-            "started_at": datetime.utcnow(),
+            "started_at": utc_now(),
             "timeout": self.config["sandbox"]["default_timeout"],
             "resource_limits": self.config["sandbox"]["resource_limits"],
             "restrictions": ["network_isolated", "filesystem_readonly", "cpu_limited"]
@@ -402,7 +404,7 @@ class GraceImmuneController:
         
         isolation_config = {
             "component": component,
-            "isolated_at": datetime.utcnow(),
+            "isolated_at": utc_now(),
             "restrictions": ["no_external_calls", "limited_resources"],
             "monitoring_level": "high"
         }
@@ -424,7 +426,7 @@ class GraceImmuneController:
         rollback_request = {
             "component": component,
             "rollback_type": "immune_response",
-            "triggered_at": datetime.utcnow(),
+            "triggered_at": utc_now(),
             "reason": "Critical adversarial signals detected"
         }
         
@@ -442,7 +444,7 @@ class GraceImmuneController:
         
         shutdown_config = {
             "component": component,
-            "shutdown_at": datetime.utcnow(),
+            "shutdown_at": utc_now(),
             "reason": "catastrophic_threat",
             "approval_required": True
         }
@@ -505,7 +507,7 @@ class GraceImmuneController:
         self.kpi_metrics[component].update({
             "trust_score": new_trust,
             "threat_events": self.kpi_metrics[component].get("threat_events", 0) + 1,
-            "last_threat": datetime.utcnow().isoformat(),
+            "last_threat": iso_format(),
             "immune_responses": self.kpi_metrics[component].get("immune_responses", 0) + 1
         })
         
@@ -559,7 +561,7 @@ class GraceImmuneController:
             # Publish sandbox removal event
             await self._publish_immune_event("IMMUNE_SANDBOX_REMOVED", {
                 "component": component,
-                "removed_at": datetime.utcnow().isoformat()
+                "removed_at": iso_format()
             })
     
     def _check_circuit_health(self, component: str) -> bool:
@@ -593,7 +595,7 @@ class GraceImmuneController:
             severity=self._map_severity(severity),
             confidence=confidence,
             evidence=evidence,
-            timestamp=datetime.utcnow()
+            timestamp=utc_now()
         )
         
         await self._process_adversarial_signal(signal)
@@ -631,5 +633,5 @@ class GraceImmuneController:
             "threat_patterns": {k: len(v) for k, v in self.threat_patterns.items()},
             "trust_scores": self.trust_scores.copy(),
             "kpi_metrics": self.kpi_metrics.copy(),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": iso_format()
         }

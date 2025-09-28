@@ -9,6 +9,8 @@ from datetime import datetime
 import json
 import logging
 
+from ..utils.datetime_utils import utc_now, iso_format, format_for_audit, parse_iso
+
 from ..core.contracts import (
     UnifiedDecision, GovernanceSnapshot, Experience, EventType,
     generate_snapshot_id, generate_correlation_id
@@ -117,7 +119,7 @@ class GovernanceEngine:
         Returns:
             Governance verdict dictionary
         """
-        validation_start = datetime.now()
+        validation_start = utc_now()
         correlation_id = generate_correlation_id()
         
         try:
@@ -148,7 +150,7 @@ class GovernanceEngine:
             # Step 6: Record governance experience
             await self._record_governance_experience(
                 unified_decision, verdict, 
-                (datetime.now() - validation_start).total_seconds()
+                (utc_now() - validation_start).total_seconds()
             )
             
             return verdict
@@ -162,7 +164,7 @@ class GovernanceEngine:
                 "rationale": f"Governance processing error: {str(e)}",
                 "confidence": 0.0,
                 "trust_score": 0.0,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": iso_format(),
                 "requires_manual_review": True
             }
             
@@ -402,7 +404,7 @@ class GovernanceEngine:
             "confidence": decision.confidence,
             "trust_score": decision.trust_score,
             "constitutional_compliance": constitutional_check["compliance_score"],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_format(),
             "instance_id": self.instance_id,
             "version": self.version,
             "requires_manual_review": escalation_needed or outcome == "GOVERNANCE_NEEDS_REVIEW"
@@ -423,7 +425,7 @@ class GovernanceEngine:
                 'rationale': verdict['rationale'],
                 'confidence': verdict['confidence'],
                 'trust_score': verdict['trust_score'],
-                'timestamp': datetime.fromisoformat(verdict['timestamp'].replace('Z', '+00:00'))
+                'timestamp': parse_iso(verdict['timestamp'])
             })(),
             outcome=verdict['outcome'],
             instance_id=self.instance_id,
@@ -435,7 +437,7 @@ class GovernanceEngine:
         await self.event_bus.publish(event_type, verdict, verdict["correlation_id"])
         
         # Log processing time
-        processing_time = (datetime.now() - processing_start).total_seconds()
+        processing_time = (utc_now() - processing_start).total_seconds()
         logger.info(f"Governance decision {decision_id} processed in {processing_time:.3f}s: {verdict['outcome']}")
     
     async def _record_governance_experience(self, decision: UnifiedDecision,
@@ -462,7 +464,7 @@ class GovernanceEngine:
                 "final_verdict": verdict["outcome"]
             },
             success_score=success_score,
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
         
         self.memory_core.store_experience(experience)
@@ -533,7 +535,7 @@ class GovernanceEngine:
             thresholds=self.governance_thresholds.copy(),
             model_weights=self.unifier.get_current_weights(),
             state_hash=state_hash,
-            created_at=datetime.now()
+            created_at=utc_now()
         )
         
         # Store snapshot
@@ -586,5 +588,5 @@ class GovernanceEngine:
             "shadow_instance": self.shadow_instance,
             "policies": self.policies,
             "thresholds": self.governance_thresholds,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": iso_format()
         }

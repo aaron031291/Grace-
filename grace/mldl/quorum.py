@@ -10,6 +10,7 @@ import json
 from enum import Enum
 from dataclasses import dataclass, asdict
 
+from ..utils.datetime_utils import utc_now, iso_format, format_for_filename
 from ..core.contracts import Experience, generate_correlation_id
 
 
@@ -50,7 +51,7 @@ class SpecialistOutput:
     probability: Optional[float] = None
     metadata: Dict[str, Any] = None
     processing_time: float = 0.0
-    timestamp: datetime = datetime.now()
+    timestamp: datetime = utc_now()
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -108,13 +109,13 @@ class SpecialistModel:
     
     async def predict(self, inputs: Dict[str, Any]) -> SpecialistOutput:
         """Make a prediction based on inputs."""
-        start_time = datetime.now()
+        start_time = utc_now()
         
         try:
             # This is a placeholder - real implementations would have actual ML models
             prediction, confidence = await self._generate_prediction(inputs)
             
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (utc_now() - start_time).total_seconds()
             
             output = SpecialistOutput(
                 specialist_id=self.specialist_id,
@@ -128,7 +129,7 @@ class SpecialistModel:
             
         except Exception as e:
             logger.error(f"Specialist {self.specialist_id} prediction error: {e}")
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (utc_now() - start_time).total_seconds()
             
             return SpecialistOutput(
                 specialist_id=self.specialist_id,
@@ -160,7 +161,7 @@ class SpecialistModel:
         """Update performance metrics."""
         self.performance_history.append({
             "accuracy": accuracy,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": utc_now().isoformat()
         })
         
         # Keep only recent history
@@ -172,7 +173,7 @@ class SpecialistModel:
         if not self.performance_history:
             return 0.5  # Neutral performance
         
-        cutoff = datetime.now().timestamp() - (window_days * 24 * 3600)
+        cutoff = utc_now().timestamp() - (window_days * 24 * 3600)
         recent_scores = [
             entry["accuracy"] for entry in self.performance_history
             if datetime.fromisoformat(entry["timestamp"]).timestamp() >= cutoff
@@ -249,7 +250,7 @@ class MLDLQuorum:
         Returns:
             QuorumConsensus result
         """
-        consensus_id = f"consensus_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{generate_correlation_id()}"
+        consensus_id = f"consensus_{utc_now().strftime('%Y%m%d_%H%M%S')}_{generate_correlation_id()}"
         
         try:
             # Select participating specialists
@@ -296,7 +297,7 @@ class MLDLQuorum:
                         "agreement_level": consensus.agreement_level
                     },
                     success_score=consensus.consensus_confidence,
-                    timestamp=datetime.now()
+                    timestamp=utc_now()
                 )
                 self.memory_core.store_experience(experience)
             
@@ -467,7 +468,7 @@ class MLDLQuorum:
             agreement_level=agreement_level,
             participating_specialists=[output.specialist_id for output in outputs],
             weighted_vote_breakdown=weighted_votes,
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     def _normalize_prediction(self, prediction: Any) -> str:
@@ -521,7 +522,7 @@ class MLDLQuorum:
             agreement_level=0.0,
             participating_specialists=[],
             weighted_vote_breakdown={},
-            timestamp=datetime.now()
+            timestamp=utc_now()
         )
     
     def update_specialist_weight(self, specialist_id: str, new_weight: float):

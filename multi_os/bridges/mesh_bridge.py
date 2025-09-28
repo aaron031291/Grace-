@@ -1,10 +1,18 @@
 """
-Multi-OS Mesh Bridge - Integration with Event Mesh system.
+Multi-OS Mesh Bridge - Integration with Event Mesh system using GME standard.
 """
 import logging
 import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+
+# Import Grace Communications Module
+try:
+    from grace.comms import create_envelope, MessageKind, Priority, QoSClass
+    GME_AVAILABLE = True
+except ImportError:
+    # Fallback for backward compatibility
+    GME_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
@@ -84,7 +92,7 @@ class MeshBridge:
                           host_id: Optional[str] = None, 
                           metadata: Optional[Dict] = None) -> str:
         """
-        Publish an event to the mesh.
+        Publish an event to the mesh using GME standard.
         
         Args:
             event_name: Name of the event
@@ -93,32 +101,57 @@ class MeshBridge:
             metadata: Optional event metadata
             
         Returns:
-            Event ID
+            Message ID (GME format) or Event ID (legacy format)
         """
         try:
-            import uuid
-            event_id = str(uuid.uuid4())
-            
-            event = {
-                "event_id": event_id,
-                "event_name": event_name,
-                "payload": payload,
-                "host_id": host_id,
-                "metadata": metadata or {},
-                "timestamp": datetime.utcnow().isoformat(),
-                "source": "multi_os_kernel"
-            }
-            
-            # Apply routing rules
-            routing = self.routing_rules.get(event_name, {})
-            event["routing"] = routing
-            
-            # Publish to event bus if available
-            if self.event_bus:
-                await self.event_bus.publish(event)
-            
-            # Store locally for tracking
-            self.published_events.append(event)
+            if GME_AVAILABLE:
+                # Use GME standard
+                envelope = create_envelope(
+                    kind=MessageKind.EVENT,
+                    domain="multi_os",
+                    name=event_name,
+                    payload=payload,
+                    priority=self._get_priority_for_event(event_name),
+                    qos=self._get_qos_for_event(event_name),
+                    partition_key=host_id or f"mos_default",
+                    rbac=["mos.publish"]
+                )
+                
+                # Publish to event bus if available
+                if self.event_bus:
+                    await self.event_bus.publish(event_name, envelope.model_dump(), envelope.headers.correlation_id)
+                
+                # Store locally for tracking  
+                self.published_events.append(envelope.model_dump())
+                
+                logger.info(f"Published GME event {event_name} with msg_id {envelope.msg_id}")
+                return envelope.msg_id
+                
+            else:
+                # Legacy format fallback
+                import uuid
+                event_id = str(uuid.uuid4())
+                
+                event = {
+                    "event_id": event_id,
+                    "event_name": event_name,
+                    "payload": payload,
+                    "host_id": host_id,
+                    "metadata": metadata or {},
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "source": "multi_os_kernel"
+                }
+                
+                # Apply routing rules
+                routing = self.routing_rules.get(event_name, {})
+                event["routing"] = routing
+                
+                # Publish to event bus if available
+                if self.event_bus:
+                    await self.event_bus.publish(event_name, event)
+                
+                # Store locally for tracking
+                self.published_events.append(event)
             
             # Maintain size limit
             if len(self.published_events) > 1000:
@@ -332,6 +365,38 @@ class MeshBridge:
         
         # Return most recent events first
         return list(reversed(events[-limit:]))
+    
+    def _get_priority_for_event(self, event_name: str) -> Priority:
+        """Map event names to GME priorities based on Multi-OS operations."""
+        # Critical system events
+        if event_name in ["MOS_HOST_CRITICAL", "MOS_SECURITY_ALERT", "ROLLBACK_REQUESTED"]:
+            return Priority.P0
+        
+        # Important operational events
+        elif event_name in ["MOS_TASK_FAILED", "MOS_HOST_HEALTH", "ROLLBACK_COMPLETED"]:
+            return Priority.P1
+            
+        # Standard events
+        elif event_name in ["MOS_TASK_STARTED", "MOS_TASK_COMPLETED"]:
+            return Priority.P2
+            
+        # Background/bulk events
+        else:
+            return Priority.P3
+    
+    def _get_qos_for_event(self, event_name: str) -> QoSClass:
+        """Map event names to GME QoS classes based on Multi-OS requirements."""
+        # Real-time events need immediate processing
+        if event_name in ["MOS_HOST_CRITICAL", "MOS_SECURITY_ALERT"]:
+            return QoSClass.REALTIME
+        
+        # Most operational events use standard processing
+        elif event_name in ["MOS_TASK_STARTED", "MOS_TASK_COMPLETED", "MOS_HOST_HEALTH"]:
+            return QoSClass.STANDARD
+            
+        # Background and batch events
+        else:
+            return QoSClass.BULK
     
     def get_routing_stats(self) -> Dict[str, Any]:
         """Get routing statistics."""

@@ -1,0 +1,64 @@
+priorities:
+  P0: 
+    deadline_ms: 100  
+    retries: {max: 6, strategy: "exp", base_ms: 25, jitter_ms: 20}
+    description: "Critical system operations, governance decisions"
+  P1: 
+    deadline_ms: 500  
+    retries: {max: 5, strategy: "exp", base_ms: 50, jitter_ms: 40}
+    description: "Important business operations, model deployments"
+  P2: 
+    deadline_ms: 2000 
+    retries: {max: 4, strategy: "lin", base_ms: 200, jitter_ms: 80}
+    description: "Standard operations, training notifications"
+  P3: 
+    deadline_ms: 5000 
+    retries: {max: 2, strategy: "lin", base_ms: 500, jitter_ms: 120}
+    description: "Background operations, bulk data processing"
+
+backpressure:
+  signals: ["brokerLag","consumerLag","queueDepth","cpu","mem","errorRate"]
+  thresholds:
+    brokerLag: 1000      # messages
+    consumerLag: 5000    # messages  
+    queueDepth: 10000    # messages
+    cpu: 0.8             # utilization
+    mem: 0.9             # utilization
+    errorRate: 0.05      # 5% error rate
+  
+  actions:
+    - condition: "brokerLag > threshold || consumerLag > threshold"
+      actions: ["reduceBatch", "throttleProducers", "shedLowPriority"]
+    - condition: "cpu > threshold || mem > threshold"
+      actions: ["throttleProducers", "increasePartitions"]
+    - condition: "errorRate > threshold"
+      actions: ["pauseNonCritical", "alertOperators"]
+
+idempotency:
+  window_minutes: 60
+  dedupe_cache_ttl_s: 3600
+  storage: "redis"  # or "memory" for development
+
+# Quality of Service classes
+qos_classes:
+  realtime:
+    max_latency_ms: 50
+    drop_policy: "backpressure"
+    batch: false
+    compression: false
+  standard:
+    max_latency_ms: 500
+    drop_policy: "queue"
+    batch: true
+    compression: "auto"
+  bulk:
+    max_latency_ms: 5000
+    drop_policy: "queue"
+    batch: true
+    compression: "always"
+
+# Circuit breaker configuration
+circuit_breaker:
+  failure_threshold: 5
+  timeout_seconds: 60
+  half_open_max_calls: 3

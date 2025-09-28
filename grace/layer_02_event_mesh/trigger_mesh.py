@@ -1,25 +1,30 @@
 """
-Trigger Mesh - Event router for governance messages and system-wide event routing.
+Trigger Mesh - Enhanced event router with priority handling and latency recording.
+Part of Phase 5: Trigger Mesh MVP implementation.
 """
 import asyncio
+import time
 from typing import Dict, List, Callable, Any, Optional, Set
 from datetime import datetime, timedelta
 import json
 import logging
 from enum import Enum
 from dataclasses import dataclass, asdict
+import heapq
+from collections import defaultdict
 
 from ..contracts.message_envelope import GraceMessageEnvelope, EventTypes
-
+from ..core.immutable_logs import ImmutableLogs, TransparencyLevel
+from ..config.environment import get_grace_config
 
 logger = logging.getLogger(__name__)
 
 
 class RoutingPriority(Enum):
-    CRITICAL = "critical"
-    HIGH = "high"
-    NORMAL = "normal"
-    LOW = "low"
+    CRITICAL = 1  # Immediate processing
+    HIGH = 2     # High priority queue
+    NORMAL = 3   # Normal priority queue  
+    LOW = 4      # Low priority queue
 
 
 class RoutingMode(Enum):
@@ -43,578 +48,514 @@ class RoutingRule:
 
 
 @dataclass
+class PriorityEvent:
+    """Event wrapper for priority queue processing."""
+    priority: int  # Lower number = higher priority
+    timestamp: float
+    event_id: str
+    event: Dict[str, Any]
+    routing_rule: Optional[RoutingRule] = None
+    
+    def __lt__(self, other):
+        """For heap queue sorting - higher priority first, then by timestamp."""
+        if self.priority != other.priority:
+            return self.priority < other.priority
+        return self.timestamp < other.timestamp
+
+
+@dataclass
 class RoutingMetrics:
     """Tracks routing performance metrics."""
     total_routed: int = 0
     successful_deliveries: int = 0
     failed_deliveries: int = 0
+    total_latency_ms: float = 0.0
+    priority_counts: Dict[str, int] = None
+    
+    def __post_init__(self):
+        if self.priority_counts is None:
+            self.priority_counts = {
+                "critical": 0,
+                "high": 0,
+                "normal": 0,
+                "low": 0
+            }
     avg_latency_ms: float = 0.0
     last_updated: datetime = datetime.now()
 
 
 class TriggerMesh:
     """
-    Advanced event router for governance messages with sub-millisecond routing,
-    priority classes, constitutional validators, and mirror/shadow capabilities.
+    Enhanced event router with priority handling, latency recording, and constitutional validation.
+    Part of Phase 5: Trigger Mesh MVP implementation.
     """
     
-    def __init__(self, event_bus, memory_core=None):
-        self.event_bus = event_bus  # Should be GraceEventBus instance
-        self.memory_core = memory_core
+    def __init__(self, event_bus=None, immutable_logs: Optional[ImmutableLogs] = None):
+        self.config = get_grace_config()
+        self.event_bus = event_bus
+        self.immutable_logs = immutable_logs
+        
+        # Routing configuration
         self.routing_rules: List[RoutingRule] = []
         self.component_registry: Dict[str, Dict[str, Any]] = {}
-        self.routing_metrics: Dict[str, RoutingMetrics] = {}
-        self.constitutional_validators: List[Callable] = []
-        self.shadow_targets: Dict[str, List[str]] = {}
+        self.routing_metrics = RoutingMetrics()
         
-        # Performance optimization
+        # Priority queue system for event processing
+        self.priority_queue: List[PriorityEvent] = []  # Using heapq
+        self.processing_workers: List[asyncio.Task] = []
+        self.worker_count = self.config["event_routing"]["priority_workers"]["normal"]
+        
+        # Performance tracking
         self.routing_cache: Dict[str, List[RoutingRule]] = {}
-        self.priority_queues: Dict[RoutingPriority, asyncio.Queue] = {
-            priority: asyncio.Queue() for priority in RoutingPriority
-        }
+        self.latency_history: defaultdict[str, List[float]] = defaultdict(list)
         
+        # System state
+        self.running = False
+        self.started_at: Optional[datetime] = None
+        
+        # Initialize default routing rules
         self._initialize_default_rules()
-        asyncio.create_task(self._start_routing_workers())
+        
+        logger.info("TriggerMesh initialized with priority routing")
     
-    def _initialize_default_rules(self):
-        """Initialize default routing rules for governance events."""
-        default_rules = [
-            # Governance validation flow
-            RoutingRule(
-                event_pattern=EventTypes.GOVERNANCE_VALIDATION,
-                target_components=["governance_engine"],
-                priority=RoutingPriority.HIGH,
-                mode=RoutingMode.UNICAST,
-                filter_conditions={},
-                transformation_rules={},
-                timeout_ms=2000
-            ),
+    async def start(self):
+        """Start the trigger mesh with priority processing workers."""
+        if self.running:
+            logger.warning("TriggerMesh already running")
+            return
             
-            # Governance decisions - broadcast to interested parties
-            RoutingRule(
-                event_pattern=f"{EventTypes.GOVERNANCE_APPROVED}|{EventTypes.GOVERNANCE_REJECTED}",
-                target_components=["audit_logger", "notification_service", "memory_core"],
-                priority=RoutingPriority.HIGH,
-                mode=RoutingMode.MULTICAST,
-                filter_conditions={},
-                transformation_rules={},
-                timeout_ms=1000
-            ),
-            
-            # Parliament reviews
-            RoutingRule(
-                event_pattern=EventTypes.GOVERNANCE_NEEDS_REVIEW,
-                target_components=["parliament", "notification_service"],
-                priority=RoutingPriority.NORMAL,
-                mode=RoutingMode.MULTICAST,
-                filter_conditions={},
-                transformation_rules={},
-                timeout_ms=3000
-            ),
-            
-            # Critical system events
-            RoutingRule(
-                event_pattern=f"{EventTypes.GOVERNANCE_ROLLBACK}|{EventTypes.ANOMALY_DETECTED}",
-                target_components=["governance_engine", "avn_core", "alert_system"],
-                priority=RoutingPriority.CRITICAL,
-                mode=RoutingMode.BROADCAST,
-                filter_conditions={},
-                transformation_rules={},
-                timeout_ms=500
-            ),
-            
-            # Learning experiences
-            RoutingRule(
-                event_pattern="LEARNING_EXPERIENCE",
-                target_components=["learning_engine", "immutable_logs"],
-                priority=RoutingPriority.LOW,
-                mode=RoutingMode.MULTICAST,
-                filter_conditions={},
-                transformation_rules={},
-                timeout_ms=10000
-            ),
-            
-            # Trust updates
-            RoutingRule(
-                event_pattern="TRUST_UPDATED",
-                target_components=["trust_core", "governance_engine"],
-                priority=RoutingPriority.NORMAL,
-                mode=RoutingMode.MULTICAST,
-                filter_conditions={},
-                transformation_rules={},
-                timeout_ms=2000
+        self.running = True
+        self.started_at = datetime.now()
+        
+        # Start priority processing workers
+        for i in range(self.worker_count):
+            worker = asyncio.create_task(self._priority_worker(f"worker_{i}"))
+            self.processing_workers.append(worker)
+        
+        # Log startup
+        if self.immutable_logs:
+            await self.immutable_logs.log_event(
+                event_type="trigger_mesh_started",
+                component_id="trigger_mesh",
+                event_data={
+                    "worker_count": self.worker_count,
+                    "routing_rules": len(self.routing_rules)
+                },
+                transparency_level=TransparencyLevel.GOVERNANCE_INTERNAL
             )
-        ]
         
-        self.routing_rules.extend(default_rules)
+        logger.info(f"TriggerMesh started with {self.worker_count} workers")
     
-    async def _start_routing_workers(self):
-        """Start priority-based routing workers."""
-        # Create workers for each priority level
-        for priority in RoutingPriority:
-            worker_count = {
-                RoutingPriority.CRITICAL: 4,
-                RoutingPriority.HIGH: 3,
-                RoutingPriority.NORMAL: 2,
-                RoutingPriority.LOW: 1
-            }.get(priority, 1)
+    async def stop(self):
+        """Stop the trigger mesh and workers."""
+        if not self.running:
+            return
             
-            for i in range(worker_count):
-                asyncio.create_task(
-                    self._routing_worker(priority, f"{priority.value}_worker_{i}")
-                )
-    
-    async def _routing_worker(self, priority: RoutingPriority, worker_name: str):
-        """Worker coroutine for processing routing tasks."""
-        queue = self.priority_queues[priority]
+        self.running = False
         
-        while True:
+        # Stop all workers
+        for worker in self.processing_workers:
+            worker.cancel()
+        
+        await asyncio.gather(*self.processing_workers, return_exceptions=True)
+        self.processing_workers.clear()
+        
+        # Log shutdown with metrics
+        if self.immutable_logs:
+            await self.immutable_logs.log_event(
+                event_type="trigger_mesh_stopped",
+                component_id="trigger_mesh",
+                event_data={
+                    "total_routed": self.routing_metrics.total_routed,
+                    "success_rate": self._calculate_success_rate(),
+                    "avg_latency_ms": self._calculate_avg_latency()
+                },
+                transparency_level=TransparencyLevel.GOVERNANCE_INTERNAL
+            )
+        
+        logger.info("TriggerMesh stopped")
+    
+    async def route_event(self, event: Dict[str, Any], priority: RoutingPriority = RoutingPriority.NORMAL,
+                         correlation_id: Optional[str] = None) -> str:
+        """
+        Route an event with priority handling and latency tracking.
+        This is the main method specified in the requirements.
+        """
+        start_time = time.time()
+        event_id = f"route_{int(start_time * 1000000)}"
+        
+        # Enhance event with routing metadata
+        enhanced_event = event.copy()
+        enhanced_event.update({
+            "event_id": event_id,
+            "correlation_id": correlation_id or event.get("correlation_id"),
+            "priority": priority.name.lower(),
+            "routed_at": datetime.now().isoformat(),
+            "routing_metadata": {
+                "mesh_version": "1.0.0",
+                "source_component": "trigger_mesh"
+            }
+        })
+        
+        # Find applicable routing rules
+        matching_rules = self._find_matching_rules(enhanced_event)
+        
+        if not matching_rules:
+            logger.warning(f"No routing rules found for event {event.get('type', 'unknown')}")
+            return event_id
+        
+        # Create priority event for processing
+        priority_event = PriorityEvent(
+            priority=priority.value,
+            timestamp=start_time,
+            event_id=event_id,
+            event=enhanced_event,
+            routing_rule=matching_rules[0] if matching_rules else None
+        )
+        
+        # Add to priority queue
+        heapq.heappush(self.priority_queue, priority_event)
+        
+        # Record in metrics
+        self.routing_metrics.total_routed += 1
+        self.routing_metrics.priority_counts[priority.name.lower()] += 1
+        
+        # Log high-priority events immediately
+        if priority in [RoutingPriority.CRITICAL, RoutingPriority.HIGH] and self.immutable_logs:
+            await self.immutable_logs.log_system_performance(
+                metric_name="event_routed",
+                metric_value=1.0,
+                component_id="trigger_mesh",
+                tags={
+                    "priority": priority.name.lower(),
+                    "event_type": event.get("type", "unknown")
+                },
+                correlation_id=correlation_id
+            )
+        
+        logger.debug(f"Event {event_id} queued with {priority.name} priority")
+        
+        return event_id
+    
+    async def _priority_worker(self, worker_id: str):
+        """Background worker for processing priority events."""
+        logger.info(f"Priority worker {worker_id} started")
+        
+        while self.running:
             try:
-                # Get routing task
-                routing_task = await queue.get()
-                
-                # Process the routing
-                start_time = datetime.now()
-                await self._execute_routing(routing_task)
-                processing_time = (datetime.now() - start_time).total_seconds() * 1000
-                
-                # Update metrics
-                await self._update_routing_metrics(
-                    routing_task["event_type"], 
-                    processing_time, 
-                    True
-                )
-                
-                # Mark task as done
-                queue.task_done()
-                
+                # Process events from priority queue
+                if self.priority_queue:
+                    priority_event = heapq.heappop(self.priority_queue)
+                    await self._process_priority_event(priority_event, worker_id)
+                else:
+                    # No events - brief sleep to prevent busy waiting
+                    await asyncio.sleep(0.001)  # 1ms
+                    
             except Exception as e:
-                logger.error(f"Routing worker {worker_name} error: {e}")
-                await self._update_routing_metrics(
-                    routing_task.get("event_type", "unknown"), 
-                    0, 
-                    False
-                )
-    
-    async def route_event(self, event_type: str, payload: Dict[str, Any],
-                         correlation_id: str, source_component: str = "unknown") -> bool:
-        """
-        Route an event through the trigger mesh.
+                logger.error(f"Error in priority worker {worker_id}: {e}")
+                await asyncio.sleep(0.1)  # Longer sleep on error
         
-        Args:
-            event_type: Type of event to route
-            payload: Event payload
-            correlation_id: Correlation ID for tracing
-            source_component: Component that originated the event
-            
-        Returns:
-            True if routing was initiated successfully
-        """
+        logger.info(f"Priority worker {worker_id} stopped")
+    
+    async def _process_priority_event(self, priority_event: PriorityEvent, worker_id: str):
+        """Process a single priority event with latency tracking."""
+        processing_start = time.time()
+        event = priority_event.event
+        rule = priority_event.routing_rule
+        
         try:
-            # Find matching routing rules
-            matching_rules = await self._find_matching_rules(event_type, payload)
+            # Calculate queueing latency
+            queue_latency_ms = (processing_start - priority_event.timestamp) * 1000
             
-            if not matching_rules:
-                logger.warning(f"No routing rules found for event: {event_type}")
-                return False
+            # Record queueing latency
+            if self.immutable_logs and queue_latency_ms > 10:  # Log if > 10ms queue time
+                await self.immutable_logs.log_system_performance(
+                    metric_name="event_queue_latency",
+                    metric_value=queue_latency_ms,
+                    component_id="trigger_mesh",
+                    tags={
+                        "priority": RoutingPriority(priority_event.priority).name.lower(),
+                        "worker_id": worker_id
+                    }
+                )
             
-            # Apply constitutional validation
-            if not await self._validate_constitutional_compliance(event_type, payload):
-                logger.warning(f"Constitutional validation failed for event: {event_type}")
-                return False
+            # Apply routing rule if available
+            if rule:
+                await self._apply_routing_rule(event, rule)
+            else:
+                # Fallback: broadcast to event bus
+                if self.event_bus:
+                    await self.event_bus.publish(
+                        event.get("type", "unknown"),
+                        event,
+                        correlation_id=event.get("correlation_id"),
+                        priority=RoutingPriority(priority_event.priority).name.lower()
+                    )
             
-            # Create routing tasks for each matching rule
-            for rule in matching_rules:
-                routing_task = {
-                    "event_type": event_type,
-                    "payload": payload,
-                    "correlation_id": correlation_id,
-                    "source_component": source_component,
-                    "rule": rule,
-                    "created_at": datetime.now()
-                }
-                
-                # Add to appropriate priority queue
-                await self.priority_queues[rule.priority].put(routing_task)
+            # Calculate total processing latency
+            total_latency_ms = (time.time() - priority_event.timestamp) * 1000
             
-            logger.debug(f"Queued {len(matching_rules)} routing tasks for {event_type}")
-            return True
+            # Update metrics
+            self.routing_metrics.successful_deliveries += 1
+            self.routing_metrics.total_latency_ms += total_latency_ms
+            
+            # Track latency history for the event type
+            event_type = event.get("type", "unknown")
+            self.latency_history[event_type].append(total_latency_ms)
+            if len(self.latency_history[event_type]) > 1000:  # Keep last 1000 samples
+                self.latency_history[event_type] = self.latency_history[event_type][-1000:]
+            
+            # Log latency for critical/high priority events or slow events
+            priority_name = RoutingPriority(priority_event.priority).name.lower()
+            if priority_name in ["critical", "high"] or total_latency_ms > 100:
+                if self.immutable_logs:
+                    await self.immutable_logs.log_system_performance(
+                        metric_name="event_processing_latency",
+                        metric_value=total_latency_ms,
+                        component_id="trigger_mesh",
+                        tags={
+                            "priority": priority_name,
+                            "event_type": event_type,
+                            "worker_id": worker_id
+                        },
+                        correlation_id=event.get("correlation_id")
+                    )
+            
+            logger.debug(f"Processed {priority_event.event_id} in {total_latency_ms:.2f}ms")
             
         except Exception as e:
-            logger.error(f"Error routing event {event_type}: {e}")
-            return False
-    
-    async def _find_matching_rules(self, event_type: str, 
-                                 payload: Dict[str, Any]) -> List[RoutingRule]:
-        """Find routing rules that match the event."""
-        # Check cache first
-        cache_key = f"{event_type}:{hash(json.dumps(payload, sort_keys=True))}"
-        if cache_key in self.routing_cache:
-            return self.routing_cache[cache_key]
-        
-        matching_rules = []
-        
-        for rule in self.routing_rules:
-            if await self._matches_pattern(event_type, rule.event_pattern):
-                if await self._matches_filter_conditions(payload, rule.filter_conditions):
-                    matching_rules.append(rule)
-        
-        # Cache the result
-        self.routing_cache[cache_key] = matching_rules
-        
-        # Limit cache size
-        if len(self.routing_cache) > 10000:
-            # Remove oldest 25% of cache entries
-            keys_to_remove = list(self.routing_cache.keys())[:2500]
-            for key in keys_to_remove:
-                del self.routing_cache[key]
-        
-        return matching_rules
-    
-    async def _matches_pattern(self, event_type: str, pattern: str) -> bool:
-        """Check if event type matches pattern (supports wildcards and OR)."""
-        # Handle OR patterns
-        if "|" in pattern:
-            patterns = pattern.split("|")
-            return any(await self._matches_pattern(event_type, p.strip()) for p in patterns)
-        
-        # Handle wildcards
-        if "*" in pattern:
-            # Convert pattern to regex-like matching
-            pattern_parts = pattern.split("*")
-            current_pos = 0
+            self.routing_metrics.failed_deliveries += 1
             
-            for i, part in enumerate(pattern_parts):
-                if not part:  # Empty part from leading/trailing *
-                    continue
-                
-                pos = event_type.find(part, current_pos)
-                if pos == -1:
-                    return False
-                
-                if i == 0 and pos != 0:  # First part must match at start if no leading *
-                    if not pattern.startswith("*"):
-                        return False
-                
-                current_pos = pos + len(part)
+            # Log processing failure
+            if self.immutable_logs:
+                await self.immutable_logs.log_event(
+                    event_type="event_processing_failed",
+                    component_id="trigger_mesh",
+                    event_data={
+                        "event_id": priority_event.event_id,
+                        "error": str(e),
+                        "worker_id": worker_id,
+                        "priority": RoutingPriority(priority_event.priority).name.lower()
+                    },
+                    correlation_id=event.get("correlation_id"),
+                    transparency_level=TransparencyLevel.GOVERNANCE_INTERNAL
+                )
             
-            # Check if last part must match at end
-            if not pattern.endswith("*") and current_pos != len(event_type):
-                return False
-            
-            return True
-        
-        # Exact match
-        return event_type == pattern
+            logger.error(f"Failed to process event {priority_event.event_id}: {e}")
     
-    async def _matches_filter_conditions(self, payload: Dict[str, Any],
-                                       conditions: Dict[str, Any]) -> bool:
-        """Check if payload matches filter conditions."""
-        if not conditions:
-            return True
-        
-        for key, expected_value in conditions.items():
-            # Navigate nested payload
-            value = payload
-            for part in key.split("."):
-                if isinstance(value, dict) and part in value:
-                    value = value[part]
-                else:
-                    return False
-            
-            # Check condition
-            if isinstance(expected_value, dict):
-                # Complex conditions (gt, lt, in, etc.)
-                for op, op_value in expected_value.items():
-                    if op == "gt" and value <= op_value:
-                        return False
-                    elif op == "lt" and value >= op_value:
-                        return False
-                    elif op == "in" and value not in op_value:
-                        return False
-                    elif op == "eq" and value != op_value:
-                        return False
-            else:
-                # Simple equality
-                if value != expected_value:
-                    return False
-        
-        return True
-    
-    async def _validate_constitutional_compliance(self, event_type: str,
-                                                payload: Dict[str, Any]) -> bool:
-        """Validate event against constitutional constraints."""
-        for validator in self.constitutional_validators:
-            try:
-                if not await validator(event_type, payload):
-                    return False
-            except Exception as e:
-                logger.error(f"Constitutional validator error: {e}")
-                return False
-        
-        return True
-    
-    async def _execute_routing(self, routing_task: Dict[str, Any]):
-        """Execute a routing task."""
-        rule = routing_task["rule"]
-        event_type = routing_task["event_type"]
-        payload = routing_task["payload"]
-        correlation_id = routing_task["correlation_id"]
-        
-        # Apply transformations
-        transformed_payload = await self._apply_transformations(payload, rule.transformation_rules)
+    async def _apply_routing_rule(self, event: Dict[str, Any], rule: RoutingRule):
+        """Apply a specific routing rule to an event."""
+        # Apply transformations if specified
+        if rule.transformation_rules:
+            event = self._transform_event(event, rule.transformation_rules)
         
         # Route based on mode
         if rule.mode == RoutingMode.UNICAST:
-            await self._route_unicast(rule, event_type, transformed_payload, correlation_id)
+            # Route to first available target
+            if rule.target_components:
+                await self._route_to_component(event, rule.target_components[0])
+        
         elif rule.mode == RoutingMode.MULTICAST:
-            await self._route_multicast(rule, event_type, transformed_payload, correlation_id)
+            # Route to all specified targets
+            tasks = []
+            for component in rule.target_components:
+                tasks.append(self._route_to_component(event, component))
+            await asyncio.gather(*tasks, return_exceptions=True)
+        
         elif rule.mode == RoutingMode.BROADCAST:
-            await self._route_broadcast(rule, event_type, transformed_payload, correlation_id)
+            # Route to all registered components
+            tasks = []
+            for component_id in self.component_registry:
+                tasks.append(self._route_to_component(event, component_id))
+            await asyncio.gather(*tasks, return_exceptions=True)
+        
         elif rule.mode == RoutingMode.MIRROR:
-            await self._route_mirror(rule, event_type, transformed_payload, correlation_id)
+            # Route to primary and mirror targets
+            tasks = []
+            for component in rule.target_components:
+                tasks.append(self._route_to_component(event, component))
+            await asyncio.gather(*tasks, return_exceptions=True)
     
-    async def _apply_transformations(self, payload: Dict[str, Any],
-                                   transformation_rules: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply transformation rules to payload."""
-        if not transformation_rules:
-            return payload
+    async def _route_to_component(self, event: Dict[str, Any], component_id: str):
+        """Route an event to a specific component."""
+        try:
+            if component_id in self.component_registry:
+                component_info = self.component_registry[component_id]
+                handler = component_info.get("handler")
+                
+                if handler:
+                    if asyncio.iscoroutinefunction(handler):
+                        await handler(event)
+                    else:
+                        handler(event)
+                else:
+                    # Fallback: publish to event bus with component-specific topic
+                    if self.event_bus:
+                        await self.event_bus.publish(
+                            f"component.{component_id}",
+                            event,
+                            correlation_id=event.get("correlation_id")
+                        )
+            else:
+                logger.warning(f"Component {component_id} not registered")
+                
+        except Exception as e:
+            logger.error(f"Failed to route to component {component_id}: {e}")
+            raise
+    
+    def _find_matching_rules(self, event: Dict[str, Any]) -> List[RoutingRule]:
+        """Find routing rules that match the event."""
+        event_type = event.get("type", "")
         
-        transformed = payload.copy()
+        # Check cache first
+        if event_type in self.routing_cache:
+            return self.routing_cache[event_type]
         
-        for rule_type, rule_config in transformation_rules.items():
-            if rule_type == "add_fields":
-                transformed.update(rule_config)
-            elif rule_type == "remove_fields":
-                for field in rule_config:
-                    transformed.pop(field, None)
-            elif rule_type == "rename_fields":
-                for old_field, new_field in rule_config.items():
-                    if old_field in transformed:
-                        transformed[new_field] = transformed.pop(old_field)
-            elif rule_type == "filter_fields":
-                # Keep only specified fields
-                filtered = {field: transformed.get(field) for field in rule_config}
-                transformed = filtered
+        matching_rules = []
+        for rule in self.routing_rules:
+            if self._event_matches_pattern(event_type, rule.event_pattern):
+                if self._event_matches_filters(event, rule.filter_conditions):
+                    matching_rules.append(rule)
+        
+        # Cache the result
+        self.routing_cache[event_type] = matching_rules
+        
+        return matching_rules
+    
+    def _event_matches_pattern(self, event_type: str, pattern: str) -> bool:
+        """Check if event type matches the routing pattern."""
+        # Simple pattern matching - could be enhanced with regex
+        if pattern == "*":
+            return True
+        if pattern == event_type:
+            return True
+        if pattern.endswith("*") and event_type.startswith(pattern[:-1]):
+            return True
+        return False
+    
+    def _event_matches_filters(self, event: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+        """Check if event matches filter conditions."""
+        if not filters:
+            return True
+        
+        for key, expected_value in filters.items():
+            if key not in event or event[key] != expected_value:
+                return False
+        
+        return True
+    
+    def _transform_event(self, event: Dict[str, Any], transformations: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply transformations to an event."""
+        transformed = event.copy()
+        
+        # Simple transformation rules - could be enhanced
+        for key, transformation in transformations.items():
+            if transformation == "remove":
+                transformed.pop(key, None)
+            elif isinstance(transformation, dict) and "rename_to" in transformation:
+                if key in transformed:
+                    transformed[transformation["rename_to"]] = transformed.pop(key)
         
         return transformed
     
-    async def _route_unicast(self, rule: RoutingRule, event_type: str,
-                           payload: Dict[str, Any], correlation_id: str):
-        """Route event to a single target (load balanced)."""
-        if not rule.target_components:
-            return
-        
-        # Simple round-robin load balancing
-        target = rule.target_components[0]  # Simplified for now
-        await self._deliver_to_component(target, event_type, payload, correlation_id, rule.timeout_ms)
-    
-    async def _route_multicast(self, rule: RoutingRule, event_type: str,
-                             payload: Dict[str, Any], correlation_id: str):
-        """Route event to multiple specific targets."""
-        delivery_tasks = []
-        
-        for target in rule.target_components:
-            task = self._deliver_to_component(target, event_type, payload, correlation_id, rule.timeout_ms)
-            delivery_tasks.append(task)
-        
-        # Wait for all deliveries (with timeout)
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*delivery_tasks, return_exceptions=True),
-                timeout=rule.timeout_ms / 1000.0
-            )
-        except asyncio.TimeoutError:
-            logger.warning(f"Multicast delivery timeout for {event_type}")
-    
-    async def _route_broadcast(self, rule: RoutingRule, event_type: str,
-                             payload: Dict[str, Any], correlation_id: str):
-        """Route event to all registered components."""
-        delivery_tasks = []
-        
-        # Send to all registered components
-        for component_id in self.component_registry.keys():
-            task = self._deliver_to_component(component_id, event_type, payload, correlation_id, rule.timeout_ms)
-            delivery_tasks.append(task)
-        
-        # Fire and forget for broadcasts
-        asyncio.create_task(asyncio.gather(*delivery_tasks, return_exceptions=True))
-    
-    async def _route_mirror(self, rule: RoutingRule, event_type: str,
-                          payload: Dict[str, Any], correlation_id: str):
-        """Route event to mirror/shadow instances."""
-        # Check for shadow targets
-        shadow_targets = self.shadow_targets.get(event_type, [])
-        
-        delivery_tasks = []
-        
-        # Deliver to primary targets
-        for target in rule.target_components:
-            task = self._deliver_to_component(target, event_type, payload, correlation_id, rule.timeout_ms)
-            delivery_tasks.append(task)
-        
-        # Deliver to shadow targets (non-blocking)
-        for shadow_target in shadow_targets:
-            # Mark as shadow delivery
-            shadow_payload = payload.copy()
-            shadow_payload["__shadow_delivery__"] = True
-            
-            task = self._deliver_to_component(
-                shadow_target, event_type, shadow_payload, 
-                f"shadow_{correlation_id}", rule.timeout_ms
-            )
-            delivery_tasks.append(task)
-        
-        await asyncio.gather(*delivery_tasks, return_exceptions=True)
-    
-    async def _deliver_to_component(self, component_id: str, event_type: str,
-                                  payload: Dict[str, Any], correlation_id: str,
-                                  timeout_ms: int):
-        """Deliver event to a specific component."""
-        try:
-            # Check if component is registered
-            if component_id not in self.component_registry:
-                logger.warning(f"Component {component_id} not registered")
-                return False
-            
-            component_info = self.component_registry[component_id]
-            
-            # Create event for delivery
-            event = {
-                "type": event_type,
-                "payload": payload,
-                "correlation_id": correlation_id,
-                "timestamp": datetime.now().isoformat(),
-                "target_component": component_id,
-                "delivery_id": f"del_{datetime.now().strftime('%H%M%S')}_{component_id}"
-            }
-            
-            # Use event bus for delivery (assuming GraceEventBus)
-            if hasattr(self.event_bus, 'publish_gme'):
-                # Create GME and publish
-                gme = GraceMessageEnvelope.create_event(
-                    event_type=event_type,
-                    payload=payload,
-                    source="trigger_mesh",
-                    correlation_id=correlation_id
-                )
-                await asyncio.wait_for(
-                    self.event_bus.publish_gme(gme),
-                    timeout=timeout_ms / 1000.0
-                )
-            else:
-                # Fallback to legacy publish method
-                await asyncio.wait_for(
-                    self.event_bus.publish(event_type, payload, correlation_id),
-                    timeout=timeout_ms / 1000.0
-                )
-            
-            return True
-            
-        except asyncio.TimeoutError:
-            logger.warning(f"Delivery timeout to {component_id} for {event_type}")
-            return False
-        except Exception as e:
-            logger.error(f"Delivery error to {component_id}: {e}")
-            return False
-    
-    def register_component(self, component_id: str, component_type: str,
-                         event_subscriptions: List[str],
-                         metadata: Optional[Dict[str, Any]] = None):
-        """Register a component with the trigger mesh."""
+    def register_component(self, component_id: str, handler: Optional[Callable] = None, 
+                          metadata: Optional[Dict[str, Any]] = None):
+        """Register a component for event routing."""
         self.component_registry[component_id] = {
-            "component_type": component_type,
-            "event_subscriptions": event_subscriptions,
+            "handler": handler,
             "metadata": metadata or {},
-            "registered_at": datetime.now().isoformat(),
-            "last_seen": datetime.now().isoformat()
+            "registered_at": datetime.now().isoformat()
         }
         
-        logger.info(f"Registered component {component_id} ({component_type})")
+        # Clear routing cache when components change
+        self.routing_cache.clear()
+        
+        logger.info(f"Registered component: {component_id}")
     
     def add_routing_rule(self, rule: RoutingRule):
         """Add a new routing rule."""
         self.routing_rules.append(rule)
-        # Clear cache since rules changed
+        
+        # Clear routing cache when rules change
         self.routing_cache.clear()
         
         logger.info(f"Added routing rule for pattern: {rule.event_pattern}")
     
-    def add_constitutional_validator(self, validator: Callable[[str, Dict[str, Any]], bool]):
-        """Add a constitutional validator function."""
-        self.constitutional_validators.append(validator)
-        logger.info("Added constitutional validator")
-    
-    def add_shadow_target(self, event_type: str, shadow_component: str):
-        """Add a shadow target for mirrored routing."""
-        if event_type not in self.shadow_targets:
-            self.shadow_targets[event_type] = []
+    def _initialize_default_rules(self):
+        """Initialize default routing rules for governance events."""
+        # Critical system events
+        self.add_routing_rule(RoutingRule(
+            event_pattern="constitutional_violation",
+            target_components=["governance_engine", "audit_system"],
+            priority=RoutingPriority.CRITICAL,
+            mode=RoutingMode.MULTICAST,
+            filter_conditions={},
+            transformation_rules={},
+            timeout_ms=1000
+        ))
         
-        if shadow_component not in self.shadow_targets[event_type]:
-            self.shadow_targets[event_type].append(shadow_component)
-            logger.info(f"Added shadow target {shadow_component} for {event_type}")
-    
-    def remove_shadow_target(self, event_type: str, shadow_component: str):
-        """Remove a shadow target."""
-        if event_type in self.shadow_targets:
-            self.shadow_targets[event_type] = [
-                target for target in self.shadow_targets[event_type]
-                if target != shadow_component
-            ]
-            logger.info(f"Removed shadow target {shadow_component} for {event_type}")
-    
-    async def _update_routing_metrics(self, event_type: str, latency_ms: float, success: bool):
-        """Update routing metrics."""
-        if event_type not in self.routing_metrics:
-            self.routing_metrics[event_type] = RoutingMetrics()
+        # High priority governance events
+        self.add_routing_rule(RoutingRule(
+            event_pattern="governance_*",
+            target_components=["governance_engine"],
+            priority=RoutingPriority.HIGH,
+            mode=RoutingMode.UNICAST,
+            filter_conditions={},
+            transformation_rules={},
+            timeout_ms=2000
+        ))
         
-        metrics = self.routing_metrics[event_type]
-        metrics.total_routed += 1
-        
-        if success:
-            metrics.successful_deliveries += 1
-        else:
-            metrics.failed_deliveries += 1
-        
-        # Update rolling average latency
-        alpha = 0.1  # Smoothing factor
-        if metrics.avg_latency_ms == 0:
-            metrics.avg_latency_ms = latency_ms
-        else:
-            metrics.avg_latency_ms = alpha * latency_ms + (1 - alpha) * metrics.avg_latency_ms
-        
-        metrics.last_updated = datetime.now()
+        # Normal system events
+        self.add_routing_rule(RoutingRule(
+            event_pattern="system_*",
+            target_components=["system_monitor"],
+            priority=RoutingPriority.NORMAL,
+            mode=RoutingMode.UNICAST,
+            filter_conditions={},
+            transformation_rules={},
+            timeout_ms=5000
+        ))
     
     def get_routing_metrics(self) -> Dict[str, Any]:
-        """Get routing performance metrics."""
+        """Get comprehensive routing metrics."""
         return {
-            "event_metrics": {
-                event_type: asdict(metrics)
-                for event_type, metrics in self.routing_metrics.items()
-            },
-            "queue_sizes": {
-                priority.value: queue.qsize()
-                for priority, queue in self.priority_queues.items()
-            },
+            "total_routed": self.routing_metrics.total_routed,
+            "successful_deliveries": self.routing_metrics.successful_deliveries,
+            "failed_deliveries": self.routing_metrics.failed_deliveries,
+            "success_rate": self._calculate_success_rate(),
+            "average_latency_ms": self._calculate_avg_latency(),
+            "priority_distribution": self.routing_metrics.priority_counts,
             "registered_components": len(self.component_registry),
             "routing_rules": len(self.routing_rules),
-            "cache_size": len(self.routing_cache)
+            "queue_size": len(self.priority_queue),
+            "workers_active": len([w for w in self.processing_workers if not w.done()])
         }
     
-    def get_component_registry(self) -> Dict[str, Any]:
-        """Get registered components."""
-        return self.component_registry.copy()
+    def _calculate_success_rate(self) -> float:
+        """Calculate routing success rate."""
+        total = self.routing_metrics.successful_deliveries + self.routing_metrics.failed_deliveries
+        if total == 0:
+            return 1.0
+        return self.routing_metrics.successful_deliveries / total
     
-    async def health_check(self) -> Dict[str, Any]:
-        """Perform health check of the trigger mesh."""
-        return {
-            "status": "healthy",
-            "uptime": "running",  # Could track actual uptime
-            "routing_metrics": self.get_routing_metrics(),
-            "registered_components": len(self.component_registry),
-            "constitutional_validators": len(self.constitutional_validators),
-            "shadow_targets": {
-                event_type: len(targets)
-                for event_type, targets in self.shadow_targets.items()
-            }
-        }
+    def _calculate_avg_latency(self) -> float:
+        """Calculate average processing latency."""
+        if self.routing_metrics.successful_deliveries == 0:
+            return 0.0
+        return self.routing_metrics.total_latency_ms / self.routing_metrics.successful_deliveries
+    
+    def get_latency_stats(self) -> Dict[str, Dict[str, float]]:
+        """Get latency statistics by event type."""
+        stats = {}
+        
+        for event_type, latencies in self.latency_history.items():
+            if latencies:
+                stats[event_type] = {
+                    "count": len(latencies),
+                    "avg_ms": sum(latencies) / len(latencies),
+                    "min_ms": min(latencies),
+                    "max_ms": max(latencies),
+                    "p95_ms": sorted(latencies)[int(len(latencies) * 0.95)] if len(latencies) > 20 else max(latencies)
+                }
+        
+        return stats

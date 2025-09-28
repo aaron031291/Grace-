@@ -20,9 +20,10 @@ class MTLKernel:
         # Initialize shared store
         self.store = MemoryStore()
         
-        # Initialize services
+        # Initialize services with shared store
         self.memory_service = MemoryService()
-        self.memory_service.store = self.store  # Share store
+        # Share the store instance
+        self.memory_service.store = self.store
         
         self.trust_service = TrustService(self.store)
         self.immutable_log = ImmutableLogService(self.store)
@@ -34,7 +35,7 @@ class MTLKernel:
     def write(self, entry: MemoryEntry) -> str:
         """Write entry with full MTL fan-out: store → trust.init → immutable.append → trigger.record."""
         # 1. Store in memory service
-        memory_id = self.memory_service.store(entry)
+        memory_id = self.memory_service.store_entry(entry)
         
         # 2. Initialize trust record
         trust_id = self.trust_service.init_trust(memory_id)

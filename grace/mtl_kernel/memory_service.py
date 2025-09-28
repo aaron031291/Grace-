@@ -14,7 +14,7 @@ class MemoryService:
     def __init__(self):
         self.store = MemoryStore()
     
-    def store(self, entry: MemoryEntry) -> str:
+    def store_entry(self, entry: MemoryEntry) -> str:
         """Store a memory entry."""
         # Calculate content hash if not provided
         if not entry.sha256:

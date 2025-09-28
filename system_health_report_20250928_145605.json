@@ -1,0 +1,269 @@
+{
+  "timestamp": "2025-09-28T14:56:04.110549",
+  "overall_status": "healthy",
+  "components": [
+    {
+      "name": "EventBus",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core.event_bus",
+        "class_name": "EventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.018632888793945312
+    },
+    {
+      "name": "MemoryCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core",
+        "class_name": "MemoryCore",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 4.0531158447265625e-06
+    },
+    {
+      "name": "EventMesh",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_02_event_mesh",
+        "class_name": "GraceEventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.08426165580749512
+    },
+    {
+      "name": "AuditLogs",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_04_audit_logs.immutable_logs",
+        "class_name": "ImmutableLogs",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.000423431396484375
+    },
+    {
+      "name": "GovernanceKernel",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.grace_governance_kernel",
+        "class_name": "GraceGovernanceKernel",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.8674983978271484
+    },
+    {
+      "name": "VerificationEngine",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.verification_engine",
+        "class_name": "VerificationEngine",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 3.337860107421875e-06
+    },
+    {
+      "name": "TrustCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.trust_core_kernel",
+        "class_name": "TrustCoreKernel",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.1457672119140625e-06
+    },
+    {
+      "name": "Parliament",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.parliament",
+        "class_name": "Parliament",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.1457672119140625e-06
+    },
+    {
+      "name": "GovernanceAPI",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.governance_api",
+        "class_name": "GovernanceAPIService",
+        "importable": true,
+        "description": "Grace Governance API Service."
+      },
+      "error": null,
+      "response_time": 0.003893136978149414
+    },
+    {
+      "name": "MTL_Kernel",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.kernel",
+        "class_name": "MTLKernel",
+        "importable": true,
+        "description": "Main MTL kernel orchestrating all memory, trust, and learning operations."
+      },
+      "error": null,
+      "response_time": 0.004467964172363281
+    },
+    {
+      "name": "TrustService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.trust_service",
+        "class_name": "TrustService",
+        "importable": true,
+        "description": "Trust ledger for managing attestations and trust scores."
+      },
+      "error": null,
+      "response_time": 1.9073486328125e-06
+    },
+    {
+      "name": "ImmutableLogService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.immutable_log_service",
+        "class_name": "ImmutableLogService",
+        "importable": true,
+        "description": "Immutable audit log with Merkle proofs."
+      },
+      "error": null,
+      "response_time": 9.5367431640625e-07
+    },
+    {
+      "name": "SecurityVault",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.contracts.message_envelope_simple",
+        "class_name": "RBACContext",
+        "importable": true,
+        "description": "Role-based access control context."
+      },
+      "error": null,
+      "response_time": 1.1920928955078125e-06
+    },
+    {
+      "name": "StatusService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.interface.status_service",
+        "class_name": "GraceStatusService",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.015754222869873047
+    },
+    {
+      "name": "InterfaceKernel",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.interface_kernel.kernel",
+        "class_name": "InterfaceKernel",
+        "importable": true,
+        "description": "Main interface kernel providing REST API and WebSocket endpoints."
+      },
+      "error": null,
+      "response_time": 0.03177189826965332
+    },
+    {
+      "name": "OrchestrationService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.orchestration.orchestration_service",
+        "class_name": "OrchestrationService",
+        "importable": true,
+        "description": "Main orchestration service providing FastAPI interface with constitutional governance."
+      },
+      "error": null,
+      "response_time": 2.1457672119140625e-06
+    },
+    {
+      "name": "OODA_Loop",
+      "status": "healthy",
+      "details": {
+        "loop_type": "ooda",
+        "stages": [
+          {
+            "timestamp": "2025-09-28T14:56:05.137735",
+            "stage": "observe"
+          },
+          {
+            "timestamp": "2025-09-28T14:56:05.137740",
+            "stage": "orient"
+          },
+          {
+            "timestamp": "2025-09-28T14:56:05.137742",
+            "stage": "decide"
+          },
+          {
+            "timestamp": "2025-09-28T14:56:05.137743",
+            "stage": "act"
+          }
+        ]
+      },
+      "error": null,
+      "response_time": 1.0272023677825928
+    },
+    {
+      "name": "Contradiction_Detection",
+      "status": "unhealthy",
+      "details": {},
+      "error": "Source.__init__() got an unexpected keyword argument 'type'",
+      "response_time": null
+    },
+    {
+      "name": "Decision_Narration",
+      "status": "unhealthy",
+      "details": {},
+      "error": "argument of type 'UnifiedDecision' is not iterable",
+      "response_time": null
+    },
+    {
+      "name": "Trust_Scoring",
+      "status": "healthy",
+      "details": {
+        "trust_score": 0.5,
+        "audit_id": "trust_init_test_memory_entry",
+        "attestation_id": "cff82a6e-c36c-468e-b61d-225438cb9185"
+      },
+      "error": null,
+      "response_time": 1.0284178256988525
+    }
+  ],
+  "layers_status": {
+    "EventBus": "healthy",
+    "MemoryCore": "healthy",
+    "EventMesh": "healthy",
+    "AuditLogs": "healthy"
+  },
+  "vaults_status": {
+    "MTL_Kernel": "healthy",
+    "TrustService": "healthy",
+    "ImmutableLogService": "healthy",
+    "SecurityVault": "healthy"
+  },
+  "telemetry_active": true,
+  "ooda_loop_functional": true,
+  "governance_functional": false,
+  "recommendations": [
+    "Unhealthy components detected (2). Review component errors.",
+    "Governance system not fully functional. Security and decision-making may be compromised."
+  ]
+}

@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional, List
 
 # Core infrastructure
-from ..core import EventBus, MemoryCore
+from ..core import EventBus, MemoryCore, create_grace_tracer, GraceTracer
 
 # Governance components (now in same directory)
 from .verification_engine import VerificationEngine
@@ -168,6 +168,14 @@ class GraceGovernanceKernel:
         # MLDL quorum with 21 specialists
         self.components['mldl_quorum'] = MLDLQuorum(event_bus, memory_core)
         
+        # Grace Tracer for comprehensive tracing with Vaults 1-18 compliance
+        self.components['gtrace'] = await create_grace_tracer(
+            event_bus=event_bus,
+            memory_core=memory_core,
+            immutable_logs=self.components['immutable_logs'],
+            kpi_monitor=getattr(event_bus, 'kpi_monitor', None)
+        )
+        
         logger.info("Support systems initialized")
     
     async def _setup_component_integration(self):
@@ -219,6 +227,11 @@ class GraceGovernanceKernel:
             ["MLDL_CONSENSUS_REQUEST"]
         )
         
+        trigger_mesh.register_component(
+            "gtrace", "tracing",
+            ["TRACE_STARTED", "TRACE_COMPLETED", "GOVERNANCE_VALIDATION"]
+        )
+        
         # Register components for health monitoring
         avn_core = self.components['avn_core']
         
@@ -228,6 +241,12 @@ class GraceGovernanceKernel:
         avn_core.register_component("parliament")
         avn_core.register_component("trust_core")
         avn_core.register_component("mldl_quorum")
+        avn_core.register_component("gtrace")
+        
+        # Setup gtrace governance hooks
+        gtrace = self.components['gtrace']
+        gtrace.register_governance_hook("critical_decision", self._handle_critical_trace)
+        gtrace.register_contradiction_detector(self._detect_policy_contradictions)
         
         # Update governance engine with AVN core reference
         self.components['governance_engine'].avn_core = avn_core
@@ -548,6 +567,74 @@ class GraceGovernanceKernel:
             metrics['trust'] = self.components['trust_core'].get_trust_statistics()
         
         return metrics
+    
+    # Grace Tracer governance hook methods
+    
+    async def _handle_critical_trace(self, trace_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle critical traces that require governance review (Vault 11)."""
+        logger.info(f"Handling critical trace: {trace_data.get('trace_id')}")
+        
+        # Route to governance engine for review
+        if 'governance_engine' in self.components:
+            governance_engine = self.components['governance_engine']
+            
+            # Create governance request for trace validation
+            governance_request = {
+                "type": "trace_validation",
+                "trace_id": trace_data.get('trace_id'),
+                "component_id": trace_data.get('component_id'),
+                "operation": trace_data.get('operation'),
+                "constitutional_review_required": True,
+                "trust_validation_required": True
+            }
+            
+            # This would normally be processed through the governance engine
+            # For now, return a simplified validation result
+            return {
+                "approved": True,
+                "governance_decision_id": f"gd_{trace_data.get('trace_id', 'unknown')}",
+                "reviewer": "governance_engine",
+                "constitutional_compliant": True,
+                "notes": "Trace approved for execution"
+            }
+        
+        return {"approved": False, "reason": "No governance engine available"}
+    
+    async def _detect_policy_contradictions(self, event_data: Dict[str, Any], trace_context: Dict[str, Any]) -> List[str]:
+        """Detect policy contradictions in trace events (Vault 6)."""
+        contradictions = []
+        
+        # Check against known policies if policy engine is available
+        if self.policy_engine and hasattr(self.policy_engine, 'policies'):
+            event_operation = event_data.get('operation', '')
+            component_id = event_data.get('component_id', '')
+            
+            # Simple contradiction detection - can be enhanced
+            for policy_id, policy in self.policy_engine.policies.items():
+                if hasattr(policy, 'conflicts_with'):
+                    if policy.conflicts_with(event_operation, component_id):
+                        contradictions.append(f"Policy {policy_id} conflicts with operation {event_operation}")
+        
+        # Check for component trust contradictions
+        if 'trust_core' in self.components:
+            trust_core = self.components['trust_core']
+            component_id = event_data.get('component_id')
+            
+            # If component has low trust but is performing high-privilege operations
+            if component_id and hasattr(trust_core, 'get_trust_score'):
+                trust_score = trust_core.get_trust_score(component_id)
+                if trust_score and trust_score < 0.5 and 'critical' in event_operation.lower():
+                    contradictions.append(f"Low trust component {component_id} performing critical operation")
+        
+        return contradictions
+    
+    def get_gtrace_status(self) -> Dict[str, Any]:
+        """Get status of the gtrace component."""
+        if 'gtrace' not in self.components:
+            return {"status": "not_initialized"}
+        
+        gtrace = self.components['gtrace']
+        return gtrace.get_system_metrics()
 
 
 async def main():

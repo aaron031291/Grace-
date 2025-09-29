@@ -12,12 +12,17 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install additional production dependencies
+# Install additional production dependencies for infra services
 RUN pip install --no-cache-dir \
     psycopg2-binary \
     redis \
-    chromadb \
-    psutil
+    qdrant-client \
+    boto3 \
+    celery \
+    prometheus_client \
+    psutil \
+    sqlalchemy \
+    alembic
 
 # Copy application code
 COPY grace/ ./grace/
@@ -31,7 +36,10 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/status || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
-# Run the orchestration service
-CMD ["python", "-m", "grace.orchestration.orchestration_service"]
+# Dynamic command based on SERVICE_MODE
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]

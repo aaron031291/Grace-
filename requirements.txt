@@ -1,6 +1,8 @@
-# Grace Governance Kernel Requirements
+# ===============================
+# Grace Governance Kernel Dependencies
+# ===============================
 
-# Core dependencies (Python standard library — no install needed)
+# --- Core runtime (standard library, no install needed) ---
 # asyncio
 # sqlite3
 # json
@@ -9,46 +11,49 @@
 # logging
 # statistics
 
-# External runtime dependencies
+# --- API & Server ---
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 pydantic-settings>=2.0.0
 websockets>=12.0
 
-# Database
+# --- Database Layer ---
 sqlalchemy>=2.0.0
-alembic>=1.12.0
+alembic>=1.13.0
 asyncpg>=0.29.0
+psycopg2-binary>=2.9.0  # Sync driver for migrations/tools
 
-# Redis and workers
-redis>=4.5.0
+# --- Redis & Background Workers ---
+redis>=5.0.0
 celery[redis]>=5.3.0
-arq>=0.25.0
+arq>=0.25.0  # Optional: lightweight async task runner
 
-# Authentication and security
+# --- Authentication & RBAC ---
 python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.0
+passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.6
 
-# Vector database and AI
+# --- Memory & Vector Store ---
 chromadb>=0.4.0
 sentence-transformers>=2.2.0
-openai>=1.0.0
 
-# Document processing
-pypdf2>=3.0.0
+# --- AI/LLM Integrations (Optional) ---
+openai>=1.0.0  # Only if external LLM calls needed
+
+# --- Document Processing ---
+pypdf>=3.0.0
 python-docx>=1.1.0
 beautifulsoup4>=4.12.0
 
-# MLDL Kernel dependencies
+# --- MLDL Kernel ---
 numpy>=1.21.0
 scikit-learn>=1.0.0
 joblib>=1.0.0
 
-# Optional system monitoring
+# --- Optional System Monitoring ---
 # psutil>=5.8.0
 
-# Development dependencies (optional)
+# --- Development (Optional) ---
 # pytest>=7.0.0
 # pytest-asyncio>=0.21.0

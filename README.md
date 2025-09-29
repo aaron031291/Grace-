@@ -65,7 +65,7 @@ Grace implements a comprehensive governance architecture with the following comp
 ```bash
 git clone https://github.com/aaron031291/Grace-.git
 cd Grace-
-./scripts/setup.sh
+./grace/scripts/setup.sh
 ```
 
 The setup script will automatically:
@@ -117,10 +117,10 @@ Grace provides automated Git workflow tools to streamline development across env
 ### Git Workflow Helper
 ```bash
 # Linux/macOS
-./scripts/git-workflow.sh <command>
+./grace/scripts/git-workflow.sh <command>
 
 # Windows PowerShell
-.\scripts\git-workflow.ps1 <command>
+.\grace\scripts\git-workflow.ps1 <command>
 ```
 
 Common commands:

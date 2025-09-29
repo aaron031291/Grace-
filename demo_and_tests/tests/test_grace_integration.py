@@ -12,6 +12,7 @@ Validates all implemented functionality from the audit recommendations:
 import asyncio
 import logging
 import sys
+import os
 import tempfile
 from pathlib import Path
 from datetime import datetime

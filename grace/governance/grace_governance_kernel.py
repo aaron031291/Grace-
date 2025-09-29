@@ -27,6 +27,9 @@ from ..layer_02_event_mesh import TriggerMesh
 from ..immune import EnhancedAVNCore
 from ..mldl import MLDLQuorum
 
+# Vault system for constitutional trust compliance
+from ..vaults import VaultEngine, VaultComplianceChecker
+
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,10 @@ class GraceGovernanceKernel:
         self.verification_bridge = VerificationBridge()
         self.quorum_bridge = QuorumBridge(self.intelligence_kernel)
         self.synthesizer = Synthesizer()
+        
+        # Initialize vault compliance system
+        self.vault_engine = VaultEngine()
+        self.vault_compliance_checker = VaultComplianceChecker(self.vault_engine)
         
     async def initialize(self):
         """Initialize all governance kernel components."""
@@ -121,8 +128,8 @@ class GraceGovernanceKernel:
         event_bus = self.components['event_bus']
         memory_core = self.components['memory_core']
         
-        # Verification engine for claim analysis
-        self.components['verification_engine'] = VerificationEngine(event_bus, memory_core)
+        # Verification engine for claim analysis (with vault integration)
+        self.components['verification_engine'] = VerificationEngine(event_bus, memory_core, self.vault_engine)
         
         # Unified logic for decision synthesis
         self.components['unified_logic'] = UnifiedLogic(event_bus, memory_core)
@@ -377,21 +384,56 @@ class GraceGovernanceKernel:
         This method provides backward compatibility for the governance_kernel interface.
         
         Pipeline:
-        1) policy_engine.check(request)
-        2) verification_bridge.verify(request)
-        3) feed = mtl.feed_for_quorum(filters_from(request)) [if available]
-        4) result = quorum_bridge.consensus(feed)
-        5) decision = synthesizer.merge(request, results)
-        6) mtl.store_decision(decision) [if available]
+        1) vault_compliance.check_priority_compliance(request) - NEW: Vault validation
+        2) policy_engine.check(request)
+        3) verification_bridge.verify(request)
+        4) feed = mtl.feed_for_quorum(filters_from(request)) [if available]
+        5) result = quorum_bridge.consensus(feed)
+        6) decision = synthesizer.merge(request, results)
+        7) mtl.store_decision(decision) [if available]
         """
         try:
-            # Step 1: Policy evaluation
+            # Step 1: Vault compliance validation (NEW)
+            vault_compliance_report = None
+            try:
+                # Convert request to dict format if needed
+                request_dict = request if isinstance(request, dict) else self._convert_request_to_dict(request)
+                
+                # Run vault compliance check asynchronously in a sync context
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    vault_compliance_report = loop.run_until_complete(
+                        self.vault_compliance_checker.check_priority_compliance(request_dict)
+                    )
+                except RuntimeError:
+                    # If no event loop exists, create a new one
+                    vault_compliance_report = asyncio.run(
+                        self.vault_compliance_checker.check_priority_compliance(request_dict)
+                    )
+                
+                # If vault compliance fails, reject immediately
+                if not vault_compliance_report.overall_compliance:
+                    return {
+                        "request_id": self._extract_request_id(request),
+                        "approved": False,
+                        "confidence": vault_compliance_report.compliance_score,
+                        "reasoning": f"Vault compliance failed: {vault_compliance_report.explainable_summary}",
+                        "vault_violations": [v.description for v in vault_compliance_report.critical_violations],
+                        "vault_watermarks": [r.watermark for r in vault_compliance_report.vault_results.values()],
+                        "constitutional_compliance": False
+                    }
+                
+            except Exception as e:
+                logger.warning(f"Vault compliance check failed: {e}, continuing with standard validation")
+            
+            # Step 2: Policy evaluation
             policy_results = self.policy_engine.check(request)
             
-            # Step 2: Request verification
+            # Step 3: Request verification
             verification_result = self.verification_bridge.verify(request)
             
-            # Step 3 & 4: Quorum consensus (if required)
+            # Step 4 & 5: Quorum consensus (if required)
             quorum_consensus = None
             requires_quorum = self._check_requires_quorum(request, policy_results)
             
@@ -401,7 +443,7 @@ class GraceGovernanceKernel:
                 feed_ids = self.mtl_kernel.feed_for_quorum(filters)
                 quorum_consensus = self.quorum_bridge.consensus(feed_ids, context={"request": request})
             
-            # Step 5: Synthesize final decision
+            # Step 6: Synthesize final decision
             decision = self.synthesizer.merge(
                 request=request,
                 policy_results=policy_results,
@@ -409,7 +451,15 @@ class GraceGovernanceKernel:
                 quorum_consensus=quorum_consensus
             )
             
-            # Step 6: Store decision (if MTL kernel available)
+            # Add vault compliance information to decision
+            if vault_compliance_report:
+                decision["vault_compliance"] = {
+                    "compliance_score": vault_compliance_report.compliance_score,
+                    "watermarks": [r.watermark for r in vault_compliance_report.vault_results.values()],
+                    "explainable_summary": vault_compliance_report.explainable_summary
+                }
+            
+            # Step 7: Store decision (if MTL kernel available)
             if self.mtl_kernel:
                 try:
                     self.mtl_kernel.store_decision(decision)
@@ -475,6 +525,36 @@ class GraceGovernanceKernel:
             return str(request.get('id', request.get('request_id', 'unknown')))
         else:
             return 'unknown'
+    
+    def _convert_request_to_dict(self, request) -> Dict[str, Any]:
+        """Convert request object to dictionary format for vault validation."""
+        if isinstance(request, dict):
+            return request
+        
+        # Try to extract common attributes
+        request_dict = {
+            "request_id": self._extract_request_id(request),
+            "timestamp": getattr(request, 'timestamp', None),
+            "constitutional_compliance": True  # Default assumption
+        }
+        
+        # Extract other common attributes
+        if hasattr(request, 'action'):
+            request_dict["action"] = request.action
+        if hasattr(request, 'claims'):
+            request_dict["claims"] = request.claims
+        if hasattr(request, 'reasoning_chain'):
+            request_dict["reasoning_chain"] = request.reasoning_chain
+        if hasattr(request, 'code_changes'):
+            request_dict["code_changes"] = request.code_changes
+        if hasattr(request, 'verification_status'):
+            request_dict["verification_status"] = request.verification_status
+        if hasattr(request, 'trust_level'):
+            request_dict["trust_level"] = request.trust_level
+        if hasattr(request, 'sandbox_enabled'):
+            request_dict["sandbox_enabled"] = request.sandbox_enabled
+        
+        return request_dict
     
     def get_stats(self) -> dict:
         """Get governance kernel statistics for compatibility."""

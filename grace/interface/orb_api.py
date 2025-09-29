@@ -6,12 +6,15 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .orb_interface import GraceUnifiedOrbInterface, PanelType, NotificationPriority
 from .ide.grace_ide import BlockType  # referenced by IDE endpoints
+from ..core.utils import enum_from_str, create_error_response, validate_request_size, utc_timestamp, normalize_timestamp
+from ..core.middleware import RequestIDMiddleware, GraceHTTPExceptionHandler, get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +192,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add request ID middleware
+app.add_middleware(RequestIDMiddleware)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -197,6 +203,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add exception handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return await GraceHTTPExceptionHandler.handle_http_exception(request, exc)
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return await GraceHTTPExceptionHandler.handle_validation_error(request, exc)
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return await GraceHTTPExceptionHandler.handle_http_exception(request, exc)
 
 # WebSocket connections
 ws_connections: Dict[str, WebSocket] = {}
@@ -237,8 +256,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0"
+        "timestamp": utc_timestamp(),
+        "version": "1.0.0",
+        "request_id": get_request_id()
     }
 
 # ---------------------------
@@ -250,34 +270,59 @@ async def create_session(request: SessionCreateRequest):
     """Create a new orb session."""
     try:
         session_id = await orb_interface.create_session(request.user_id, request.preferences)
-        return {"session_id": session_id, "status": "created"}
+        return {"session_id": session_id, "status": "created", "request_id": get_request_id()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to create session: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("SESSION_CREATE_FAILED", "Failed to create session", str(e))
+        )
 
 
 @app.delete("/api/orb/v1/sessions/{session_id}")
 async def end_session(session_id: str):
     """End an orb session."""
-    success = await orb_interface.end_session(session_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"status": "ended"}
+    try:
+        success = await orb_interface.end_session(session_id)
+        if not success:
+            return JSONResponse(
+                status_code=404,
+                content=create_error_response("SESSION_NOT_FOUND", "Session not found", f"Session ID: {session_id}")
+            )
+        return {"status": "ended", "request_id": get_request_id()}
+    except Exception as e:
+        logger.error(f"Failed to end session {session_id}: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("SESSION_END_FAILED", "Failed to end session", str(e))
+        )
 
 
 @app.get("/api/orb/v1/sessions/{session_id}")
 async def get_session(session_id: str):
     """Get session information."""
-    session = orb_interface.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {
-        "session_id": session.session_id,
-        "user_id": session.user_id,
-        "start_time": session.start_time,
-        "last_activity": session.last_activity,
-        "message_count": len(session.chat_messages),
-        "active_panels": len(session.active_panels)
-    }
+    try:
+        session = orb_interface.get_session(session_id)
+        if not session:
+            return JSONResponse(
+                status_code=404,
+                content=create_error_response("SESSION_NOT_FOUND", "Session not found", f"Session ID: {session_id}")
+            )
+        return {
+            "session_id": session.session_id,
+            "user_id": session.user_id,
+            "start_time": normalize_timestamp(session.start_time),
+            "last_activity": normalize_timestamp(session.last_activity),
+            "message_count": len(session.chat_messages),
+            "active_panels": len(session.active_panels),
+            "request_id": get_request_id()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get session {session_id}: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("SESSION_GET_FAILED", "Failed to get session", str(e))
+        )
 
 # ---------------------------
 # Chat Interface
@@ -287,16 +332,45 @@ async def get_session(session_id: str):
 async def send_chat_message(request: ChatMessageRequest):
     """Send a chat message."""
     try:
+        # Validate content size
+        size_error = validate_request_size(request.content, max_size_mb=10)
+        if size_error:
+            return JSONResponse(status_code=413, content=size_error)
+        
+        # Validate attachments size if present
+        if request.attachments:
+            for attachment in request.attachments:
+                attachment_error = validate_request_size(attachment, max_size_mb=50)  # Larger limit for attachments
+                if attachment_error:
+                    return JSONResponse(status_code=413, content=attachment_error)
+        
         message_id = await orb_interface.send_chat_message(
             request.session_id,
             request.content,
             request.attachments
         )
-        return {"message_id": message_id, "status": "sent"}
+        return {
+            "message_id": message_id, 
+            "status": "sent",
+            "timestamp": utc_timestamp(),
+            "request_id": get_request_id()
+        }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        if "not found" in str(e).lower():
+            return JSONResponse(
+                status_code=404,
+                content=create_error_response("SESSION_NOT_FOUND", "Session not found", str(e))
+            )
+        return JSONResponse(
+            status_code=400,
+            content=create_error_response("VALIDATION_ERROR", "Invalid chat message request", str(e))
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to send chat message: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("CHAT_MESSAGE_FAILED", "Failed to send chat message", str(e))
+        )
 
 
 @app.get("/api/orb/v1/chat/{session_id}/history")
@@ -326,11 +400,8 @@ async def get_chat_history(session_id: str, limit: Optional[int] = None):
 async def create_panel(request: PanelCreateRequest):
     """Create a new panel."""
     try:
-        # Flexible enum parsing: allow value ("memory_explorer_panel") or name ("MEMORY_EXPLORER_PANEL")
-        try:
-            panel_type = PanelType(request.panel_type.lower())
-        except ValueError:
-            panel_type = PanelType[request.panel_type.upper()]
+        # Use centralized enum parsing with clear error handling
+        panel_type = enum_from_str(PanelType, request.panel_type)
 
         panel_id = await orb_interface.create_panel(
             request.session_id,
@@ -339,15 +410,38 @@ async def create_panel(request: PanelCreateRequest):
             request.data,
             request.position
         )
-        return {"panel_id": panel_id, "status": "created"}
-    except KeyError:
-        raise HTTPException(status_code=400, detail=f"Unknown panel_type '{request.panel_type}'")
+        return {
+            "panel_id": panel_id, 
+            "status": "created",
+            "panel_type": panel_type.value,
+            "timestamp": utc_timestamp(),
+            "request_id": get_request_id()
+        }
     except ValueError as e:
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+        if "invalid" in str(e).lower() and "paneltype" in str(e).lower():
+            return JSONResponse(
+                status_code=400,
+                content=create_error_response(
+                    "INVALID_PANEL_TYPE", 
+                    f"Invalid panel type: '{request.panel_type}'", 
+                    str(e)
+                )
+            )
+        elif "not found" in str(e).lower():
+            return JSONResponse(
+                status_code=404,
+                content=create_error_response("SESSION_NOT_FOUND", "Session not found", str(e))
+            )
+        return JSONResponse(
+            status_code=400,
+            content=create_error_response("VALIDATION_ERROR", "Invalid panel creation request", str(e))
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to create panel: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("PANEL_CREATE_FAILED", "Failed to create panel", str(e))
+        )
 
 
 @app.delete("/api/orb/v1/panels/{session_id}/{panel_id}")
@@ -403,13 +497,20 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "default"
         import tempfile
         import os
 
+        # Read file content
+        content = await file.read()
+        
+        # Validate file size (50MB limit for file uploads)
+        size_error = validate_request_size(content, max_size_mb=50)
+        if size_error:
+            return JSONResponse(status_code=413, content=size_error)
+
         # safer suffix handling if filename has no dot
         suffix = ""
         if "." in (file.filename or ""):
             suffix = f".{file.filename.rsplit('.', 1)[-1]}"
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-            content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
 
@@ -426,12 +527,18 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "default"
                 "filename": file.filename,
                 "file_type": file_type,
                 "size": len(content),
-                "status": "uploaded"
+                "status": "uploaded",
+                "timestamp": utc_timestamp(),
+                "request_id": get_request_id()
             }
         finally:
             os.unlink(temp_file_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to upload document: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("UPLOAD_FAILED", "Failed to upload document", str(e))
+        )
 
 
 @app.post("/api/orb/v1/memory/search")
@@ -525,7 +632,7 @@ async def update_governance_task_status(task_id: str, status: str, user_id: str)
 async def create_notification(request: NotificationRequest):
     """Create a notification."""
     try:
-        priority = NotificationPriority(request.priority.lower())
+        priority = enum_from_str(NotificationPriority, request.priority)
         notification_id = await orb_interface.create_notification(
             request.user_id,
             request.title,
@@ -535,9 +642,33 @@ async def create_notification(request: NotificationRequest):
             request.actions,
             request.auto_dismiss_seconds
         )
-        return {"notification_id": notification_id, "status": "created"}
+        return {
+            "notification_id": notification_id, 
+            "status": "created",
+            "priority": priority.value,
+            "timestamp": utc_timestamp(),
+            "request_id": get_request_id()
+        }
+    except ValueError as e:
+        if "invalid" in str(e).lower() and "notificationpriority" in str(e).lower():
+            return JSONResponse(
+                status_code=400,
+                content=create_error_response(
+                    "INVALID_PRIORITY", 
+                    f"Invalid notification priority: '{request.priority}'", 
+                    str(e)
+                )
+            )
+        return JSONResponse(
+            status_code=400,
+            content=create_error_response("VALIDATION_ERROR", "Invalid notification request", str(e))
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to create notification: {e}", extra={"request_id": get_request_id()})
+        return JSONResponse(
+            status_code=500,
+            content=create_error_response("NOTIFICATION_CREATE_FAILED", "Failed to create notification", str(e))
+        )
 
 
 @app.get("/api/orb/v1/notifications/{user_id}")
@@ -803,7 +934,13 @@ async def get_ide_stats():
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for real-time communication."""
     await websocket.accept()
+    
+    # Generate request ID for this WebSocket connection
+    ws_request_id = f"ws_{session_id}_{utc_timestamp().replace(':', '').replace('-', '').replace('.', '')[:16]}"
+    
     ws_connections[session_id] = websocket
+    
+    logger.info(f"WebSocket connected for session {session_id}", extra={"request_id": ws_request_id})
 
     try:
         while True:
@@ -813,36 +950,68 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             if message_type == "chat_message":
                 content = data.get("content", "")
                 attachments = data.get("attachments", [])
+                
+                # Set request ID context for WebSocket handling
+                from ..core.middleware import set_request_id
+                msg_request_id = f"{ws_request_id}_msg_{len(content) % 1000}"
+                set_request_id(msg_request_id)
+                
                 try:
+                    # Validate message content size
+                    size_error = validate_request_size(content, max_size_mb=1)  # Smaller limit for WS messages
+                    if size_error:
+                        await websocket.send_json({
+                            "type": "error", 
+                            "error": size_error["error"],
+                            "request_id": msg_request_id
+                        })
+                        continue
+                    
                     message_id = await orb_interface.send_chat_message(session_id, content, attachments)
                     messages = orb_interface.get_chat_history(session_id, 2)
                     await websocket.send_json({
                         "type": "chat_response",
                         "message_id": message_id,
+                        "timestamp": utc_timestamp(),
+                        "request_id": msg_request_id,
                         "messages": [
                             {
                                 "message_id": msg.message_id,
                                 "user_id": msg.user_id,
                                 "content": msg.content,
-                                "timestamp": msg.timestamp,
+                                "timestamp": normalize_timestamp(msg.timestamp),
                                 "message_type": msg.message_type
                             }
                             for msg in messages[-1:]
                         ]
                     })
                 except Exception as e:
-                    await websocket.send_json({"type": "error", "error": str(e)})
+                    logger.error(f"WebSocket chat message error: {e}", extra={"request_id": msg_request_id})
+                    await websocket.send_json({
+                        "type": "error", 
+                        "error": create_error_response("WS_CHAT_ERROR", "Chat message failed", str(e)),
+                        "request_id": msg_request_id
+                    })
 
             elif message_type == "ping":
-                await websocket.send_json({"type": "pong"})
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": utc_timestamp(),
+                    "request_id": ws_request_id
+                })
 
             else:
-                await websocket.send_json({"type": "error", "error": f"Unknown message type: {message_type}"})
+                await websocket.send_json({
+                    "type": "error", 
+                    "error": create_error_response("UNKNOWN_MESSAGE_TYPE", f"Unknown message type: {message_type}"),
+                    "request_id": ws_request_id
+                })
 
     except WebSocketDisconnect:
         ws_connections.pop(session_id, None)
+        logger.info(f"WebSocket disconnected for session {session_id}", extra={"request_id": ws_request_id})
     except Exception as e:
-        logger.error(f"WebSocket error for session {session_id}: {e}")
+        logger.error(f"WebSocket error for session {session_id}: {e}", extra={"request_id": ws_request_id})
         ws_connections.pop(session_id, None)
 
 # ---------------------------

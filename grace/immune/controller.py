@@ -21,6 +21,7 @@ from dataclasses import dataclass, asdict
 from ..contracts.message_envelope_simple import GraceMessageEnvelope, EventTypes
 from ..resilience_kernel.kernel import ResilienceKernel
 from ..immune.avn_core import AnomalyType, SeverityLevel
+from ..core.utils import utc_timestamp, normalize_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class ImmuneAction:
     parameters: Dict[str, Any]
     duration_seconds: Optional[int] = None
     triggered_by: str = None
-    created_at: datetime = datetime.utcnow()
+    created_at: str = utc_timestamp()
 
 
 @dataclass

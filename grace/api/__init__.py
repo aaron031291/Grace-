@@ -1,1 +1,1 @@
-"""Grace API Service"""
+"""Grace API package."""

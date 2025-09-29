@@ -1,0 +1,182 @@
+"""Enhanced docker-compose for Grace development with all services."""
+
+version: '3.8'
+
+services:
+  # PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15
+    container_name: grace_postgres
+    environment:
+      POSTGRES_DB: grace
+      POSTGRES_USER: grace_user
+      POSTGRES_PASSWORD: grace_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db:/docker-entrypoint-initdb.d
+    networks:
+      - grace_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grace_user -d grace"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: grace_redis
+    command: redis-server --appendonly yes --requirepass grace_redis_pass
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - grace_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ChromaDB for vector storage and similarity search
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: grace_chroma
+    ports:
+      - "8001:8000"
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - grace_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MinIO for object storage
+  minio:
+    image: minio/minio:latest
+    container_name: grace_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=minio123
+    volumes:
+      - minio_data:/data
+    networks:
+      - grace_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: grace_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - grace_network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  # Grafana for observability dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grace_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./observability/grafana-datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - grace_network
+
+  # Grace Backend API
+  grace_backend:
+    build: 
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: grace_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      - DEBUG=true
+      - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace
+      - REDIS_URL=redis://:grace_redis_pass@redis:6379/0
+      - VECTOR_DB_URL=http://chromadb:8000
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=minio
+      - STORAGE_SECRET_KEY=minio123
+    ports:
+      - "8000:8000"  # API endpoint
+    volumes:
+      - ./backend:/app/backend
+      - ./grace:/app/grace
+      - ./logs:/app/logs
+    networks:
+      - grace_network
+    restart: unless-stopped
+
+  # Celery worker for background tasks
+  grace_worker:
+    build: 
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: grace_worker
+    depends_on:
+      - grace_backend
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace
+      - REDIS_URL=redis://:grace_redis_pass@redis:6379/0
+      - VECTOR_DB_URL=http://chromadb:8000
+      - STORAGE_ENDPOINT=http://minio:9000
+    volumes:
+      - ./backend:/app/backend
+      - ./grace:/app/grace
+    networks:
+      - grace_network
+    command: ["python", "-m", "celery", "worker", "-A", "backend.worker.celery_app", "--loglevel=info"]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:  
+  chroma_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  grace_network:
+    driver: bridge

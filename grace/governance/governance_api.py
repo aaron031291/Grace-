@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Union
 try:
     from fastapi import FastAPI, HTTPException, Depends, Request
     from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -24,9 +25,12 @@ except ImportError:
     FASTAPI_AVAILABLE = False
     BaseModel = object
     Field = lambda **kwargs: None
+    JSONResponse = None
 
 from ..contracts.message_envelope_simple import GraceMessageEnvelope, EventTypes, GMEHeaders, RBACContext
 from ..layer_04_audit_logs.immutable_logs import ImmutableLogs as ImmutableLogger
+from ..core.utils import create_error_response, utc_timestamp, normalize_timestamp
+from ..core.middleware import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -230,16 +234,33 @@ class GovernanceAPIService:
             # Extract RBAC context
             rbac_context = RBACCheck.extract_rbac_from_headers(request)
             if not rbac_context:
-                raise HTTPException(status_code=401, detail="Authentication required")
+                return JSONResponse(
+                    status_code=401,
+                    content=create_error_response("UNAUTHORIZED", "Authentication required")
+                )
             
             # Check if requester can submit this type of request
             if not self._can_submit_request(governance_request.action_type, rbac_context):
-                raise HTTPException(status_code=403, detail="Insufficient permissions to submit request")
+                return JSONResponse(
+                    status_code=403,
+                    content=create_error_response(
+                        "INSUFFICIENT_PERMISSIONS", 
+                        "Insufficient permissions to submit request",
+                        f"Action type: {governance_request.action_type}"
+                    )
+                )
             
             # Check consent requirements
             consent_scopes = self.consent_requirements.get(governance_request.action_type, [])
             if consent_scopes and not RBACCheck.check_consent(request, consent_scopes):
-                raise HTTPException(status_code=403, detail=f"Missing required consent: {consent_scopes}")
+                return JSONResponse(
+                    status_code=403,
+                    content=create_error_response(
+                        "MISSING_CONSENT", 
+                        f"Missing required consent: {consent_scopes}",
+                        f"Action type: {governance_request.action_type}"
+                    )
+                )
             
             # Create request record
             request_record = {
@@ -270,8 +291,9 @@ class GovernanceAPIService:
                 "request_id": governance_request.request_id,
                 "action_type": governance_request.action_type,
                 "requester": governance_request.requester,
-                "timestamp": datetime.utcnow().isoformat(),
-                "rbac_context": rbac_context.to_dict()
+                "timestamp": utc_timestamp(),
+                "rbac_context": rbac_context.to_dict(),
+                "http_request_id": get_request_id()
             })
             
             # Publish event
@@ -282,27 +304,35 @@ class GovernanceAPIService:
                         "request_id": governance_request.request_id,
                         "action_type": governance_request.action_type,
                         "priority": governance_request.priority,
-                        "requester": governance_request.requester
+                        "requester": governance_request.requester,
+                        "http_request_id": get_request_id()
                     },
                     source="governance_api",
                     priority=governance_request.priority
                 )
             
-            logger.info(f"Queued governance request {governance_request.request_id} for {governance_request.action_type}")
+            logger.info(
+                f"Queued governance request {governance_request.request_id} for {governance_request.action_type}",
+                extra={"request_id": get_request_id()}
+            )
             
             return {
                 "request_id": governance_request.request_id,
                 "status": "pending",
                 "message": "Request queued for approval",
                 "approvals_required": request_record["approvals_required"],
-                "estimated_approval_time": "1-4 hours"
+                "estimated_approval_time": "1-4 hours",
+                "created_at": normalize_timestamp(request_record["created_at"]),
+                "expires_at": normalize_timestamp(request_record["expires_at"]),
+                "http_request_id": get_request_id()
             }
             
-        except HTTPException:
-            raise
         except Exception as e:
-            logger.error(f"Error queuing governance request: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error(f"Error queuing governance request: {e}", extra={"request_id": get_request_id()})
+            return JSONResponse(
+                status_code=500,
+                content=create_error_response("GOVERNANCE_QUEUE_FAILED", "Failed to queue governance request", str(e))
+            )
     
     async def _handle_approval(self, decision: GovernanceDecision, request: Request) -> Dict[str, Any]:
         """Handle approval decision."""

@@ -1,0 +1,51 @@
+version: '1.0'
+name: Grace Sandbox Branch Policy
+description: Sandbox branch enforcement with required approvals and policy validation
+sandbox:
+  branch_protection:
+    enabled: true
+    enforce_admins: true
+    required_status_checks:
+    - policy-check
+    - security-scan
+    - governance-validation
+    strict: true
+  approval_requirements:
+    required_reviewers: 2
+    dismiss_stale_reviews: true
+    require_code_owner_reviews: true
+    required_approving_review_count: 1
+  policy_validation:
+    required: true
+    blocking: true
+    checks:
+    - dangerous_operations
+    - security_compliance
+    - governance_alignment
+  automated_testing:
+    required: true
+    test_suites:
+    - unit_tests
+    - integration_tests
+    - policy_tests
+    coverage_threshold: 0.8
+  security_scanning:
+    enabled: true
+    tools:
+    - bandit
+    - semgrep
+    - safety
+    fail_on:
+    - high
+    - critical
+  labels:
+    required_for_merge:
+    - policy:pass
+    - security:reviewed
+    - governance:approved
+    auto_apply:
+    - sandbox:active
+  experiment_limits:
+    max_duration_hours: 24
+    max_resource_usage: 0.5
+    auto_cleanup: true

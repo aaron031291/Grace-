@@ -1,0 +1,46 @@
+name: Grace Policy Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  policy-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml jsonschema
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        
+    - name: Validate YAML Policy Files
+      run: |
+        python scripts/validate_policies.py
+        
+    - name: Check Dangerous Operations Policy
+      run: |
+        python scripts/check_dangerous_operations.py
+        
+    - name: Validate Sandbox Branch Policies
+      run: |
+        python scripts/validate_sandbox_policies.py
+        
+    - name: Security Policy Compliance Check
+      run: |
+        python scripts/security_compliance_check.py
+        
+    - name: Policy Integration Test
+      run: |
+        python -m pytest demo_and_tests/tests/policy_tests.py -v

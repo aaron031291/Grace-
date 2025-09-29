@@ -13,17 +13,21 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
+    from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
     BaseModel = object
     Field = lambda **kwargs: None
+    JSONResponse = None
 
 from .lightning import LightningMemory
 from .fusion import FusionMemory
 from .librarian import EnhancedLibrarian
+from ..core.utils import create_error_response, validate_request_size, utc_timestamp, normalize_timestamp
+from ..core.middleware import get_request_id, RequestIDMiddleware, GraceHTTPExceptionHandler
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +99,19 @@ class GraceMemoryAPI:
                 description="Memory operations for Grace kernel",
                 version="1.0.0"
             )
+            
+            # Add middleware
+            self.app.add_middleware(RequestIDMiddleware)
+            
+            # Add exception handlers
+            @self.app.exception_handler(HTTPException)
+            async def http_exception_handler(request: Request, exc: HTTPException):
+                return await GraceHTTPExceptionHandler.handle_http_exception(request, exc)
+
+            @self.app.exception_handler(Exception)
+            async def general_exception_handler(request: Request, exc: Exception):
+                return await GraceHTTPExceptionHandler.handle_http_exception(request, exc)
+            
             self._register_routes()
         else:
             logger.warning("FastAPI not available, running in compatibility mode")
@@ -109,6 +126,11 @@ class GraceMemoryAPI:
         async def write_memory(request: MemoryWriteRequest):
             """Write content to memory with full processing pipeline."""
             try:
+                # Validate content size
+                size_error = validate_request_size(request.content, max_size_mb=10)
+                if size_error:
+                    return JSONResponse(status_code=413, content=size_error)
+                
                 # Process through librarian for chunking and indexing
                 if request.content_type == "text/plain" or request.content_type.startswith("text/"):
                     result = self.librarian.ingest_document(
@@ -130,19 +152,24 @@ class GraceMemoryAPI:
                                 "source_id": result["source_id"],
                                 "document_entry_id": result["document_entry_id"],
                                 "chunks_processed": result["chunks_processed"],
-                                "constitutional_score": result["constitutional_score"]
+                                "constitutional_score": result["constitutional_score"],
+                                "timestamp": utc_timestamp(),
+                                "request_id": get_request_id()
                             }
                         )
                     else:
-                        return MemoryResponse(
-                            success=False,
-                            message=f"Processing failed: {result.get('reason', 'Unknown error')}",
-                            data=result
+                        return JSONResponse(
+                            status_code=400,
+                            content=create_error_response(
+                                "MEMORY_PROCESSING_FAILED",
+                                f"Processing failed: {result.get('reason', 'Unknown error')}",
+                                str(result)
+                            )
                         )
                 
                 else:
                     # Direct storage for non-text content
-                    cache_key = request.source_id or f"direct_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                    cache_key = request.source_id or f"direct_{utc_timestamp().replace(':', '').replace('-', '').replace('.', '')[:16]}"
                     
                     # Store in cache
                     cache_success = self.lightning.put(
@@ -167,13 +194,18 @@ class GraceMemoryAPI:
                         data={
                             "cache_key": cache_key,
                             "fusion_entry_id": fusion_entry_id,
-                            "cache_stored": cache_success
+                            "cache_stored": cache_success,
+                            "timestamp": utc_timestamp(),
+                            "request_id": get_request_id()
                         }
                     )
                     
             except Exception as e:
-                logger.error(f"Memory write failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                logger.error(f"Memory write failed: {e}", extra={"request_id": get_request_id()})
+                return JSONResponse(
+                    status_code=500,
+                    content=create_error_response("MEMORY_WRITE_FAILED", "Failed to write to memory", str(e))
+                )
         
         @self.app.post("/api/memory/v1/read", response_model=MemoryResponse)
         async def read_memory(request: MemoryReadRequest):
@@ -283,7 +315,8 @@ class GraceMemoryAPI:
                     success=True,
                     message="Memory statistics retrieved",
                     data={
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": utc_timestamp(),
+                        "request_id": get_request_id(),
                         "lightning_cache": {
                             "stats": lightning_stats,
                             "health": lightning_health
@@ -298,8 +331,11 @@ class GraceMemoryAPI:
                 )
                 
             except Exception as e:
-                logger.error(f"Failed to get memory stats: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                logger.error(f"Failed to get memory stats: {e}", extra={"request_id": get_request_id()})
+                return JSONResponse(
+                    status_code=500,
+                    content=create_error_response("MEMORY_STATS_FAILED", "Failed to get memory statistics", str(e))
+                )
         
         @self.app.post("/api/memory/v1/document/{source_id}", response_model=MemoryResponse)
         async def get_document_info(source_id: str):

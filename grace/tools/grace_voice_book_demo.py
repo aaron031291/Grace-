@@ -20,8 +20,8 @@ import json
 import time
 from datetime import datetime
 
-# Add grace to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add grace to path - go up two directories to reach the repository root
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from grace.interface_kernel.kernel import InterfaceKernel
 from grace.interface_kernel.voice_service import create_voice_service

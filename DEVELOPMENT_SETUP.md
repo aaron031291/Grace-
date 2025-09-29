@@ -253,7 +253,7 @@ git config --global credential.helper store
 **Permission errors (Linux/macOS):**
 ```bash
 # Fix permissions
-chmod +x scripts/*.sh
+chmod +x grace/scripts/*.sh
 sudo chown -R $USER:$USER venv/
 ```
 
@@ -307,7 +307,7 @@ After setup, explore:
 1. [Governance Examples](./governance_examples.py)
 2. [Communication Demo](./grace_communication_demo.py) 
 3. [System Analysis](./grace_system_analysis.py)
-4. [Multi-OS Kernel](./multi_os/README.md)
+4. [Multi-OS Kernel](./grace/multi_os/README.md)
 5. [Architecture Documentation](./GRACE_SYSTEM_ANALYSIS_REPORT.md)
 
 Happy coding! 🎉

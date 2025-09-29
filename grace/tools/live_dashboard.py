@@ -19,7 +19,8 @@ import uvicorn
 # Import our system check capabilities
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add grace to path - go up two directories to reach the repository root  
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from system_check import GraceSystemHealthChecker, SystemHealthReport, ComponentStatus
 

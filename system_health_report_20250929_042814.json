@@ -1,0 +1,246 @@
+{
+  "timestamp": "2025-09-29T04:28:13.804551",
+  "overall_status": "degraded",
+  "components": [
+    {
+      "name": "EventBus",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core.event_bus",
+        "class_name": "EventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.7020053863525391
+    },
+    {
+      "name": "MemoryCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.core",
+        "class_name": "MemoryCore",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 5.4836273193359375e-06
+    },
+    {
+      "name": "EventMesh",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_02_event_mesh",
+        "class_name": "GraceEventBus",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.07060694694519043
+    },
+    {
+      "name": "AuditLogs",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.layer_04_audit_logs.immutable_logs",
+        "class_name": "ImmutableLogs",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 0.0004658699035644531
+    },
+    {
+      "name": "GovernanceKernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.governance.grace_governance_kernel",
+        "class_name": "GraceGovernanceKernel"
+      },
+      "error": "Import error: cannot import name 'MLDLQuorum' from 'grace.mldl' (/home/runner/work/Grace-/Grace-/grace/mldl/__init__.py)",
+      "response_time": null
+    },
+    {
+      "name": "VerificationEngine",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.verification_engine",
+        "class_name": "VerificationEngine",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 4.291534423828125e-06
+    },
+    {
+      "name": "TrustCore",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.trust_core_kernel",
+        "class_name": "TrustCoreKernel",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 3.0994415283203125e-06
+    },
+    {
+      "name": "Parliament",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.governance.parliament",
+        "class_name": "Parliament",
+        "importable": true,
+        "description": ""
+      },
+      "error": null,
+      "response_time": 2.6226043701171875e-06
+    },
+    {
+      "name": "GovernanceAPI",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.governance.governance_api",
+        "class_name": "GovernanceAPIService"
+      },
+      "error": "Import error: No module named 'starlette'",
+      "response_time": null
+    },
+    {
+      "name": "MTL_Kernel",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.kernel",
+        "class_name": "MTLKernel",
+        "importable": true,
+        "description": "Main MTL kernel orchestrating all memory, trust, and learning operations."
+      },
+      "error": null,
+      "response_time": 0.007913351058959961
+    },
+    {
+      "name": "TrustService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.trust_service",
+        "class_name": "TrustService",
+        "importable": true,
+        "description": "Trust ledger for managing attestations and trust scores."
+      },
+      "error": null,
+      "response_time": 2.1457672119140625e-06
+    },
+    {
+      "name": "ImmutableLogService",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.mtl_kernel.immutable_log_service",
+        "class_name": "ImmutableLogService",
+        "importable": true,
+        "description": "Immutable audit log with Merkle proofs."
+      },
+      "error": null,
+      "response_time": 1.430511474609375e-06
+    },
+    {
+      "name": "SecurityVault",
+      "status": "healthy",
+      "details": {
+        "module_path": "grace.contracts.message_envelope_simple",
+        "class_name": "RBACContext",
+        "importable": true,
+        "description": "Role-based access control context."
+      },
+      "error": null,
+      "response_time": 1.430511474609375e-06
+    },
+    {
+      "name": "StatusService",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.interface.status_service",
+        "class_name": "GraceStatusService"
+      },
+      "error": "Import error: No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "InterfaceKernel",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.interface_kernel.kernel",
+        "class_name": "InterfaceKernel"
+      },
+      "error": "Import error: No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "OrchestrationService",
+      "status": "missing",
+      "details": {
+        "module_path": "grace.orchestration.orchestration_service",
+        "class_name": "OrchestrationService"
+      },
+      "error": "Import error: No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "OODA_Loop",
+      "status": "unhealthy",
+      "details": {},
+      "error": "No module named 'fastapi'",
+      "response_time": null
+    },
+    {
+      "name": "Contradiction_Detection",
+      "status": "healthy",
+      "details": {
+        "contradictions_found": 1
+      },
+      "error": null,
+      "response_time": 0.8013923168182373
+    },
+    {
+      "name": "Decision_Narration",
+      "status": "healthy",
+      "details": {
+        "decision": "review",
+        "confidence": 0.0
+      },
+      "error": null,
+      "response_time": 0.8049991130828857
+    },
+    {
+      "name": "Trust_Scoring",
+      "status": "healthy",
+      "details": {
+        "trust_score": 0.5,
+        "audit_id": "trust_init_test_memory_entry",
+        "attestation_id": "ae7babd8-3cfe-4e44-8ac7-6e7427a64318"
+      },
+      "error": null,
+      "response_time": 0.80517578125
+    }
+  ],
+  "layers_status": {
+    "EventBus": "healthy",
+    "MemoryCore": "healthy",
+    "EventMesh": "healthy",
+    "AuditLogs": "healthy"
+  },
+  "vaults_status": {
+    "MTL_Kernel": "healthy",
+    "TrustService": "healthy",
+    "ImmutableLogService": "healthy",
+    "SecurityVault": "healthy"
+  },
+  "telemetry_active": false,
+  "ooda_loop_functional": false,
+  "governance_functional": true,
+  "recommendations": [
+    "Missing components detected (5). Check installation and imports.",
+    "Unhealthy components detected (1). Review component errors.",
+    "Telemetry systems not fully operational. Monitor system visibility may be limited.",
+    "OODA loop not functional. System may not respond properly to events."
+  ]
+}

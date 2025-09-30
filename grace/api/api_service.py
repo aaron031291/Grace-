@@ -228,6 +228,7 @@ def create_app() -> FastAPI:
                               current_user: dict = Depends(get_current_user)):
         """Search knowledge base with vector and keyword filters."""
         from ..auth.jwt_auth import require_scopes, GraceScopes
+        from ..audit.golden_path_auditor import append_audit
         
         # Check if user has read permissions
         user_scopes = current_user.get("scopes", [])
@@ -237,10 +238,27 @@ def create_app() -> FastAPI:
         if not q.strip():
             return {"results": [], "message": "Empty query"}
         
-        from ..memory_ingestion.pipeline import get_memory_ingestion_pipeline
-        pipeline = get_memory_ingestion_pipeline(settings.vector_url)
+        # Audit the search operation
+        audit_data = {
+            "query": q,
+            "filters": filters,
+            "trust_threshold": trust_threshold,
+            "limit": limit,
+            "user_scopes": user_scopes
+        }
         
         try:
+            # Log memory read operation
+            audit_id = await append_audit(
+                operation_type="memory_read",
+                operation_data=audit_data,
+                user_id=current_user["user_id"],
+                transparency_level="democratic_oversight"
+            )
+            
+            from ..memory_ingestion.pipeline import get_memory_ingestion_pipeline
+            pipeline = get_memory_ingestion_pipeline(settings.vector_url)
+            
             results = await pipeline.search_memory(
                 query=q,
                 user_id=current_user["user_id"],
@@ -248,22 +266,53 @@ def create_app() -> FastAPI:
                 limit=limit
             )
             
-            return {
+            response_data = {
                 "query": q,
                 "filters": filters,
                 "trust_threshold": trust_threshold,
                 "results": results,
                 "count": len(results),
-                "user_id": current_user["user_id"]
+                "user_id": current_user["user_id"],
+                "audit_id": audit_id
             }
+            
+            # Log the API response
+            await append_audit(
+                operation_type="api_response",
+                operation_data={
+                    "endpoint": "/api/v1/search",
+                    "response_type": "search_results",
+                    "result_count": len(results),
+                    "audit_id": audit_id
+                },
+                user_id=current_user["user_id"]
+            )
+            
+            return response_data
+            
         except Exception as e:
             logger.error(f"Search failed: {e}")
+            
+            # Log the error
+            await append_audit(
+                operation_type="api_error",
+                operation_data={
+                    "endpoint": "/api/v1/search",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "query": q
+                },
+                user_id=current_user["user_id"],
+                transparency_level="governance_internal"
+            )
+            
             raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
     
     @app.post("/api/v1/memory/ingest")
     async def ingest_memory(request_data: dict, current_user: dict = Depends(get_current_user)):
         """Ingest file into memory system."""
         from ..auth.jwt_auth import GraceScopes
+        from ..audit.golden_path_auditor import append_audit
         
         # Check if user has write permissions
         user_scopes = current_user.get("scopes", [])
@@ -276,6 +325,20 @@ def create_app() -> FastAPI:
         try:
             # Add user context to request
             request_data["user_id"] = current_user["user_id"]
+            
+            # Log memory write operation
+            audit_id = await append_audit(
+                operation_type="memory_write",
+                operation_data={
+                    "ingestion_type": "file" if "file_path" in request_data else "text",
+                    "file_path": request_data.get("file_path"),
+                    "has_text": "text" in request_data,
+                    "tags": request_data.get("tags"),
+                    "trust_score": request_data.get("trust_score", 0.7)
+                },
+                user_id=current_user["user_id"],
+                transparency_level="governance_internal"  # Write operations are more restricted
+            )
             
             # Handle different ingestion types
             if 'file_path' in request_data:
@@ -300,10 +363,39 @@ def create_app() -> FastAPI:
             else:
                 raise HTTPException(status_code=400, detail="Either 'file_path' or 'text' is required")
             
+            # Add audit info to result
+            result["audit_id"] = audit_id
+            
+            # Log successful ingestion
+            await append_audit(
+                operation_type="api_response",
+                operation_data={
+                    "endpoint": "/api/v1/memory/ingest",
+                    "response_type": "ingestion_success",
+                    "ingestion_result": {k: v for k, v in result.items() if k != "audit_id"},
+                    "audit_id": audit_id
+                },
+                user_id=current_user["user_id"]
+            )
+            
             return result
             
         except Exception as e:
             logger.error(f"Memory ingestion failed: {e}")
+            
+            # Log the error
+            await append_audit(
+                operation_type="api_error",
+                operation_data={
+                    "endpoint": "/api/v1/memory/ingest",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "request_data": {k: v for k, v in request_data.items() if k not in ["text", "content"]}  # Don't log sensitive content
+                },
+                user_id=current_user["user_id"],
+                transparency_level="governance_internal"
+            )
+            
             raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
     
     return app

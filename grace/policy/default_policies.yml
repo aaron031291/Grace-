@@ -1,0 +1,89 @@
+description: Grace System Default Security Policies
+rules:
+  dangerous_code_execution:
+    actions:
+    - block
+    - log
+    - alert
+    conditions:
+    - pattern: (exec|eval|subprocess|os\.system|shell=True)
+      regex: true
+      type: content_pattern
+    - type: operation_type
+      values:
+      - code_execution
+      - shell_command
+    description: Block dangerous code execution patterns
+    enabled: true
+    exceptions:
+    - scopes:
+      - sandbox:build
+      - govern:tasks
+      type: scope_required
+    severity: critical
+  dangerous_file_operations:
+    actions:
+    - block
+    - log
+    - notify_admin
+    conditions:
+    - type: operation_type
+      values:
+      - file_write
+      - file_delete
+      - directory_create
+      - directory_delete
+    - patterns:
+      - /etc/.*
+      - /usr/bin/.*
+      - /var/log/.*
+      - .*\.sh$
+      - .*\.exe$
+      - .*\.bat$
+      type: file_path
+    description: Block dangerous file system operations
+    enabled: true
+    exceptions:
+    - roles:
+      - admin
+      - system
+      type: user_role
+    severity: high
+  ide_apply_changes:
+    actions:
+    - require_sandbox_branch
+    - require_policy_pass
+    - require_human_approval
+    conditions:
+    - type: operation_type
+      values:
+      - ide_apply_changes
+      - code_modification
+    description: Gate IDE apply changes to sandbox branch with approval
+    enabled: true
+    metadata:
+      required_approvals: 1
+      required_labels:
+      - policy:pass
+      sandbox_branch_prefix: sandbox/
+    severity: medium
+  network_access:
+    actions:
+    - require_approval
+    - log
+    conditions:
+    - type: operation_type
+      values:
+      - network_request
+      - socket_open
+    - pattern: (requests\.|urllib\.|socket\.|http)
+      regex: true
+      type: content_pattern
+    description: Control network access operations
+    enabled: true
+    exceptions:
+    - scopes:
+      - network:access
+      type: scope_required
+    severity: medium
+version: '1.0'

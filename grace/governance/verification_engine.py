@@ -29,9 +29,10 @@ class VerificationEngine:
     confidence scoring, and contradiction detection.
     """
     
-    def __init__(self, event_bus, memory_core):
+    def __init__(self, event_bus, memory_core, vault_engine=None):
         self.event_bus = event_bus
         self.memory_core = memory_core
+        self.vault_engine = vault_engine  # Optional vault engine for enhanced verification
         self.constitutional_principles = self._load_constitutional_principles()
         
     def _load_constitutional_principles(self) -> Dict[str, Dict[str, Any]]:

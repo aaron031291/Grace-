@@ -33,6 +33,18 @@ class ConstitutionalValidationResult:
     violations: List[ConstitutionalViolation]
     validation_timestamp: datetime
     validation_id: str
+    audit_trail: List[str] = None
+    
+    @property
+    def summary(self) -> str:
+        """Generate a summary of validation results."""
+        if self.is_valid:
+            return f"Valid (score: {self.compliance_score:.3f})"
+        
+        violation_summary = ", ".join([
+            f"{v.principle}:{v.severity}" for v in self.violations
+        ])
+        return f"Invalid (score: {self.compliance_score:.3f}) - {violation_summary}"
 
 
 class ConstitutionalValidator:
@@ -100,7 +112,8 @@ class ConstitutionalValidator:
             compliance_score=compliance_score,
             violations=violations,
             validation_timestamp=validation_timestamp,
-            validation_id=validation_id
+            validation_id=validation_id,
+            audit_trail=[f"Validated {len(violations)} principles", f"Score: {compliance_score:.3f}"]
         )
         
         # Log any violations

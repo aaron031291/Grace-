@@ -1,148 +1,219 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://grace.ai/schemas/ml-api/v1",
-  "title": "Grace ML REST API Specification",
-  "description": "REST API endpoints for Grace ML system",
+uvicorn grace_ml_api:app --host 0.0.0.0 --port 8090
+"""
+Grace ML REST API (FastAPI)
+Implements:
+  - GET    /health
+  - POST   /experience
+  - GET    /insights?since=ISO8601
+  - POST   /plan/propose
+  - GET    /plans/{id}/status
+  - POST   /snapshot/export
+  - POST   /rollback
 
-  "$defs": {
-    "SemVer": {
-      "type": "string", 
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
-    },
-    "UID": {
-      "type": "string", 
-      "pattern": "^[a-z][a-z0-9_-]{4,64}$"
-    },
-    "ISO8601": {
-      "type": "string", 
-      "format": "date-time"
+Notes
+- Pydantic v2 strict models, UTC-safe datetimes.
+- UID & SemVer patterns match your JSON schema.
+- Experience/Insight/AdaptationPlan bodies are accepted as validated mappings
+  (your spec references external "ml_schemas.json" — this code preserves that
+   by treating them as opaque, schema-validated upstream if you wish).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Mapping, Optional
+from uuid import uuid4
+
+from fastapi import FastAPI, Body, HTTPException, Path, Query, status
+from pydantic import BaseModel, Field, field_validator
+
+API_VERSION = "1.0.0"  # SemVer; matches #/$defs/SemVer
+BASE_PREFIX = ""       # endpoints are root-level per your spec
+
+
+# =========================
+# Helpers
+# =========================
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+def _gen_uid(prefix_first_char: str = "a") -> str:
+    # UID pattern: ^[a-z][a-z0-9_-]{4,64}$
+    base = uuid4().hex  # 32 lowercase hex
+    return f"{prefix_first_char}{base[:10]}"  # >=5 chars total
+
+def gen_uid_with(prefix: str) -> str:
+    # Keep first char alpha as per schema; you can feed 'e','c','p','s' etc.
+    first = prefix[0].lower() if prefix and prefix[0].isalpha() else "a"
+    return _gen_uid(first)
+
+
+# =========================
+# Pydantic base
+# =========================
+
+class StrictModel(BaseModel):
+    model_config = {
+        "extra": "forbid",
+        "validate_assignment": True,
+        "use_enum_values": True,
+        "ser_json_bytes": "utf8",
+        "populate_by_name": True,
     }
-  },
 
-  "endpoints": {
-    "GET /health": {
-      "description": "Health check endpoint",
-      "response": {
-        "status_code": 200,
-        "schema": {
-          "type": "object",
-          "required": ["status", "version"],
-          "properties": {
-            "status": {"const": "ok"},
-            "version": {"$ref": "#/$defs/SemVer"}
-          }
-        }
-      }
-    },
 
-    "POST /experience": {
-      "description": "Submit experience data",
-      "request_body": {"$ref": "ml_schemas.json#/Experience"},
-      "response": {
-        "status_code": 202,
-        "schema": {
-          "type": "object",
-          "required": ["experience_id"],
-          "properties": {
-            "experience_id": {"$ref": "#/$defs/UID"}
-          }
-        }
-      }
-    },
+# =========================
+# $defs mappings
+# =========================
 
-    "GET /insights": {
-      "description": "Get insights since timestamp",
-      "parameters": {
-        "since": {
-          "in": "query",
-          "required": false,
-          "schema": {"$ref": "#/$defs/ISO8601"}
-        }
-      },
-      "response": {
-        "status_code": 200,
-        "schema": {
-          "type": "array",
-          "items": {"$ref": "ml_schemas.json#/Insight"}
-        }
-      }
-    },
+class SemVer(StrictModel):
+    value: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
-    "POST /plan/propose": {
-      "description": "Propose adaptation plan",
-      "request_body": {"$ref": "ml_schemas.json#/AdaptationPlan"},
-      "response": {
-        "status_code": 202,
-        "schema": {
-          "type": "object",
-          "required": ["correlation_id"],
-          "properties": {
-            "correlation_id": {"$ref": "#/$defs/UID"}
-          }
-        }
-      }
-    },
+    def __str__(self) -> str:
+        return self.value
 
-    "GET /plans/{id}/status": {
-      "description": "Get plan status",
-      "parameters": {
-        "id": {
-          "in": "path",
-          "required": true,
-          "schema": {"$ref": "#/$defs/UID"}
-        }
-      },
-      "response": {
-        "status_code": 200,
-        "schema": {
-          "type": "object",
-          "required": ["status"],
-          "properties": {
-            "status": {
-              "enum": ["pending", "approved", "rejected", "applied"]
-            },
-            "rationale": {"type": "string"}
-          }
-        }
-      }
-    },
+class UID(StrictModel):
+    value: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
 
-    "POST /snapshot/export": {
-      "description": "Export snapshot",
-      "response": {
-        "status_code": 200,
-        "schema": {
-          "type": "object",
-          "required": ["snapshot_id", "uri"],
-          "properties": {
-            "snapshot_id": {"$ref": "#/$defs/UID"},
-            "uri": {"type": "string"}
-          }
-        }
-      }
-    },
+    def __str__(self) -> str:
+        return self.value
 
-    "POST /rollback": {
-      "description": "Request rollback",
-      "request_body": {
-        "type": "object",
-        "required": ["target", "to_snapshot"],
-        "properties": {
-          "target": {"enum": ["governance", "mlt", "model"]},
-          "to_snapshot": {"type": "string"}
-        }
-      },
-      "response": {
-        "status_code": 202,
-        "schema": {
-          "type": "object",
-          "required": ["target", "to_snapshot"],
-          "properties": {
-            "target": {"enum": ["governance", "mlt", "model"]},
-            "to_snapshot": {"type": "string"}
-          }
-        }
-      }
-    }
-  }
-}
+class ISO8601(StrictModel):
+    value: datetime
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _tz(cls, dt: Any) -> datetime:
+        if isinstance(dt, datetime):
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        # Let Pydantic parse string → datetime; then make tz-aware
+        parsed = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+# =========================
+# Request/Response models
+# =========================
+
+# GET /health
+class HealthResponse(StrictModel):
+    status: str = Field(pattern=r"^ok$", default="ok")
+    version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$", default=API_VERSION)
+
+# POST /experience
+# Your spec references external "ml_schemas.json#/Experience".
+# We accept an opaque Mapping to avoid guessing that schema here.
+class ExperienceBody(StrictModel):
+    __root__: Mapping[str, Any]
+
+class ExperienceAccepted(StrictModel):
+    experience_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+
+# GET /insights
+class InsightItem(StrictModel):
+    # Opaque placeholder for "ml_schemas.json#/Insight".
+    # You can replace this with a concrete model later.
+    __root__: Mapping[str, Any]
+
+# POST /plan/propose
+class AdaptationPlanBody(StrictModel):
+    __root__: Mapping[str, Any]
+
+class PlanAccepted(StrictModel):
+    correlation_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+
+# GET /plans/{id}/status
+class PlanStatusResponse(StrictModel):
+    status: str = Field(pattern=r"^(pending|approved|rejected|applied)$")
+    rationale: Optional[str] = None
+
+# POST /snapshot/export
+class SnapshotExportResponse(StrictModel):
+    snapshot_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    uri: str
+
+# POST /rollback
+class RollbackRequest(StrictModel):
+    target: str = Field(pattern=r"^(governance|mlt|model)$")
+    to_snapshot: str
+
+class RollbackAck(StrictModel):
+    target: str = Field(pattern=r"^(governance|mlt|model)$")
+    to_snapshot: str
+
+
+# =========================
+# In-memory stores
+# =========================
+
+_plans: Dict[str, Dict[str, Any]] = {}       # plan_id -> {"status": "...", "rationale": "..."}
+_insights: List[InsightItem] = []            # append-only demo store
+_experiences: Dict[str, Mapping[str, Any]] = {}  # experience_id -> payload
+_snapshots: Dict[str, Dict[str, Any]] = {}   # snapshot_id -> meta
+
+
+# =========================
+# FastAPI setup
+# =========================
+
+app = FastAPI(
+    title="Grace ML REST API",
+    description="REST API endpoints for Grace ML system",
+    version=API_VERSION,
+    openapi_version="3.0.3",
+)
+
+
+# =========================
+# Routes (per spec)
+# =========================
+
+@app.get("/health", response_model=HealthResponse, status_code=200)
+def get_health() -> HealthResponse:
+    return HealthResponse()
+
+@app.post("/experience", response_model=ExperienceAccepted, status_code=202)
+def post_experience(body: ExperienceBody = Body(...)) -> ExperienceAccepted:
+    exp_id = gen_uid_with("e")
+    _experiences[exp_id] = body.__root__
+    # OPTIONAL: push to bus / store
+    return ExperienceAccepted(experience_id=exp_id)
+
+@app.get("/insights", response_model=List[InsightItem], status_code=200)
+def get_insights(since: Optional[str] = Query(None, description="ISO8601 date-time")) -> List[InsightItem]:
+    # We accept 'since' as ISO8601, but do not filter without a concrete Insight schema timestamp field.
+    if since:
+        try:
+            _ = ISO8601(value=since)  # validate only
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid ISO8601 'since' parameter")
+    return list(_insights)
+
+@app.post("/plan/propose", response_model=PlanAccepted, status_code=202)
+def post_plan_propose(body: AdaptationPlanBody = Body(...)) -> PlanAccepted:
+    corr = gen_uid_with("p")
+    # You might kick off async review/approval here; for now, default to pending.
+    _plans[corr] = {"status": "pending", "rationale": None, "payload": body.__root__, "created_at": _utcnow().isoformat()}
+    return PlanAccepted(correlation_id=corr)
+
+@app.get("/plans/{id}/status", response_model=PlanStatusResponse, status_code=200)
+def get_plan_status(id: str = Path(..., pattern=r"^[a-z][a-z0-9_-]{4,64}$")) -> PlanStatusResponse:
+    rec = _plans.get(id)
+    if not rec:
+        # Not found in store ⇒ still pending by spec; return pending with rationale=None
+        return PlanStatusResponse(status="pending")
+    return PlanStatusResponse(status=rec["status"], rationale=rec.get("rationale"))
+
+@app.post("/snapshot/export", response_model=SnapshotExportResponse, status_code=200)
+def post_snapshot_export() -> SnapshotExportResponse:
+    snap = gen_uid_with("s")
+    meta = {"created_at": _utcnow().isoformat(), "experiences": len(_experiences), "insights": len(_insights), "plans": len(_plans)}
+    _snapshots[snap] = meta
+    # In production, upload snapshot to object storage and return a signed URL.
+    return SnapshotExportResponse(snapshot_id=snap, uri=f"memory://ml-snapshots/{snap}.json")
+
+@app.post("/rollback", response_model=RollbackAck, status_code=202)
+def post_rollback(req: RollbackRequest) -> RollbackAck:
+    # In production, enqueue rollback workflow; here we just acknowledge per spec.
+    return RollbackAck(target=req.target, to_snapshot=req.to_snapshot)

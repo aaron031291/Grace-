@@ -1,46 +1,378 @@
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "interface.rbac.schema.json",
-  "title": "Interface RBAC Schema",
-  "description": "Role-based access control policy definitions",
-  "definitions": {
-    "PolicyRule": {
-      "type": "object",
-      "required": ["rule_id", "effect", "actions", "resources", "condition"],
-      "properties": {
-        "rule_id": {"type": "string"},
-        "effect": {
-          "enum": ["allow", "deny"]
-        },
-        "actions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "task.create", "task.update", "task.run", "task.pause", "task.cancel",
-              "memory.query", "memory.search", "intel.request",
-              "ingress.register_source", "governance.request_approval",
-              "consent.grant", "consent.revoke", "settings.update",
-              "snapshot.export", "snapshot.rollback"
-            ]
-          }
-        },
-        "resources": {
-          "type": "array",
-          "items": {"type": "string"}
-        },
-        "condition": {
-          "type": "object",
-          "properties": {
-            "label_in": {
-              "type": "array",
-              "items": {"type": "string"}
-            },
-            "time_after": {"type": "string"},
-            "time_before": {"type": "string"}
-          }
-        }
+"""
+interface_rbac.py
+Production RBAC evaluator for the Grace Interface Kernel.
+
+- Strict Pydantic v2 models mirroring interface.rbac.schema.json
+- Deny-overrides precedence
+- Conditions: label_in (any-match), time_after, time_before (ISO 8601)
+- UTC-safe time handling; accepts aware/naive datetimes (naive -> UTC)
+- Policy layout: role -> [PolicyRule,...]
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import StrEnum
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+# ---------------------------
+# Helpers
+# ---------------------------
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+def _ensure_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+# ---------------------------
+# Enumerations
+# ---------------------------
+
+class Effect(StrEnum):
+    ALLOW = "allow"
+    DENY = "deny"
+
+class Action(StrEnum):
+    TASK_CREATE            = "task.create"
+    TASK_UPDATE            = "task.update"
+    TASK_RUN               = "task.run"
+    TASK_PAUSE             = "task.pause"
+    TASK_CANCEL            = "task.cancel"
+    MEMORY_QUERY           = "memory.query"
+    MEMORY_SEARCH          = "memory.search"
+    INTEL_REQUEST          = "intel.request"
+    INGRESS_REGISTER       = "ingress.register_source"
+    GOVERNANCE_REQUEST     = "governance.request_approval"
+    CONSENT_GRANT          = "consent.grant"
+    CONSENT_REVOKE         = "consent.revoke"
+    SETTINGS_UPDATE        = "settings.update"
+    SNAPSHOT_EXPORT        = "snapshot.export"
+    SNAPSHOT_ROLLBACK      = "snapshot.rollback"
+
+
+# ---------------------------
+# Policy model
+# ---------------------------
+
+class Condition(BaseModel):
+    """RBAC conditional constraints."""
+    label_in: Optional[List[str]] = None
+    time_after: Optional[str] = None   # ISO-8601
+    time_before: Optional[str] = None  # ISO-8601
+
+    model_config = {"extra": "forbid", "validate_assignment": True, "use_enum_values": True}
+
+    @field_validator("label_in", mode="after")
+    @classmethod
+    def _normalize_labels(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if not v:
+            return v
+        seen, out = set(), []
+        for s in (x.strip().lower() for x in v if isinstance(x, str)):
+            if s and s not in seen:
+                seen.add(s)
+                out.append(s)
+        return out
+
+    @field_validator("time_after", "time_before")
+    @classmethod
+    def _trim(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip() if isinstance(v, str) else v
+
+
+class PolicyRule(BaseModel):
+    rule_id: str
+    effect: Effect
+    actions: List[Action]
+    resources: List[str]
+    condition: Condition = Field(default_factory=Condition)
+
+    model_config = {"extra": "forbid", "validate_assignment": True, "use_enum_values": True}
+
+    @field_validator("rule_id")
+    @classmethod
+    def _nonempty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("rule_id cannot be empty")
+        return v
+
+    @field_validator("actions", "resources", mode="after")
+    @classmethod
+    def _nonempty_list(cls, v: List[Any]) -> List[Any]:
+        if not v:
+            raise ValueError("actions/resources cannot be empty")
+        return v
+
+
+class RolePolicies(BaseModel):
+    """Mapping of role -> rules."""
+    roles: Mapping[str, List[PolicyRule]]
+
+    model_config = {"extra": "forbid", "validate_assignment": True, "use_enum_values": True}
+
+
+# ---------------------------
+# Request context & decision
+# ---------------------------
+
+class SubjectContext(BaseModel):
+    user_id: str
+    roles: List[str]
+    labels: List[str] = Field(default_factory=list)
+
+    model_config = {"extra": "forbid", "validate_assignment": True}
+
+    @field_validator("roles", "labels", mode="after")
+    @classmethod
+    def _norm_lists(cls, v: List[str]) -> List[str]:
+        seen, out = set(), []
+        for s in (x.strip().lower() for x in v if isinstance(v, list) for x in v if isinstance(x, str)):
+            # NOTE: the above is a bit verbose; we just want cleaned, unique entries
+            pass
+        out = []
+        seen = set()
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip().lower()
+                if s and s not in seen:
+                    seen.add(s)
+                    out.append(s)
+        return out
+
+
+class Decision(BaseModel):
+    allowed: bool
+    effect: Effect
+    matched_rule: Optional[str] = None
+    reasons: List[str] = Field(default_factory=list)
+    evaluated_rules: int = 0
+    at: datetime = Field(default_factory=_utcnow)
+
+    model_config = {"extra": "forbid", "validate_assignment": True}
+
+
+# ---------------------------
+# Evaluator
+# ---------------------------
+
+class RBACEvaluator:
+    """
+    Deny-overrides evaluation:
+    - Iterate rules from all subject roles (in provided order).
+    - If any matching DENY applies => deny.
+    - Else if any matching ALLOW applies => allow.
+    - Else => deny (default-deny).
+    """
+
+    def __init__(self, policies: RolePolicies) -> None:
+        self.policies = policies
+
+    def is_allowed(
+        self,
+        *,
+        subject: SubjectContext,
+        action: Action | str,
+        resource: str,
+        now: Optional[datetime] = None,
+    ) -> Decision:
+        now = _ensure_aware(now) or _utcnow()
+        action_val = Action(action) if not isinstance(action, Action) else action
+        labels = set(subject.labels)
+
+        deny_hit: Optional[Tuple[str, List[str]]] = None
+        allow_hit: Optional[Tuple[str, List[str]]] = None
+        evaluated = 0
+
+        for role in subject.roles:
+            rules = self.policies.roles.get(role, [])
+            for rule in rules:
+                evaluated += 1
+                matched, reasons = self._rule_matches(rule, action_val, resource, labels, now)
+                if not matched:
+                    continue
+                if rule.effect == Effect.DENY:
+                    deny_hit = (rule.rule_id, reasons)
+                    # deny-overrides immediate
+                    return Decision(
+                        allowed=False, effect=Effect.DENY, matched_rule=rule.rule_id,
+                        reasons=reasons, evaluated_rules=evaluated
+                    )
+                else:
+                    # record first allow; still continue in case a deny appears later in same role set
+                    if allow_hit is None:
+                        allow_hit = (rule.rule_id, reasons)
+
+        if allow_hit:
+            rid, rs = allow_hit
+            return Decision(
+                allowed=True, effect=Effect.ALLOW, matched_rule=rid,
+                reasons=rs, evaluated_rules=evaluated
+            )
+
+        # default deny
+        return Decision(
+            allowed=False, effect=Effect.DENY, matched_rule=None,
+            reasons=["no matching allow rule; default deny"], evaluated_rules=evaluated
+        )
+
+    # ----- internals -----
+
+    @staticmethod
+    def _rule_matches(
+        rule: PolicyRule,
+        action: Action,
+        resource: str,
+        labels: set[str],
+        now: datetime,
+    ) -> Tuple[bool, List[str]]:
+        reasons: List[str] = []
+        if action not in rule.actions:
+            return False, ["action not in rule.actions"]
+        if not RBACEvaluator._resource_matches(resource, rule.resources):
+            return False, ["resource not matched"]
+
+        # Conditions
+        cond = rule.condition
+
+        # label_in: any-match
+        if cond.label_in:
+            normalized_need = {s.lower() for s in cond.label_in}
+            if labels.isdisjoint(normalized_need):
+                return False, [f"label_in mismatch; subject labels={sorted(labels)} rule requires any of {sorted(normalized_need)}"]
+            reasons.append("label_in matched")
+
+        # time_after / time_before (ISO 8601)
+        # Interpret as absolute instants if full datetime; if time-only, compare time component in UTC day.
+        if cond.time_after:
+            try:
+                t_after = RBACEvaluator._parse_iso_dt(cond.time_after)
+                if now <= t_after:
+                    return False, [f"now={now.isoformat()} not after time_after={t_after.isoformat()}"]
+                reasons.append("time_after passed")
+            except ValueError as e:
+                return False, [f"invalid time_after: {e}"]
+
+        if cond.time_before:
+            try:
+                t_before = RBACEvaluator._parse_iso_dt(cond.time_before)
+                if now >= t_before:
+                    return False, [f"now={now.isoformat()} not before time_before={t_before.isoformat()}"]
+                reasons.append("time_before passed")
+            except ValueError as e:
+                return False, [f"invalid time_before: {e}"]
+
+        if not reasons:
+            reasons.append("rule matched (no conditions)")
+        return True, reasons
+
+    @staticmethod
+    def _resource_matches(resource: str, patterns: Sequence[str]) -> bool:
+        """
+        Simple prefix/glob-ish matching:
+        - '*' matches anything
+        - 'foo:*' matches 'foo:anything'
+        - Exact string matches otherwise
+        """
+        for p in patterns:
+            p = p.strip()
+            if p == "*" or p == resource:
+                return True
+            if p.endswith(":*") and resource.startswith(p[:-1]):
+                return True
+        return False
+
+    @staticmethod
+    def _parse_iso_dt(s: str) -> datetime:
+        """
+        Parse ISO-8601 string. If date or time is missing, make a best-safe assumption:
+        - If only time provided (e.g., '15:00:00Z' or '15:00:00'): use today's date in UTC.
+        - If naive, assume UTC.
+        """
+        s = s.strip()
+        # Try fromisoformat first (handles many forms without 'Z'); add 'Z' handling
+        try:
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+        except Exception as e:
+            raise ValueError(f"cannot parse ISO datetime '{s}': {e}")
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+
+# ---------------------------
+# Policy loading helpers
+# ---------------------------
+
+def load_policies(data: Mapping[str, Any]) -> RolePolicies:
+    """
+    Load policies from a dict shaped like:
+    {
+      "roles": {
+        "admin": [ {...PolicyRule...}, ... ],
+        "viewer": [ ... ],
+        ...
       }
     }
-  }
-}
+    This mirrors how you'd store JSON alongside interface.rbac.schema.json
+    """
+    return RolePolicies.model_validate(data)
+
+
+# ---------------------------
+# Example (remove in prod if not needed)
+# ---------------------------
+
+if __name__ == "__main__":
+    # Tiny smoke test
+    policies = load_policies({
+        "roles": {
+            "admin": [
+                {
+                    "rule_id": "admin-all",
+                    "effect": "allow",
+                    "actions": [a.value for a in Action],
+                    "resources": ["*"],
+                    "condition": {}
+                }
+            ],
+            "analyst": [
+                {
+                    "rule_id": "analyst-read",
+                    "effect": "allow",
+                    "actions": ["memory.query", "memory.search"],
+                    "resources": ["memory:*"],
+                    "condition": {"label_in": ["internal", "restricted"]}
+                }
+            ],
+            "viewer": [
+                {
+                    "rule_id": "viewer-deny-governance",
+                    "effect": "deny",
+                    "actions": ["governance.request_approval"],
+                    "resources": ["*"],
+                    "condition": {}
+                }
+            ]
+        }
+    })
+
+    evaluator = RBACEvaluator(policies)
+
+    subj = SubjectContext(user_id="usr_abc", roles=["viewer", "analyst"], labels=["internal"])
+    dec = evaluator.is_allowed(
+        subject=subj,
+        action="memory.search",
+        resource="memory:vector",
+        now=_utcnow(),
+    )
+    print(dec.model_dump())

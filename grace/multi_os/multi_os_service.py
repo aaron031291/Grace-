@@ -9,14 +9,14 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import uuid
 
-from orchestrator.scheduler import Scheduler
-from inventory.registry import Registry
-from telemetry.collector import TelemetryCollector
-from snapshots.manager import SnapshotManager
-from bridges.mesh_bridge import MeshBridge
-from agents.linux import LinuxAdapter
-from agents.windows import WindowsAdapter
-from agents.macos import MacOSAdapter
+from grace.multi_os.orchestrator.scheduler import Scheduler
+from grace.multi_os.inventory.registry import Registry
+from grace.multi_os.telemetry.collector import TelemetryCollector
+from grace.multi_os.snapshots.manager import SnapshotManager
+from grace.multi_os.bridges.mesh_bridge import MeshBridge
+from grace.multi_os.agents.linux import LinuxAdapter
+from grace.multi_os.agents.windows import WindowsAdapter
+from grace.multi_os.agents.macos import MacOSAdapter
 
 
 logger = logging.getLogger(__name__)

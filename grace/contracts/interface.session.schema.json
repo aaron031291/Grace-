@@ -1,79 +1,122 @@
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "interface.session.schema.json",
-  "title": "Interface Session Schema",
-  "description": "Data contracts for user identity and UI sessions",
-  "definitions": {
-    "UserIdentity": {
-      "type": "object",
-      "required": ["user_id", "roles"],
-      "properties": {
-        "user_id": {
-          "type": "string",
-          "pattern": "usr_[a-z0-9_-]{4,}"
-        },
-        "display_name": {
-          "type": "string"
-        },
-        "roles": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": ["owner", "admin", "dev", "analyst", "viewer"]
-          }
-        },
-        "labels": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": ["internal", "restricted", "external"]
-          }
-        },
-        "locale": {
-          "type": "string",
-          "default": "en-GB"
-        },
-        "a11y": {
-          "type": "object",
-          "properties": {
-            "high_contrast": {"type": "boolean"},
-            "reduce_motion": {"type": "boolean"}
-          }
-        }
-      }
-    },
-    "UISession": {
-      "type": "object",
-      "required": ["session_id", "user", "created_at", "client"],
-      "properties": {
-        "session_id": {
-          "type": "string",
-          "pattern": "ses_[a-z0-9]{8,}"
-        },
-        "user": {
-          "$ref": "#/definitions/UserIdentity"
-        },
-        "client": {
-          "type": "object",
-          "properties": {
-            "agent": {"type": "string"},
-            "ip": {"type": "string"},
-            "device": {"type": "string"}
-          }
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "last_seen": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "permissions": {
-          "type": "array",
-          "items": {"type": "string"}
-        }
-      }
+"""
+interface_session_models.py
+Strict Pydantic v2 models for Interface Session contracts.
+
+Mirrors interface.session.schema.json:
+- UserIdentity
+- UISession (+ ClientInfo, A11yPrefs)
+
+Adds:
+- UTC-safe datetime defaults
+- ID generators for ses_… and usr_…
+- Convenience .from_dict() / .model_dump_json()
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, List, Mapping, Optional
+from uuid import uuid4
+
+from pydantic import BaseModel, Field, field_validator
+
+
+API_LOCALE_DEFAULT = "en-GB"
+
+
+# ---------------------------
+# Helpers
+# ---------------------------
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+def gen_user_id() -> str:
+    return f"usr_{uuid4().hex[:8]}"
+
+def gen_session_id() -> str:
+    return f"ses_{uuid4().hex[:10]}"
+
+
+# ---------------------------
+# Base config
+# ---------------------------
+
+class StrictModel(BaseModel):
+    model_config = {
+        "extra": "forbid",
+        "validate_assignment": True,
+        "use_enum_values": True,
+        "ser_json_bytes": "utf8",
+        "populate_by_name": True,
     }
-  }
-}
+
+
+# ---------------------------
+# Schemas
+# ---------------------------
+
+class A11yPrefs(StrictModel):
+    high_contrast: Optional[bool] = None
+    reduce_motion: Optional[bool] = None
+
+
+class UserIdentity(StrictModel):
+    user_id: str = Field(pattern=r"^usr_[a-z0-9_-]{4,}$", default_factory=gen_user_id)
+    display_name: Optional[str] = None
+    roles: List[str]  # enum enforced upstream: ["owner","admin","dev","analyst","viewer"]
+    labels: Optional[List[str]] = None  # enum enforced upstream: ["internal","restricted","external"]
+    locale: str = API_LOCALE_DEFAULT
+    a11y: Optional[A11yPrefs] = None
+
+    @field_validator("roles", mode="after")
+    @classmethod
+    def _roles_nonempty(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("roles must contain at least one role")
+        return v
+
+    @field_validator("labels", mode="after")
+    @classmethod
+    def _labels_norm(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        seen, out = set(), []
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip().lower()
+                if s and s not in seen:
+                    seen.add(s)
+                    out.append(s)
+        return out
+
+
+class ClientInfo(StrictModel):
+    agent: Optional[str] = None
+    ip: Optional[str] = None
+    device: Optional[str] = None
+
+
+class UISession(StrictModel):
+    session_id: str = Field(pattern=r"^ses_[a-z0-9]{8,}$", default_factory=gen_session_id)
+    user: UserIdentity
+    client: ClientInfo
+    created_at: datetime = Field(default_factory=_utcnow)
+    last_seen: datetime = Field(default_factory=_utcnow)
+    permissions: Optional[List[str]] = None
+
+    @field_validator("created_at", "last_seen", mode="before")
+    @classmethod
+    def _ensure_tz(cls, dt: Optional[datetime]) -> datetime:
+        if dt and dt.tzinfo is not None:
+            return dt
+        return _utcnow()
+
+    # Convenience: update last_seen safely
+    def touch(self) -> None:
+        object.__setattr__(self, "last_seen", _utcnow())
+
+    # Convenience: construct from plain dicts (e.g., parsed JSON)
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "UISession":
+        return cls.model_validate(data)

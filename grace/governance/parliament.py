@@ -1,19 +1,50 @@
+# parliament.py
+# -*- coding: utf-8 -*-
 """
-Parliament - Democratic review system for major governance decisions.
+Parliament — Democratic review system for major governance decisions (production).
+
+Highlights
+- Strong typing & UTC timestamps
+- Configurable voting thresholds per proposal type
+- Weighted voting with participation floors
+- Async-safe (internal lock) + EventBus integration
+- Clear status lifecycle & serialization helpers
+- Emits telemetry Experience records to MemoryCore
+- Robust handler subscriptions with async init() hook
 """
+
+from __future__ import annotations
+
 import asyncio
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
-from enum import Enum
 import logging
+from dataclasses import dataclass, asdict, field
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from ..core.contracts import Experience, generate_correlation_id
-
+from ..core.contracts import Experience
+from ..core.contracts import generate_correlation_id  # for notifications
+from ..core import EventBus, MemoryCore
 
 logger = logging.getLogger(__name__)
 
 
-class ReviewStatus(Enum):
+# --------------------------- Utilities ---------------------------
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _iso(dt: datetime) -> str:
+    # Always serialize timestamps as ISO-8601 UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+# --------------------------- Enums ---------------------------
+
+class ReviewStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     APPROVED = "approved"
@@ -21,63 +52,71 @@ class ReviewStatus(Enum):
     NEEDS_REVISION = "needs_revision"
 
 
-class VoteType(Enum):
+class VoteType(str, Enum):
     APPROVE = "approve"
     REJECT = "reject"
     ABSTAIN = "abstain"
     NEEDS_INFO = "needs_info"
 
 
+# --------------------------- Data Models ---------------------------
+
+@dataclass
+class VoteRecord:
+    vote: VoteType
+    rationale: str
+    weight: float
+    at: datetime = field(default_factory=_utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        d["vote"] = self.vote.value
+        d["at"] = _iso(self.at)
+        return d
+
+
+@dataclass
 class ParliamentMember:
     """Represents a member of the governance parliament."""
-    
-    def __init__(self, member_id: str, name: str, expertise: List[str], 
-                 weight: float = 1.0):
-        self.member_id = member_id
-        self.name = name
-        self.expertise = expertise  # Areas of expertise
-        self.weight = weight  # Voting weight
-        self.active = True
-        self.vote_history = []
-    
+    member_id: str
+    name: str
+    expertise: List[str]
+    weight: float = 1.0
+    active: bool = True
+    vote_history: List[Tuple[str, VoteRecord]] = field(default_factory=list)
+
+    def record_vote(self, proposal_id: str, vr: VoteRecord) -> None:
+        self.vote_history.append((proposal_id, vr))
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "member_id": self.member_id,
             "name": self.name,
-            "expertise": self.expertise,
+            "expertise": list(self.expertise),
             "weight": self.weight,
             "active": self.active,
-            "vote_count": len(self.vote_history)
+            "vote_count": len(self.vote_history),
         }
 
 
+@dataclass
 class ReviewProposal:
     """Represents a proposal for parliamentary review."""
-    
-    def __init__(self, proposal_id: str, title: str, description: str,
-                 proposal_type: str, urgency: str = "normal"):
-        self.proposal_id = proposal_id
-        self.title = title
-        self.description = description
-        self.proposal_type = proposal_type  # "policy", "constitutional", "operational"
-        self.urgency = urgency  # "low", "normal", "high", "critical"
-        self.submitted_at = datetime.now()
-        self.status = ReviewStatus.PENDING
-        self.votes = {}
-        self.discussion = []
-        self.deadline = self._calculate_deadline()
-    
-    def _calculate_deadline(self) -> datetime:
-        """Calculate review deadline based on urgency."""
-        days_map = {
-            "critical": 1,
-            "high": 3,
-            "normal": 7,
-            "low": 14
-        }
-        days = days_map.get(self.urgency, 7)
-        return self.submitted_at + timedelta(days=days)
-    
+    proposal_id: str
+    title: str
+    description: str
+    proposal_type: str  # "policy" | "constitutional" | "operational"
+    urgency: str = "normal"  # "low","normal","high","critical"
+    submitted_at: datetime = field(default_factory=_utcnow)
+    status: ReviewStatus = ReviewStatus.PENDING
+    deadline: datetime = field(init=False)
+    votes: Dict[str, VoteRecord] = field(default_factory=dict)
+    discussion: List[Dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        days_map = {"critical": 1, "high": 3, "normal": 7, "low": 14}
+        self.deadline = self.submitted_at + timedelta(days=days_map.get(self.urgency, 7))
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "proposal_id": self.proposal_id,
@@ -85,374 +124,344 @@ class ReviewProposal:
             "description": self.description,
             "proposal_type": self.proposal_type,
             "urgency": self.urgency,
-            "submitted_at": self.submitted_at.isoformat(),
+            "submitted_at": _iso(self.submitted_at),
             "status": self.status.value,
-            "deadline": self.deadline.isoformat(),
+            "deadline": _iso(self.deadline),
             "vote_count": len(self.votes),
-            "discussion_count": len(self.discussion)
+            "discussion_count": len(self.discussion),
         }
 
+
+# --------------------------- Parliament ---------------------------
 
 class Parliament:
     """
     Democratic review system for major governance decisions and policy updates.
     Manages committee reviews, voting processes, and democratic validation.
+
+    Events consumed:
+      - "GOVERNANCE_NEEDS_REVIEW" (payload: {decision_id, rationale, ...})
+      - "PARLIAMENT_VOTE_CAST" (payload: {proposal_id, member_id, vote, rationale})
+
+    Events produced:
+      - "PARLIAMENT_NOTIFICATION" (review assigned)
+      - "PARLIAMENT_DECISION" (finalized outcome)
     """
-    
-    def __init__(self, event_bus, memory_core):
+
+    # Default thresholds & floors; override via ctor args if needed
+    DEFAULT_VOTING_THRESHOLDS: Mapping[str, float] = {
+        "policy": 0.60,
+        "constitutional": 0.75,
+        "operational": 0.50,
+    }
+    PARTICIPATION_FLOOR: float = 0.60  # 60% of active members must vote to finalize early
+    REJECTION_FLOOR: float = 0.40      # direct rejection if ≥ 40% weighted reject with floor met
+
+    def __init__(
+        self,
+        event_bus: EventBus,
+        memory_core: MemoryCore,
+        *,
+        voting_thresholds: Optional[Mapping[str, float]] = None,
+        participation_floor: Optional[float] = None,
+        rejection_floor: Optional[float] = None,
+    ) -> None:
         self.event_bus = event_bus
         self.memory_core = memory_core
-        self.members = self._initialize_default_members()
-        self.active_proposals = {}
-        self.review_history = []
-        
-        # Voting thresholds
-        self.voting_thresholds = {
-            "policy": 0.6,      # 60% for policy changes
-            "constitutional": 0.75,  # 75% for constitutional changes
-            "operational": 0.5       # 50% for operational decisions
-        }
-        
-        # Setup event subscriptions
-        asyncio.create_task(self._setup_event_subscriptions())
-    
-    def _initialize_default_members(self) -> Dict[str, ParliamentMember]:
-        """Initialize default parliament members."""
-        default_members = [
-            ParliamentMember("ethics_chair", "Ethics Committee Chair", 
-                           ["ethics", "fairness", "harm_prevention"], 1.2),
-            ParliamentMember("tech_lead", "Technical Lead", 
-                           ["security", "privacy", "technical"], 1.1),
-            ParliamentMember("transparency_officer", "Transparency Officer", 
-                           ["transparency", "accountability", "audit"], 1.1),
-            ParliamentMember("user_advocate", "User Advocate", 
-                           ["user_rights", "accessibility", "usability"], 1.0),
-            ParliamentMember("legal_counsel", "Legal Counsel", 
-                           ["legal", "compliance", "constitutional"], 1.2),
-            ParliamentMember("domain_expert_1", "Domain Expert (AI/ML)", 
-                           ["machine_learning", "ai_safety"], 1.0),
-            ParliamentMember("domain_expert_2", "Domain Expert (Governance)", 
-                           ["governance", "policy", "process"], 1.0),
+
+        self._members: Dict[str, ParliamentMember] = self._default_members()
+        self._active: Dict[str, ReviewProposal] = {}
+        self._history: List[Dict[str, Any]] = []
+
+        self._thresholds: Dict[str, float] = dict(self.DEFAULT_VOTING_THRESHOLDS)
+        if voting_thresholds:
+            self._thresholds.update({k: float(v) for k, v in voting_thresholds.items()})
+
+        self._participation_floor = float(participation_floor) if participation_floor is not None else self.PARTICIPATION_FLOOR
+        self._rejection_floor = float(rejection_floor) if rejection_floor is not None else self.REJECTION_FLOOR
+
+        self._lock = asyncio.Lock()
+        # use async init to attach subscriptions so __init__ stays sync-safe
+
+    async def async_init(self) -> None:
+        """Attach event subscriptions (call once during kernel startup)."""
+        await self.event_bus.subscribe("GOVERNANCE_NEEDS_REVIEW", self._on_review_request)
+        await self.event_bus.subscribe("PARLIAMENT_VOTE_CAST", self._on_vote_cast)
+        logger.info("Parliament subscriptions attached")
+
+    # --------------------------- Members ---------------------------
+
+    def _default_members(self) -> Dict[str, ParliamentMember]:
+        defaults = [
+            ParliamentMember("ethics_chair", "Ethics Committee Chair", ["ethics", "fairness", "harm_prevention"], 1.2),
+            ParliamentMember("tech_lead", "Technical Lead", ["security", "privacy", "technical"], 1.1),
+            ParliamentMember("transparency_officer", "Transparency Officer", ["transparency", "accountability", "audit"], 1.1),
+            ParliamentMember("user_advocate", "User Advocate", ["user_rights", "accessibility", "usability"], 1.0),
+            ParliamentMember("legal_counsel", "Legal Counsel", ["legal", "compliance", "constitutional"], 1.2),
+            ParliamentMember("domain_expert_1", "Domain Expert (AI/ML)", ["machine_learning", "ai_safety"], 1.0),
+            ParliamentMember("domain_expert_2", "Domain Expert (Governance)", ["governance", "policy", "process"], 1.0),
         ]
-        
-        return {member.member_id: member for member in default_members}
-    
-    async def _setup_event_subscriptions(self):
-        """Setup event subscriptions for parliament operations."""
-        await self.event_bus.subscribe(
-            "GOVERNANCE_NEEDS_REVIEW",
-            self._handle_review_request
-        )
-        
-        await self.event_bus.subscribe(
-            "PARLIAMENT_VOTE_CAST",
-            self._handle_vote_cast
-        )
-    
-    async def submit_for_review(self, title: str, description: str,
-                              proposal_type: str, urgency: str = "normal",
-                              context: Optional[Dict[str, Any]] = None) -> str:
+        return {m.member_id: m for m in defaults}
+
+    def add_member(self, member_id: str, name: str, expertise: List[str], *, weight: float = 1.0) -> bool:
+        if member_id in self._members:
+            logger.warning("Member %s already exists", member_id)
+            return False
+        self._members[member_id] = ParliamentMember(member_id, name, expertise, weight)
+        logger.info("Added parliament member: %s (%s)", name, member_id)
+        return True
+
+    def remove_member(self, member_id: str) -> bool:
+        m = self._members.get(member_id)
+        if not m:
+            logger.warning("Member %s not found", member_id)
+            return False
+        m.active = False
+        logger.info("Deactivated parliament member: %s", member_id)
+        return True
+
+    # --------------------------- Proposals ---------------------------
+
+    async def submit_for_review(
+        self,
+        title: str,
+        description: str,
+        proposal_type: str,
+        *,
+        urgency: str = "normal",
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """
         Submit a proposal for parliamentary review.
-        
-        Args:
-            title: Proposal title
-            description: Detailed description
-            proposal_type: Type of proposal ("policy", "constitutional", "operational")
-            urgency: Urgency level
-            context: Additional context data
-            
-        Returns:
-            Proposal ID
+        Returns the proposal_id.
         """
-        proposal_id = f"prop_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.active_proposals)}"
-        
+        proposal_id = f"prop_{_utcnow().strftime('%Y%m%d_%H%M%S')}_{len(self._active)}"
         proposal = ReviewProposal(
             proposal_id=proposal_id,
             title=title,
             description=description,
             proposal_type=proposal_type,
-            urgency=urgency
+            urgency=urgency,
         )
-        
-        self.active_proposals[proposal_id] = proposal
-        
-        # Select relevant reviewers based on expertise
-        assigned_reviewers = await self._assign_reviewers(proposal, context)
-        
-        # Notify reviewers
-        await self._notify_reviewers(proposal, assigned_reviewers)
-        
-        logger.info(f"Submitted proposal {proposal_id} for {proposal_type} review")
-        
+
+        async with self._lock:
+            self._active[proposal_id] = proposal
+
+        assigned = await self._assign_reviewers(proposal, context)
+        await self._notify_reviewers(proposal, assigned)
+        logger.info("Submitted proposal %s (%s) for review", proposal_id, proposal_type)
         return proposal_id
-    
-    async def _assign_reviewers(self, proposal: ReviewProposal,
-                              context: Optional[Dict[str, Any]]) -> List[str]:
-        """Assign reviewers based on proposal type and member expertise."""
-        assigned = []
-        
-        # Always include chair members for important decisions
-        if proposal.proposal_type in ["constitutional", "policy"]:
-            for member_id, member in self.members.items():
-                if "chair" in member_id or member.weight > 1.1:
-                    assigned.append(member_id)
-        
-        # Add domain experts based on context
+
+    async def _assign_reviewers(self, proposal: ReviewProposal, context: Optional[Dict[str, Any]]) -> List[str]:
+        assigned: List[str] = []
+
+        # Chairs / heavier weights for constitutional & policy
+        if proposal.proposal_type in ("constitutional", "policy"):
+            for mid, m in self._members.items():
+                if "chair" in mid or m.weight > 1.1:
+                    if m.active and mid not in assigned:
+                        assigned.append(mid)
+
+        # Domain expertise
         if context:
-            required_expertise = context.get("required_expertise", [])
-            for expertise in required_expertise:
-                for member_id, member in self.members.items():
-                    if expertise in member.expertise and member_id not in assigned:
-                        assigned.append(member_id)
-        
-        # Ensure minimum reviewers
-        min_reviewers = {
-            "constitutional": 5,
-            "policy": 4,
-            "operational": 3
-        }
-        
-        required_count = min_reviewers.get(proposal.proposal_type, 3)
-        while len(assigned) < required_count:
-            # Add active members not yet assigned
-            for member_id, member in self.members.items():
-                if member.active and member_id not in assigned:
-                    assigned.append(member_id)
-                    if len(assigned) >= required_count:
+            for need in context.get("required_expertise", []):
+                for mid, m in self._members.items():
+                    if m.active and need in m.expertise and mid not in assigned:
+                        assigned.append(mid)
+
+        # Ensure minimum headcount
+        min_req = {"constitutional": 5, "policy": 4, "operational": 3}.get(proposal.proposal_type, 3)
+        if len(assigned) < min_req:
+            for mid, m in self._members.items():
+                if m.active and mid not in assigned:
+                    assigned.append(mid)
+                    if len(assigned) >= min_req:
                         break
-        
         return assigned
-    
-    async def _notify_reviewers(self, proposal: ReviewProposal,
-                              assigned_reviewers: List[str]):
-        """Notify assigned reviewers of new proposal."""
-        notification = {
+
+    async def _notify_reviewers(self, proposal: ReviewProposal, assigned: List[str]) -> None:
+        payload = {
             "type": "PARLIAMENT_REVIEW_ASSIGNED",
             "proposal": proposal.to_dict(),
-            "assigned_reviewers": assigned_reviewers,
-            "deadline": proposal.deadline.isoformat()
+            "assigned_reviewers": assigned,
+            "deadline": _iso(proposal.deadline),
         }
-        
-        await self.event_bus.publish("PARLIAMENT_NOTIFICATION", notification)
-    
-    async def cast_vote(self, proposal_id: str, member_id: str,
-                       vote: VoteType, rationale: str = "") -> bool:
-        """
-        Cast a vote on a proposal.
-        
-        Args:
-            proposal_id: ID of proposal to vote on
-            member_id: ID of voting member
-            vote: Vote type
-            rationale: Optional rationale for vote
-            
-        Returns:
-            True if vote was recorded successfully
-        """
-        if proposal_id not in self.active_proposals:
-            logger.error(f"Proposal {proposal_id} not found")
-            return False
-        
-        if member_id not in self.members:
-            logger.error(f"Member {member_id} not found")
-            return False
-        
-        proposal = self.active_proposals[proposal_id]
-        member = self.members[member_id]
-        
-        # Record vote
-        proposal.votes[member_id] = {
-            "vote": vote.value,
-            "rationale": rationale,
-            "timestamp": datetime.now().isoformat(),
-            "weight": member.weight
-        }
-        
-        # Update member vote history
-        member.vote_history.append({
-            "proposal_id": proposal_id,
-            "vote": vote.value,
-            "timestamp": datetime.now().isoformat()
-        })
-        
-        # Check if voting is complete
-        await self._check_voting_completion(proposal)
-        
-        logger.info(f"Member {member_id} voted {vote.value} on proposal {proposal_id}")
-        
+        await self.event_bus.publish("PARLIAMENT_NOTIFICATION", payload, correlation_id=generate_correlation_id())
+
+    # --------------------------- Voting ---------------------------
+
+    async def cast_vote(self, proposal_id: str, member_id: str, vote: VoteType, *, rationale: str = "") -> bool:
+        async with self._lock:
+            proposal = self._active.get(proposal_id)
+            if not proposal:
+                logger.error("Proposal %s not found", proposal_id)
+                return False
+
+            member = self._members.get(member_id)
+            if not member or not member.active:
+                logger.error("Member %s not found or inactive", member_id)
+                return False
+
+            vr = VoteRecord(vote=vote, rationale=rationale, weight=member.weight)
+            proposal.votes[member_id] = vr
+            member.record_vote(proposal_id, vr)
+
+        logger.info("Member %s voted %s on proposal %s", member_id, vote.value, proposal_id)
+        await self._maybe_finalize(proposal_id)
         return True
-    
-    async def _check_voting_completion(self, proposal: ReviewProposal):
-        """Check if voting is complete and determine outcome."""
-        if not proposal.votes:
-            return
-        
-        # Calculate vote totals
-        approve_weight = sum(
-            vote_data["weight"] for vote_data in proposal.votes.values()
-            if vote_data["vote"] == VoteType.APPROVE.value
-        )
-        
-        total_weight = sum(vote_data["weight"] for vote_data in proposal.votes.values())
-        reject_weight = sum(
-            vote_data["weight"] for vote_data in proposal.votes.values()
-            if vote_data["vote"] == VoteType.REJECT.value
-        )
-        
-        if total_weight == 0:
-            return
-        
-        approval_ratio = approve_weight / total_weight
-        rejection_ratio = reject_weight / total_weight
-        
-        # Check thresholds
-        threshold = self.voting_thresholds.get(proposal.proposal_type, 0.6)
-        
-        # Determine if we have enough votes to make a decision
-        assigned_members = len([m for m in self.members.values() if m.active])
-        voted_members = len(proposal.votes)
-        participation_ratio = voted_members / assigned_members
-        
-        # Decision criteria
-        if approval_ratio >= threshold and participation_ratio >= 0.6:
-            proposal.status = ReviewStatus.APPROVED
-            await self._finalize_proposal(proposal, "approved", approval_ratio)
-        elif rejection_ratio >= 0.4 and participation_ratio >= 0.6:
-            proposal.status = ReviewStatus.REJECTED
-            await self._finalize_proposal(proposal, "rejected", rejection_ratio)
-        elif datetime.now() >= proposal.deadline:
-            # Deadline reached
-            if approval_ratio > rejection_ratio:
-                proposal.status = ReviewStatus.APPROVED
-                await self._finalize_proposal(proposal, "approved_by_deadline", approval_ratio)
-            else:
-                proposal.status = ReviewStatus.NEEDS_REVISION
-                await self._finalize_proposal(proposal, "needs_revision", rejection_ratio)
-    
-    async def _finalize_proposal(self, proposal: ReviewProposal,
-                               outcome: str, final_ratio: float):
-        """Finalize a proposal and notify stakeholders."""
-        # Move to history
-        self.review_history.append({
-            "proposal": proposal.to_dict(),
-            "outcome": outcome,
-            "final_ratio": final_ratio,
-            "finalized_at": datetime.now().isoformat(),
-            "votes": proposal.votes
-        })
-        
-        # Remove from active proposals
-        if proposal.proposal_id in self.active_proposals:
-            del self.active_proposals[proposal.proposal_id]
-        
-        # Record experience
-        experience = Experience(
+
+    async def _maybe_finalize(self, proposal_id: str) -> None:
+        async with self._lock:
+            proposal = self._active.get(proposal_id)
+            if not proposal:
+                return
+
+            if not proposal.votes:
+                return
+
+            approve_w = sum(v.weight for v in proposal.votes.values() if v.vote is VoteType.APPROVE)
+            reject_w = sum(v.weight for v in proposal.votes.values() if v.vote is VoteType.REJECT)
+            total_w = sum(v.weight for v in proposal.votes.values())
+            if total_w <= 0.0:
+                return
+
+            approval_ratio = approve_w / total_w
+            rejection_ratio = reject_w / total_w
+            threshold = self._thresholds.get(proposal.proposal_type, 0.60)
+
+            active_members = sum(1 for m in self._members.values() if m.active)
+            participation_ratio = (len(proposal.votes) / active_members) if active_members else 0.0
+
+            now = _utcnow()
+            reached_deadline = now >= proposal.deadline
+
+            # Decision criteria
+            outcome: Optional[str] = None
+            final_ratio: float = 0.0
+
+            if participation_ratio >= self._participation_floor:
+                if approval_ratio >= threshold:
+                    outcome, final_ratio = "approved", approval_ratio
+                elif rejection_ratio >= self._rejection_floor:
+                    outcome, final_ratio = "rejected", rejection_ratio
+
+            if outcome is None and reached_deadline:
+                # On deadline, prefer the side with higher weight; if tie, needs_revision
+                if approval_ratio > rejection_ratio:
+                    outcome, final_ratio = "approved_by_deadline", approval_ratio
+                elif rejection_ratio > approval_ratio:
+                    outcome, final_ratio = "rejected_by_deadline", rejection_ratio
+                else:
+                    outcome, final_ratio = "needs_revision", rejection_ratio
+
+        if outcome:
+            await self._finalize(proposal_id, outcome, final_ratio)
+
+    async def _finalize(self, proposal_id: str, outcome: str, final_ratio: float) -> None:
+        async with self._lock:
+            proposal = self._active.pop(proposal_id, None)
+            if not proposal:
+                return
+
+            proposal.status = (
+                ReviewStatus.APPROVED
+                if outcome.startswith("approved")
+                else (ReviewStatus.REJECTED if outcome.startswith("rejected") else ReviewStatus.NEEDS_REVISION)
+            )
+
+            record = {
+                "proposal": proposal.to_dict(),
+                "outcome": outcome,
+                "final_ratio": final_ratio,
+                "finalized_at": _iso(_utcnow()),
+                "votes": {mid: vr.to_dict() for mid, vr in proposal.votes.items()},
+            }
+            self._history.append(record)
+
+        # Telemetry: Experience for MLT
+        exp = Experience(
             type="DEMOCRATIC_REVIEW",
             component_id="parliament",
             context={
                 "proposal_type": proposal.proposal_type,
                 "urgency": proposal.urgency,
-                "participation_ratio": len(proposal.votes) / len(self.members)
+                "participation_ratio": min(1.0, len(proposal.votes) / max(1, sum(1 for m in self._members.values() if m.active))),
             },
-            outcome={
-                "decision": outcome,
-                "approval_ratio": final_ratio,
-                "vote_count": len(proposal.votes)
-            },
-            success_score=final_ratio if outcome.startswith("approved") else 1.0 - final_ratio,
-            timestamp=datetime.now()
+            outcome={"decision": outcome, "approval_ratio": final_ratio, "vote_count": len(proposal.votes)},
+            success_score=final_ratio if outcome.startswith("approved") else (1.0 - final_ratio),
+            timestamp=_utcnow(),
         )
-        
-        self.memory_core.store_experience(experience)
-        
-        # Publish result
-        await self.event_bus.publish("PARLIAMENT_DECISION", {
-            "proposal_id": proposal.proposal_id,
-            "outcome": outcome,
-            "final_ratio": final_ratio,
-            "votes": proposal.votes
-        })
-        
-        logger.info(f"Finalized proposal {proposal.proposal_id}: {outcome} (ratio: {final_ratio:.3f})")
-    
-    async def _handle_review_request(self, event: Dict[str, Any]):
-        """Handle incoming review requests from governance engine."""
-        payload = event.get("payload", {})
-        
-        # Extract review details
-        decision_id = payload.get("decision_id", "")
-        rationale = payload.get("rationale", "")
-        
-        # Create review proposal
+        self.memory_core.store_experience(exp)
+
+        # Notify decision
+        await self.event_bus.publish(
+            "PARLIAMENT_DECISION",
+            {
+                "proposal_id": proposal.proposal_id,
+                "outcome": outcome,
+                "final_ratio": final_ratio,
+                "votes": {mid: vr.to_dict() for mid, vr in proposal.votes.items()},
+            },
+            correlation_id=generate_correlation_id(),
+        )
+        logger.info("Finalized proposal %s: %s (ratio=%.3f)", proposal.proposal_id, outcome, final_ratio)
+
+    # --------------------------- Event Handlers ---------------------------
+
+    async def _on_review_request(self, event: Mapping[str, Any]) -> None:
+        """Handle 'GOVERNANCE_NEEDS_REVIEW' events."""
+        payload = event.get("payload", {}) if isinstance(event, Mapping) else {}
+        decision_id = str(payload.get("decision_id", "unknown"))
+        rationale = str(payload.get("rationale", ""))[:500]
+
         await self.submit_for_review(
             title=f"Review Required: {decision_id}",
             description=f"Governance decision requires parliamentary review. {rationale}",
-            proposal_type="policy",  # Default to policy review
-            urgency="normal"
+            proposal_type="policy",
+            urgency="normal",
         )
-    
-    async def _handle_vote_cast(self, event: Dict[str, Any]):
-        """Handle vote casting events."""
-        payload = event.get("payload", {})
-        
-        proposal_id = payload.get("proposal_id", "")
-        member_id = payload.get("member_id", "")
-        vote_str = payload.get("vote", "")
-        rationale = payload.get("rationale", "")
-        
+
+    async def _on_vote_cast(self, event: Mapping[str, Any]) -> None:
+        """Handle 'PARLIAMENT_VOTE_CAST' events."""
+        payload = event.get("payload", {}) if isinstance(event, Mapping) else {}
+        proposal_id = str(payload.get("proposal_id", ""))
+        member_id = str(payload.get("member_id", ""))
+        vote_str = str(payload.get("vote", ""))  # expect one of VoteType values
+        rationale = str(payload.get("rationale", ""))
+
         try:
             vote = VoteType(vote_str)
-            await self.cast_vote(proposal_id, member_id, vote, rationale)
-        except ValueError:
-            logger.error(f"Invalid vote type: {vote_str}")
-    
-    def add_member(self, member_id: str, name: str, expertise: List[str],
-                   weight: float = 1.0) -> bool:
-        """Add a new parliament member."""
-        if member_id in self.members:
-            logger.warning(f"Member {member_id} already exists")
-            return False
-        
-        self.members[member_id] = ParliamentMember(member_id, name, expertise, weight)
-        logger.info(f"Added parliament member: {name} ({member_id})")
-        return True
-    
-    def remove_member(self, member_id: str) -> bool:
-        """Remove a parliament member."""
-        if member_id not in self.members:
-            logger.warning(f"Member {member_id} not found")
-            return False
-        
-        self.members[member_id].active = False
-        logger.info(f"Deactivated parliament member: {member_id}")
-        return True
-    
+        except Exception:
+            logger.error("Invalid vote type: %s", vote_str)
+            return
+
+        await self.cast_vote(proposal_id, member_id, vote, rationale=rationale)
+
+    # --------------------------- Queries ---------------------------
+
     def get_active_proposals(self) -> List[Dict[str, Any]]:
-        """Get list of active proposals."""
-        return [proposal.to_dict() for proposal in self.active_proposals.values()]
-    
+        return [p.to_dict() for p in self._active.values()]
+
     def get_proposal_status(self, proposal_id: str) -> Optional[Dict[str, Any]]:
-        """Get status of a specific proposal."""
-        if proposal_id not in self.active_proposals:
+        p = self._active.get(proposal_id)
+        if not p:
             return None
-        
-        proposal = self.active_proposals[proposal_id]
         return {
-            **proposal.to_dict(),
-            "votes": proposal.votes,
-            "discussion": proposal.discussion
+            **p.to_dict(),
+            "votes": {mid: vr.to_dict() for mid, vr in p.votes.items()},
+            "discussion": list(p.discussion),
         }
-    
+
     def get_member_stats(self) -> Dict[str, Any]:
-        """Get parliament member statistics."""
-        active_count = sum(1 for m in self.members.values() if m.active)
-        total_votes = sum(len(m.vote_history) for m in self.members.values())
-        
+        active_count = sum(1 for m in self._members.values() if m.active)
+        total_votes = sum(len(m.vote_history) for m in self._members.values())
         return {
-            "total_members": len(self.members),
+            "total_members": len(self._members),
             "active_members": active_count,
             "total_votes_cast": total_votes,
-            "active_proposals": len(self.active_proposals),
-            "completed_reviews": len(self.review_history)
+            "active_proposals": len(self._active),
+            "completed_reviews": len(self._history),
         }
+
+    def get_members(self) -> List[Dict[str, Any]]:
+        return [m.to_dict() for m in self._members.values()]

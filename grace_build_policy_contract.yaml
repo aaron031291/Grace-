@@ -1,0 +1,419 @@
+version: 1.1
+name: Grace Build & Policy Contract (Canonical)
+updated: 2025-09-29
+owner: grace
+
+# ───────────────────────────────── ENV & RUNTIME ────────────────────────────────
+environment:
+  language: python
+  python_version: "3.12"
+  sandbox_first: true
+  entrypoints:
+    dev: "uvicorn grace_interface_server:app --reload"
+    prod: "uvicorn grace_interface_server:app --host 0.0.0.0 --port 8080"
+  docker:
+    compose_files: [docker-compose.yml, docker-compose.dev.yml]
+    dockerfile: Dockerfile
+  env_vars:
+    HOST: "0.0.0.0"
+    PORT: "8080"
+    CORS_ALLOW_ORIGINS: "*"
+    UPLOAD_MAX_MB: "50"
+  dependencies:
+    spec: [requirements.txt]
+    optional: [pymupdf, python-docx]
+  feature_flags:
+    - GRACE_SANDBOX_ONLY=true   # MUST be true unless explicitly toggled by governance
+    - GRACE_ALLOW_CODEGEN=true  # permits codegen inside sandbox experiments only
+
+# ─────────────────────────────── PROJECT LAYOUT & DO-DONE ───────────────────────
+project_layout:
+  roots: [backend, frontend, grace, policies, monitoring, demo_and_tests]
+  critical_files:
+    - grace_interface_server.py
+    - grace/orb_interface.py
+    - grace/intelligence/grace_intelligence.py
+    - grace/ide/grace_ide.py
+    - grace/multimodal_interface.py
+    - Dockerfile
+    - docker-compose.yml
+    - docker-compose.dev.yml
+    - requirements.txt
+
+definition_of_done:
+  backend:
+    - All endpoints listed under api.endpoints_must_exist are implemented & return JSON.
+    - Errors use structured envelope (errors.mapping).
+    - Unit tests exist for loop engine, memory CRUD, governance transitions.
+  frontend:
+    - Orb panels map exactly to orb.panels_to_templates (no dangling templates).
+    - WebSocket chat round-trip verified.
+    - Memory upload/search flows exercised with at least 1 text + 1 binary file.
+  security:
+    - Sandbox enforcement: no network calls except allowlist (docs, localhost).
+    - No secret material in repo or logs.
+  observability:
+    - /health OK; /api/orb/v1/stats OK; basic counters present.
+  governance:
+    - Any self-modifying code path must open a governance task and remain blocked until approved.
+
+# ───────────────────────────────── CODING CONVENTIONS ───────────────────────────
+coding_conventions:
+  formatting: [black]
+  linting: [ruff]
+  typing: "use typing + pydantic models for all API IO"
+  logging:
+    level: INFO
+    format: "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
+  http_errors:
+    return_json: true
+    mapping:
+      400: { code: "ERR_BAD_REQUEST" }
+      404: { code: "ERR_NOT_FOUND" }
+      409: { code: "ERR_CONFLICT" }
+      422: { code: "ERR_VALIDATION" }
+      500: { code: "ERR_INTERNAL" }
+
+# ──────────────────────────────── IDENTITY / IDS ────────────────────────────────
+ids:
+  prefixes:
+    session: "ses_"
+    message: "msg_"
+    panel:   "pan_"
+    task:    "tsk_"
+    governance_task: "gov_"
+    notification: "ntf_"
+    memory_fragment: "mem_"
+    collab_session: "col_"
+    experiment: "exp_"
+    model: "mdl_"
+  suffix_len: 12
+  timestamp: "UTC iso8601 Z"
+
+# ───────────────────────────────── ORB INTERFACE ────────────────────────────────
+orb:
+  enums:
+    PanelType:
+      - chat
+      - analytics
+      - memory
+      - governance
+      - task_manager
+      - ide
+      - dashboard
+      - knowledge_base
+      - task_box
+      - collaboration
+      - library_access
+      - screen_share
+      - recording
+      - voice_control
+    NotificationPriority: [low, medium, high, critical]
+  panels_to_templates:
+    chat:            chat_panel
+    analytics:       analytics_panel
+    memory:          memory_explorer_panel
+    governance:      governance_center
+    task_manager:    task_box_panel
+    ide:             ide_panel
+    dashboard:       analytics_panel
+    knowledge_base:  knowledge_base_panel
+    task_box:        task_box_panel
+    collaboration:   collaboration_panel
+    library_access:  knowledge_base_panel
+    screen_share:    screen_share_panel
+    recording:       recording_panel
+    voice_control:   voice_control_panel
+  panel_limits:
+    max_panels_per_session: 6
+  panel_templates_must_exist:
+    - chat_panel
+    - analytics_panel
+    - memory_explorer_panel
+    - governance_center
+    - ide_panel
+    - knowledge_base_panel
+    - task_box_panel
+    - collaboration_panel
+    - screen_share_panel
+    - recording_panel
+    - voice_control_panel
+
+# ───────────────────────── LOOP ENGINE (CANONICAL) ──────────────────────────
+loop_engine:
+  phases:
+    - perceive   # gather input: user message, attachments, context, memory recall
+    - reason     # deliberate via GraceIntelligence; produce ReasoningResult
+    - plan       # produce explicit Plan with steps (tools to call, panels to update)
+    - act        # execute tool/API calls (bounded by sandbox + allowlist)
+    - reflect    # summarize outcome, detect errors, generate improvements
+    - learn      # write deltas to memory (short-term ↔ long-term), update skills
+    - log        # append immutable log entries (inputs, decisions, outcomes, metrics)
+  constraints:
+    sandbox_only: true         # no prod actions in act phase
+    max_actions_per_turn: 8
+    max_tokens_per_turn: 8192  # apply to LLM calls if relevant
+  outputs:
+    - ui_instructions           # panels to open/update/close
+    - messages                  # assistant/system messages
+    - metrics                   # loop KPIs (below)
+    - memory_deltas             # new/updated fragments, tags
+  kpis:
+    turn_latency_ms: "<= 3000 dev; <= 5000 prod"
+    tool_success_rate: ">= 0.95"
+    error_rate: "<= 0.02"
+    hallucination_flag_rate: "<= 0.01"
+    governance_block_rate: "reported; no target (informational)"
+  failure_policy:
+    - if act fails -> retry up to 2 with backoff (200ms, 800ms)
+    - on repeated failure -> produce user-facing error, open governance task if dangerous
+
+# ────────────────────────── META-LEARNING & MEMORY MODEL ────────────────────────
+memory_model:
+  layers:
+    short_term:
+      scope: "current session window"
+      capacity: 50 messages
+    working_context:
+      scope: "derived facts & task state for active turn"
+      eviction: "on turn end unless promoted"
+    long_term:
+      store: "memory_fragments"
+      index: "by type, tags, trust_score, timestamp"
+    knowledge_base:
+      entries: "KnowledgeEntry"
+      access_count_increments_on_read: true
+  ingestion:
+    supported_file_types:
+      - pdf, doc, docx, txt, csv, json, xml
+      - py, js, html, css, md
+      - jpg, png, gif
+      - mp4, mp3, wav
+      - screen_recording, audio_recording, video_recording
+    normalize_types:
+      text: [txt, md, csv, json]
+      document: [pdf, doc, docx]
+      code: [py, js, html, css]
+      audio: [mp3, wav]
+      video: [mp4]
+      binary: ["_others_"]
+    trust_score:
+      base: 0.7
+      bumps: { document: 0.1, verified_metadata: 0.1 }
+      clamp: [0.0, 1.0]
+  learning_rules:
+    - Promote facts referenced >= 3 times into long_term with tag "stable_fact".
+    - Demote long_term items unused for 30 days to "archived" tag.
+    - Merge duplicates by Jaccard sim >= 0.9; keep max trust_score.
+  red_flags:
+    - If fragment trust_score < 0.5 -> never auto-promote to long_term.
+    - If source is "user_code" and not approved -> tag "unapproved_code" and block execution.
+
+# ──────────────────────── EXPERIMENTS & SELF-MODIFICATION ───────────────────────
+experimentation:
+  allowed: true
+  sandbox_only: true
+  flow:
+    - propose_experiment: "open governance task type=approval"
+    - design_checks: ["metrics_defined", "rollback_defined", "blast_radius_small"]
+    - run_in_sandbox: true
+    - evaluate: "compare KPIs vs baseline"
+    - produce_report: "attach to governance task"
+    - request_merge: "requires governance approval"
+  default_metrics:
+    - turn_latency_ms
+    - error_rate
+    - tool_success_rate
+    - user_satisfaction_proxy  # thumbs/quality heuristic if available
+  auto_codegen:
+    allowed_paths:
+      - "grace/experimental/**"
+      - "demo_and_tests/**"
+    blocked_paths:
+      - "main app entrypoints"
+      - "governance core"
+    require_tests: true
+    require_policy_pass: true
+
+# ───────────────────────────── GOVERNANCE & TRUST ───────────────────────────────
+governance:
+  task_states: [pending, in_progress, completed, failed]
+  transitions:
+    - from: pending
+      to: in_progress
+      actor: assignee
+    - from: in_progress
+      to: completed
+      condition: "all acceptance checks met"
+    - from: any
+      to: failed
+      condition: "explicit reject or policy fail"
+  must_open_task_for:
+    - modifying repository code
+    - changing loop_engine constraints
+    - altering memory promotion rules
+    - changing API contract
+  notifications:
+    on_assign:
+      priority: medium
+      actions: [governance_review, governance_approve, governance_reject]
+    on_status_change:
+      notify_requester: true
+trust_and_kpis:
+  immutability: "all loop events appended to immutable log with hash chain"
+  min_trust_score_execute_code: 0.8
+  policy_gate_required: true
+  rollback:
+    required_for: ["any code change", "memory schema change"]
+    strategy: "git revert + config flag rollback"
+
+# ───────────────────────────── NOTIFICATIONS CONTRACT ───────────────────────────
+notifications:
+  fields:
+    - notification_id
+    - title
+    - message
+    - priority
+    - timestamp
+    - user_id
+    - action_required
+    - actions
+    - auto_dismiss_seconds
+    - read_at
+    - dismissed_at
+  sorting: "priority DESC, timestamp DESC"
+
+# ───────────────────────── API SURFACE (FastAPI MUSTS) ──────────────────────────
+api:
+  framework: fastapi
+  base_paths:
+    sessions: "/api/orb/v1/sessions"
+    chat: "/api/orb/v1/chat"
+    panels: "/api/orb/v1/panels"
+    memory: "/api/orb/v1/memory"
+    governance: "/api/orb/v1/governance"
+    notifications: "/api/orb/v1/notifications"
+    ide: "/api/orb/v1/ide"
+    multimodal: "/api/orb/v1/multimodal"
+    stats: "/api/orb/v1/stats"
+    ws: "/ws/{session_id}"
+  endpoints_must_exist:
+    - GET    /
+    - GET    /health
+    - POST   /api/orb/v1/sessions/create
+    - DELETE /api/orb/v1/sessions/{session_id}
+    - GET    /api/orb/v1/sessions/{session_id}
+    - POST   /api/orb/v1/chat/message
+    - GET    /api/orb/v1/chat/{session_id}/history
+    - POST   /api/orb/v1/panels/create
+    - DELETE /api/orb/v1/panels/{session_id}/{panel_id}
+    - PUT    /api/orb/v1/panels/update
+    - GET    /api/orb/v1/panels/{session_id}
+    - POST   /api/orb/v1/memory/upload
+    - POST   /api/orb/v1/memory/search
+    - GET    /api/orb/v1/memory/stats
+    - POST   /api/orb/v1/governance/tasks
+    - GET    /api/orb/v1/governance/tasks/{user_id}
+    - PUT    /api/orb/v1/governance/tasks/{task_id}/status
+    - POST   /api/orb/v1/notifications
+    - GET    /api/orb/v1/notifications/{user_id}
+    - DELETE /api/orb/v1/notifications/{notification_id}
+    - POST   /api/orb/v1/ide/panels/{session_id}
+    - POST   /api/orb/v1/ide/flows
+    - GET    /api/orb/v1/ide/flows/{flow_id}
+    - POST   /api/orb/v1/ide/flows/blocks
+    - GET    /api/orb/v1/ide/blocks
+    - POST   /api/orb/v1/multimodal/screen-share/start
+    - POST   /api/orb/v1/multimodal/screen-share/stop/{session_id}
+    - POST   /api/orb/v1/multimodal/recording/start
+    - POST   /api/orb/v1/multimodal/recording/stop/{session_id}
+    - GET    /api/orb/v1/multimodal/sessions
+    - POST   /api/orb/v1/multimodal/voice/settings
+    - GET    /api/orb/v1/multimodal/voice/settings/{user_id}
+    - POST   /api/orb/v1/multimodal/voice/toggle/{user_id}
+    - POST   /api/orb/v1/multimodal/tasks
+    - GET    /api/orb/v1/multimodal/tasks/{task_id}
+    - GET    /api/orb/v1/stats
+    - GET    /api/orb/v1/stats/ide
+
+# ────────────────────────────── OBSERVABILITY / LOGS ────────────────────────────
+observability:
+  health_endpoint: "/health"
+  stats_endpoint: "/api/orb/v1/stats"
+  logs:
+    immutable_chain: true
+    include:
+      - loop.phase
+      - loop.plan_summary
+      - tools.called
+      - tools.results_summary
+      - errors
+      - kpis
+  pii_redaction: true
+
+# ────────────────────────────── CI POLICY GATE (HARD) ───────────────────────────
+ci_policy_gate:
+  runner: "python -m grace.policy.ci_integration"
+  report_file: "policy-report.md"
+  fail_on_marker: "❌ **FAILED**"
+  surfaces:
+    - "**/*.py"
+    - "**/*.js"
+    - "**/*.sh"
+    - "**/*.bat"
+    - "**/*.ps1"
+    - "Dockerfile*"
+    - "docker-compose*.yml"
+    - "requirements*.txt"
+    - "**/*.yml"
+    - "**/*.yaml"
+  pr_labels:
+    success: "policy:pass"
+    failure: "policy:fail"
+  concurrency_group: "policy-${{ github.ref }}"
+  timeout_minutes: 20
+
+# ──────────────────────────── AMBIGUITY GUARDRAILS (KEY) ────────────────────────
+ambiguity_checks:
+  # Agents MUST resolve these before coding or merging
+  - name: "Panel/Template sync"
+    assert: "Every PanelType has a template in orb.panel_templates_must_exist and panels_to_templates."
+  - name: "Loop token & action budgets"
+    assert: "Loop limits match loop_engine.constraints (max_actions_per_turn, max_tokens_per_turn)."
+  - name: "Sandbox enforcement"
+    assert: "All tool calls in act phase respect sandbox_only and network allowlist."
+  - name: "Governance gating"
+    assert: "Any code-writing or repo mutation opens a governance task and blocks until approved."
+  - name: "Memory promotion safety"
+    assert: "No promotion to long_term if trust_score < 0.5 or tag 'unapproved_code' present."
+  - name: "API contract completeness"
+    assert: "All endpoints_must_exist implemented and pass 2xx with sample payloads."
+  - name: "Observability present"
+    assert: "/health, /stats return sane payloads; error logs structured."
+  - name: "Rollback ready"
+    assert: "For each experiment or code change, a rollback plan exists and is tested."
+
+# ───────────────────────── PROMPT / PLAN TEMPLATES FOR AGENTS ───────────────────
+agent_templates:
+  plan_template: |
+    PLAN:
+    - perceive: <summarize inputs>
+    - reason: <key deductions>
+    - plan:
+      steps:
+      - <tool/api/panel action 1>
+      - <tool/api/panel action 2>
+    - act: <executed steps + results summary>
+    - reflect: <what worked / failed>
+    - learn: <memory deltas>
+    - log: <kpis + hashes>
+  governance_task_template:
+    title: "Proposed change: <subsystem>"
+    description: |
+      Summary: <what/why>
+      Impact: <blast radius, affected modules>
+      Metrics: <success KPIs>
+      Rollback: <how to revert>
+      Test Plan: <unit/integration/e2e>
+    task_type: "approval"
+    priority: "medium"

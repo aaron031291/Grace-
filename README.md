@@ -13,16 +13,18 @@ Grace implements a comprehensive governance architecture with the following comp
 - **Parliament** - Democratic review system for major decisions
 - **Trust Core Kernel** - Trust and credibility weighting for sources and components
 
-### Event Infrastructure (`layer_02_event_mesh/`)
+### Event Infrastructure (`grace/layer_02_event_mesh/`)
 - **Trigger Mesh** - Sub-millisecond event routing with priority queues and constitutional validators
 
-### Audit System (`layer_04_audit_logs/`)
+### Audit System (`grace/layer_04_audit_logs/` → `grace/audit/`)
 - **Immutable Logs** - Blockchain-like tamper-proof audit trail with transparency controls
+- **Golden Path Auditor** - Concrete append/verify implementation for all memory operations
+- **Accessible via**: `grace/audit/immutable_logs.py` (symlinked for convenience)
 
-### Health Monitoring (`immune/`)
+### Health Monitoring (`grace/immune/`)
 - **Enhanced AVN Core** - Anomaly detection, predictive alerts, and automated healing
 
-### ML/DL Consensus (`mldl/`)
+### ML/DL Consensus (`grace/mldl/`)
 - **21-Specialist Quorum** - Expert consensus system with weighted voting
 - **Governance Liaison** - Ensures ML/DL model compliance with constitutional principles
 
@@ -109,6 +111,50 @@ async def main():
 
 asyncio.run(main())
 ```
+
+### Governance Enforcement Hooks
+
+Grace provides runtime enforcement through several key components:
+
+#### Constitutional Decorator
+```python
+from grace.governance.constitutional_decorator import constitutional_check
+
+@constitutional_check(policy="strict", transparency_level="public")
+async def sensitive_operation(data, rationale="Automated operation"):
+    # Your sensitive operation here
+    return {"result": "processed", "governance": {...}}
+```
+
+#### Trust Middleware
+```python
+from grace.governance.constitutional_decorator import trust_middleware
+
+@trust_middleware(min_trust_score=0.8)
+async def high_trust_operation(data):
+    # Operation requiring high trust score
+    return data
+```
+
+#### Golden Path Auditing
+```python
+from grace.audit.golden_path_auditor import append_audit
+
+# In your API endpoints or operations:
+audit_id = await append_audit(
+    operation_type="memory_write",
+    operation_data={"action": "data_ingestion"},
+    user_id="user123",
+    transparency_level="democratic_oversight"
+)
+```
+
+#### Policy Enforcement Middleware
+Applied automatically to all API routes in `grace.api.api_service`:
+- Validates operations against policy rules
+- Blocks unauthorized actions
+- Logs policy violations
+- Enforces constitutional compliance
 
 ## Development Workflow
 
@@ -226,6 +272,34 @@ Audit logs support configurable transparency:
 3. **Governance Internal** - Internal operations (1-year retention)
 4. **Audit Only** - Audit purposes (7-year retention)
 5. **Security Sensitive** - Restricted access (90-day retention)
+
+## Architecture Evolution
+
+> **⚠️ Deprecation Notice**: The "layer_*" model references in older documentation are deprecated. 
+> The current Grace architecture uses an **11-kernel structure** as the single source of truth:
+> 
+> - **Governance Kernel** - Constitutional decision-making
+> - **Intelligence Kernel** - AI reasoning and validation  
+> - **Learning Kernel** - Adaptive learning and improvement
+> - **Memory Kernel** - Persistent storage and retrieval
+> - **Trust Kernel** - Credibility and reliability management
+> - **Interface Kernel** - User and system interfaces
+> - **Orchestration Kernel** - Workflow coordination
+> - **Resilience Kernel** - Health monitoring and recovery
+> - **Ingress Kernel** - Data input and validation
+> - **Multi-OS Kernel** - Cross-platform compatibility
+> - **MLdL Kernel** - Machine learning specialists
+>
+> For legacy compatibility, some layer references remain but point to the kernel implementations.
+
+## Documentation Links
+
+- [Development Setup](DEVELOPMENT_SETUP.md) - Getting started with Grace development
+- [Communications Guide](COMMUNICATIONS_GUIDE.md) - Event system and messaging
+- [Implementation Details](IMPLEMENTATION.md) - Technical implementation notes
+- [Security Improvements](SECURITY_IMPROVEMENTS.md) - Security architecture
+- [Enhanced Features](ENHANCED_FEATURES_DOCUMENTATION.md) - Advanced capabilities
+- [System Overview](GRACE_COMPLETE_SYSTEM_OVERVIEW.md) - Comprehensive system documentation
 
 ## Meta-Learning
 

@@ -1,92 +1,213 @@
-events:
-  - name: UI_SESSION_STARTED
-    description: "User session started in interface"
-    payload:
-      session:
-        $ref: "interface.session.schema.json#/definitions/UISession"
+"""
+ui_events.py
+Grace Interface Event Contracts — production-ready schemas for Interface ⇄ Mesh communication.
+"""
 
-  - name: UI_ACTION
-    description: "User action performed in interface"
-    payload:
-      action:
-        $ref: "interface.taskcard.schema.json#/definitions/UIAction"
+from __future__ import annotations
 
-  - name: UI_TASKCARD_UPDATED
-    description: "Task card state or content updated"
-    payload:
-      card:
-        $ref: "interface.taskcard.schema.json#/definitions/TaskCard"
+from datetime import datetime, timezone
+from enum import StrEnum
+from typing import Any, Dict, List, Mapping, Optional, Type, Union
 
-  - name: UI_NOTIFICATION
-    description: "Notification sent to user"
-    payload:
-      notification:
-        $ref: "interface.taskcard.schema.json#/definitions/Notification"
-      user_id:
-        type: string
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-  - name: UI_POLICY_VIOLATION
-    description: "Policy violation detected in interface"
-    payload:
-      action_id:
-        type: string
-      reasons:
-        type: array
-        items:
-          type: string
-      severity:
-        type: string
-        enum: ["warn", "error"]
 
-  - name: UI_EXPERIENCE
-    description: "UX telemetry data for meta-learning"
-    payload:
-      schema_version:
-        type: string
-        const: "1.0.0"
-      experience:
-        type: object
-        required: ["exp_id", "stage", "metrics", "timestamp"]
-        properties:
-          exp_id:
-            type: string
-          stage:
-            type: string
-            enum: ["latency", "interaction", "approval_flow", "error", "a11y", "i18n"]
-          metrics:
-            type: object
-            properties:
-              p95_interaction_ms: {type: number}
-              task_completion_rate: {type: number}
-              approval_cycle_time_s: {type: number}
-              drop_off_rate: {type: number}
-              a11y_violations: {type: integer}
-              ws_disconnects_per_hr: {type: number}
-              error_rate: {type: number}
-              satisfaction_csat: {type: number}
-          segment:
-            type: string
-          timestamp:
-            type: string
-            format: date-time
+# ---------------------------
+# Helpers
+# ---------------------------
 
-  - name: ROLLBACK_REQUESTED
-    description: "Interface rollback requested"
-    payload:
-      target:
-        type: string
-        const: "interface"
-      to_snapshot:
-        type: string
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
-  - name: ROLLBACK_COMPLETED
-    description: "Interface rollback completed"
-    payload:
-      target:
-        type: string
-        const: "interface"
-      snapshot_id:
-        type: string
-      at:
-        type: string
-        format: date-time
+
+# ---------------------------
+# Enums
+# ---------------------------
+
+class UIEventType(StrEnum):
+    UI_SESSION_STARTED   = "UI_SESSION_STARTED"
+    UI_ACTION            = "UI_ACTION"
+    UI_TASKCARD_UPDATED  = "UI_TASKCARD_UPDATED"
+    UI_NOTIFICATION      = "UI_NOTIFICATION"
+    UI_POLICY_VIOLATION  = "UI_POLICY_VIOLATION"
+    UI_EXPERIENCE        = "UI_EXPERIENCE"
+    ROLLBACK_REQUESTED   = "ROLLBACK_REQUESTED"
+    ROLLBACK_COMPLETED   = "ROLLBACK_COMPLETED"
+
+
+class Severity(StrEnum):
+    WARN = "warn"
+    ERROR = "error"
+
+
+class ExperienceStage(StrEnum):
+    LATENCY        = "latency"
+    INTERACTION    = "interaction"
+    APPROVAL_FLOW  = "approval_flow"
+    ERROR          = "error"
+    A11Y           = "a11y"
+    I18N           = "i18n"
+
+
+# ---------------------------
+# Payloads
+# ---------------------------
+
+class UISessionPayload(BaseModel):
+    session: Mapping[str, Any]  # UISession dict
+
+
+class UIActionPayload(BaseModel):
+    action: Mapping[str, Any]  # UIAction dict
+
+
+class UITaskCardUpdatedPayload(BaseModel):
+    card: Mapping[str, Any]  # TaskCard dict
+
+
+class UINotificationPayload(BaseModel):
+    notification: Mapping[str, Any]  # Notification dict
+    user_id: str
+
+
+class UIPolicyViolationPayload(BaseModel):
+    action_id: str
+    reasons: List[str]
+    severity: Severity
+
+    @field_validator("reasons", mode="after")
+    @classmethod
+    def _normalize(cls, v: List[str]) -> List[str]:
+        return [s.strip() for s in v if isinstance(s, str) and s.strip()]
+
+
+class UIExperienceMetrics(BaseModel):
+    p95_interaction_ms: Optional[float] = None
+    task_completion_rate: Optional[float] = None
+    approval_cycle_time_s: Optional[float] = None
+    drop_off_rate: Optional[float] = None
+    a11y_violations: Optional[int] = None
+    ws_disconnects_per_hr: Optional[float] = None
+    error_rate: Optional[float] = None
+    satisfaction_csat: Optional[float] = None
+
+
+class UIExperienceInner(BaseModel):
+    exp_id: str
+    stage: ExperienceStage
+    metrics: UIExperienceMetrics
+    segment: Optional[str] = None
+    timestamp: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _tz(cls, dt: Optional[datetime]) -> datetime:
+        if dt and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt or _utcnow()
+
+
+class UIExperiencePayload(BaseModel):
+    schema_version: str = "1.0.0"
+    experience: UIExperienceInner
+
+
+class RollbackRequestedPayload(BaseModel):
+    target: str = Field(default="interface", const=True)
+    to_snapshot: str
+
+
+class RollbackCompletedPayload(BaseModel):
+    target: str = Field(default="interface", const=True)
+    snapshot_id: str
+    at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, dt: Optional[datetime]) -> datetime:
+        if dt and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt or _utcnow()
+
+
+# ---------------------------
+# Map event type → payload
+# ---------------------------
+
+EVENT_PAYLOAD_MAP: Dict[UIEventType, Type[BaseModel]] = {
+    UIEventType.UI_SESSION_STARTED:   UISessionPayload,
+    UIEventType.UI_ACTION:            UIActionPayload,
+    UIEventType.UI_TASKCARD_UPDATED:  UITaskCardUpdatedPayload,
+    UIEventType.UI_NOTIFICATION:      UINotificationPayload,
+    UIEventType.UI_POLICY_VIOLATION:  UIPolicyViolationPayload,
+    UIEventType.UI_EXPERIENCE:        UIExperiencePayload,
+    UIEventType.ROLLBACK_REQUESTED:   RollbackRequestedPayload,
+    UIEventType.ROLLBACK_COMPLETED:   RollbackCompletedPayload,
+}
+
+
+# ---------------------------
+# Event envelope
+# ---------------------------
+
+class UIEvent(BaseModel):
+    event_type: UIEventType
+    correlation_id: str
+    timestamp: datetime = Field(default_factory=_utcnow)
+    payload: Union[
+        UISessionPayload,
+        UIActionPayload,
+        UITaskCardUpdatedPayload,
+        UINotificationPayload,
+        UIPolicyViolationPayload,
+        UIExperiencePayload,
+        RollbackRequestedPayload,
+        RollbackCompletedPayload,
+    ]
+    source: str = "interface_kernel"
+    version: str = "1.0.0"
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _tz(cls, dt: Optional[datetime]) -> datetime:
+        if dt and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt or _utcnow()
+
+    @model_validator(mode="after")
+    def _payload_type_check(self) -> "UIEvent":
+        expected = EVENT_PAYLOAD_MAP.get(self.event_type)
+        if expected and not isinstance(self.payload, expected):
+            if isinstance(self.payload, Mapping):
+                object.__setattr__(self, "payload", expected.model_validate(self.payload))  # type: ignore[arg-type]
+            else:
+                raise TypeError(f"payload must be {expected.__name__} for {self.event_type}")
+        return self
+
+
+# ---------------------------
+# Factory
+# ---------------------------
+
+def make_event(
+    event_type: UIEventType,
+    payload: Mapping[str, Any] | BaseModel,
+    *,
+    correlation_id: str,
+    source: str = "interface_kernel",
+    version: str = "1.0.0",
+    timestamp: Optional[datetime] = None,
+) -> UIEvent:
+    ts = timestamp or _utcnow()
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    expected = EVENT_PAYLOAD_MAP[event_type]
+    model_payload = payload if isinstance(payload, expected) else expected.model_validate(payload)  # type: ignore[arg-type]
+    return UIEvent(
+        event_type=event_type,
+        correlation_id=correlation_id,
+        timestamp=ts,
+        payload=model_payload,
+        source=source,
+        version=version,
+    )

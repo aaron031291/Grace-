@@ -1,296 +1,280 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://grace.ai/schemas/ml-contracts/v1",
-  "title": "Grace ML Contracts",
-  "description": "JSON Schema definitions for Grace ML system contracts",
+"""
+ml_contracts.py
+Grace ML Contracts — strict Pydantic v2 models mirroring:
+https://grace.ai/schemas/ml-contracts/v1
 
-  "$defs": {
-    "SemVer": {
-      "type": "string", 
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
-    },
-    "UID": {
-      "type": "string", 
-      "pattern": "^[a-z][a-z0-9_-]{4,64}$"
-    },
-    "ISO8601": {
-      "type": "string", 
-      "format": "date-time"
-    },
-    "Sha256": {
-      "type": "string", 
-      "pattern": "^sha256:[a-f0-9]{64}$"
+- Strong pattern checks for UID / SemVer / Sha256
+- UTC-safe datetimes
+- Typed AdaptationPlan actions (hpo, reweight_specialists, policy_delta, canary)
+- Light normalization for string lists
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Mapping, Optional, Union, Literal
+from pydantic import BaseModel, Field, field_validator
+
+
+# ---------------------------
+# Helpers / Base
+# ---------------------------
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+class StrictModel(BaseModel):
+    model_config = {
+        "extra": "forbid",
+        "validate_assignment": True,
+        "use_enum_values": True,
+        "ser_json_bytes": "utf8",
+        "populate_by_name": True,
     }
-  },
 
-  "Task": {
-    "enum": ["classification", "regression", "clustering", "dimred", "rl"]
-  },
 
-  "Metric": {
-    "classification": ["accuracy", "f1", "auroc", "logloss", "calibration"],
-    "regression": ["rmse", "mae", "r2", "mape"],
-    "clustering": ["silhouette", "davies_bouldin"],
-    "dimred": ["explained_variance"],
-    "rl": ["episode_return", "stability"]
-  },
+# ---------------------------
+# $defs
+# ---------------------------
 
-  "SpecialistReport": {
-    "type": "object",
-    "required": ["report_id", "specialist", "task", "candidates", "timestamp", "version"],
-    "properties": {
-      "report_id": {"$ref": "#/$defs/UID"},
-      "specialist": {
-        "type": "string",
-        "description": "e.g., Tabular-Classification"
-      },
-      "task": {"$ref": "#/Task"},
-      "candidates": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": ["model_key", "version", "artifact_uri", "metrics"],
-          "properties": {
-            "model_key": {
-              "type": "string",
-              "description": "e.g., tabular.classification.xgb"
-            },
-            "version": {"$ref": "#/$defs/SemVer"},
-            "artifact_uri": {"type": "string"},
-            "metrics": {
-              "type": "object",
-              "description": "by task; see Metric enum"
-            },
-            "risks": {
-              "type": "array",
-              "items": {"type": "string"}
-            },
-            "explanations": {
-              "type": "object",
-              "description": "SHAP/feature importances etc."
-            },
-            "validation_hash": {"$ref": "#/$defs/Sha256"}
-          }
-        }
-      },
-      "dataset_id": {"type": "string"},
-      "notes": {"type": "string"},
-      "timestamp": {"$ref": "#/$defs/ISO8601"},
-      "version": {"$ref": "#/$defs/SemVer"}
-    }
-  },
+class SemVer(StrictModel):
+    value: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
-  "Experience": {
-    "type": "object",
-    "required": ["experience_id", "source", "task", "context", "signals", "timestamp"],
-    "properties": {
-      "experience_id": {"$ref": "#/$defs/UID"},
-      "source": {
-        "enum": ["training", "inference", "governance", "ops"]
-      },
-      "task": {"$ref": "#/Task"},
-      "context": {
-        "type": "object",
-        "properties": {
-          "dataset_id": {"type": "string"},
-          "model_key": {"type": "string"},
-          "model_version": {"$ref": "#/$defs/SemVer"},
-          "segment": {"type": "string"},
-          "env": {"enum": ["dev", "staging", "prod"]}
-        }
-      },
-      "signals": {
-        "type": "object",
-        "properties": {
-          "metrics": {"type": "object"},
-          "drift": {
-            "type": "object",
-            "properties": {
-              "psi": {"type": "number"},
-              "kl": {"type": "number"},
-              "mmd": {"type": "number"}
-            }
-          },
-          "fairness": {
-            "type": "object",
-            "properties": {
-              "delta": {"type": "number"},
-              "groups": {
-                "type": "array",
-                "items": {"type": "string"}
-              }
-            }
-          },
-          "latency": {
-            "type": "object",
-            "properties": {
-              "p95_ms": {"type": "number"}
-            }
-          },
-          "compliance": {
-            "type": "object",
-            "properties": {
-              "constitutional": {"type": "number"}
-            }
-          }
-        }
-      },
-      "ground_truth_lag_s": {
-        "type": "integer",
-        "minimum": 0
-      },
-      "timestamp": {"$ref": "#/$defs/ISO8601"}
-    }
-  },
+    def __str__(self) -> str:  # nice repr
+        return self.value
 
-  "Insight": {
-    "type": "object",
-    "required": ["insight_id", "type", "scope", "evidence", "confidence", "timestamp"],
-    "properties": {
-      "insight_id": {"$ref": "#/$defs/UID"},
-      "type": {
-        "enum": ["performance", "drift", "fairness", "calibration", "stability", "governance_alignment"]
-      },
-      "scope": {
-        "enum": ["model", "specialist", "policy", "dataset", "segment"]
-      },
-      "target_ref": {
-        "type": "string",
-        "description": "e.g., model_key or policy path"
-      },
-      "evidence": {
-        "type": "object",
-        "description": "before/after stats, tests run"
-      },
-      "confidence": {
-        "type": "number",
-        "minimum": 0,
-        "maximum": 1
-      },
-      "recommendation": {
-        "enum": ["retrain", "reweight", "recalibrate", "hpo", "policy_tune", "segment_route"]
-      },
-      "timestamp": {"$ref": "#/$defs/ISO8601"}
-    }
-  },
+class UID(StrictModel):
+    value: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    def __str__(self) -> str:
+        return self.value
 
-  "AdaptationPlan": {
-    "type": "object",
-    "required": ["plan_id", "actions", "expected_effect", "risk_controls", "created_at", "version"],
-    "properties": {
-      "plan_id": {"$ref": "#/$defs/UID"},
-      "actions": {
-        "type": "array",
-        "minItems": 1,
-        "items": {
-          "oneOf": [
-            {
-              "type": "object",
-              "required": ["type", "target", "budget", "success_metric"],
-              "properties": {
-                "type": {"const": "hpo"},
-                "target": {
-                  "type": "string",
-                  "description": "family or model_key"
-                },
-                "budget": {
-                  "type": "object",
-                  "properties": {
-                    "trials": {"type": "integer"},
-                    "max_runtime_min": {"type": "integer"}
-                  }
-                },
-                "success_metric": {"type": "string"}
-              }
-            },
-            {
-              "type": "object",
-              "required": ["type", "weights"],
-              "properties": {
-                "type": {"const": "reweight_specialists"},
-                "weights": {
-                  "type": "object",
-                  "additionalProperties": {"type": "number"},
-                  "description": "{Fairness:1.05}"
-                }
-              }
-            },
-            {
-              "type": "object",
-              "required": ["type", "path", "from", "to"],
-              "properties": {
-                "type": {"const": "policy_delta"},
-                "path": {
-                  "type": "string",
-                  "description": "e.g., governance.thresholds.min_calibration"
-                },
-                "from": {},
-                "to": {}
-              }
-            },
-            {
-              "type": "object",
-              "required": ["type", "target_model", "steps"],
-              "properties": {
-                "type": {"const": "canary"},
-                "target_model": {"type": "string"},
-                "steps": {
-                  "type": "array",
-                  "items": {"type": "integer"}
-                }
-              }
-            }
-          ]
-        }
-      },
-      "expected_effect": {
-        "type": "object",
-        "description": "e.g., {f1:\"+1.2%\", calibration:\"+0.02\"}"
-      },
-      "risk_controls": {
-        "type": "object",
-        "properties": {
-          "max_regret_pct": {"type": "number"},
-          "halt_on_drift_z": {"type": "number"}
-        }
-      },
-      "created_at": {"$ref": "#/$defs/ISO8601"},
-      "version": {"$ref": "#/$defs/SemVer"}
-    }
-  },
+class ISO8601(StrictModel):
+    value: datetime
 
-  "GovernanceSnapshot": {
-    "type": "object",
-    "required": ["snapshot_id", "instance_id", "version", "policies", "thresholds", "model_weights", "state_hash", "created_at"],
-    "properties": {
-      "snapshot_id": {"$ref": "#/$defs/UID"},
-      "instance_id": {"$ref": "#/$defs/UID"},
-      "version": {"$ref": "#/$defs/SemVer"},
-      "policies": {"type": "object"},
-      "thresholds": {
-        "type": "object",
-        "description": "e.g., {min_conf:0.78, min_trust:0.72}"
-      },
-      "model_weights": {
-        "type": "object",
-        "description": "specialist weights"
-      },
-      "state_hash": {"$ref": "#/$defs/Sha256"},
-      "created_at": {"$ref": "#/$defs/ISO8601"}
-    }
-  },
+    @field_validator("value", mode="before")
+    @classmethod
+    def _tz(cls, v: Any) -> datetime:
+        if isinstance(v, datetime):
+            return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        dt = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
-  "MLTSnapshot": {
-    "type": "object",
-    "required": ["snapshot_id", "planner_version", "search_spaces", "weights", "policies", "active_jobs", "hash"],
-    "properties": {
-      "snapshot_id": {"$ref": "#/$defs/UID"},
-      "planner_version": {"$ref": "#/$defs/SemVer"},
-      "search_spaces": {"type": "object"},
-      "weights": {"type": "object"},
-      "policies": {"type": "object"},
-      "active_jobs": {"type": "array"},
-      "hash": {"$ref": "#/$defs/Sha256"}
-    }
-  }
-}
+class Sha256(StrictModel):
+    value: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    def __str__(self) -> str:
+        return self.value
+
+
+# ---------------------------
+# Enums (as Literals for parity)
+# ---------------------------
+
+Task = Literal["classification", "regression", "clustering", "dimred", "rl"]
+
+InsightType = Literal[
+    "performance", "drift", "fairness", "calibration", "stability", "governance_alignment"
+]
+
+InsightScope = Literal["model", "specialist", "policy", "dataset", "segment"]
+
+
+# ---------------------------
+# SpecialistReport
+# ---------------------------
+
+class Candidate(StrictModel):
+    model_key: str
+    version: SemVer
+    artifact_uri: str
+    metrics: Mapping[str, Any]
+    risks: Optional[List[str]] = None
+    explanations: Optional[Mapping[str, Any]] = None
+    validation_hash: Optional[Sha256] = None
+
+    @field_validator("risks", mode="after")
+    @classmethod
+    def _norm_risks(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        seen, out = set(), []
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    out.append(s)
+        return out
+
+class SpecialistReport(StrictModel):
+    report_id: UID
+    specialist: str  # e.g., "Tabular-Classification"
+    task: Task
+    candidates: List[Candidate]
+    dataset_id: Optional[str] = None
+    notes: Optional[str] = None
+    timestamp: ISO8601
+    version: SemVer
+
+
+# ---------------------------
+# Experience
+# ---------------------------
+
+class ExperienceContext(StrictModel):
+    dataset_id: Optional[str] = None
+    model_key: Optional[str] = None
+    model_version: Optional[SemVer] = None
+    segment: Optional[str] = None
+    env: Optional[Literal["dev", "staging", "prod"]] = None
+
+class ExperienceSignalsDrift(StrictModel):
+    psi: Optional[float] = None
+    kl: Optional[float] = None
+    mmd: Optional[float] = None
+
+class ExperienceSignalsFairness(StrictModel):
+    delta: Optional[float] = None
+    groups: Optional[List[str]] = None
+
+    @field_validator("groups", mode="after")
+    @classmethod
+    def _norm_groups(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        seen, out = set(), []
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    out.append(s)
+        return out
+
+class ExperienceSignalsLatency(StrictModel):
+    p95_ms: Optional[float] = None
+
+class ExperienceSignalsCompliance(StrictModel):
+    constitutional: Optional[float] = None
+
+class ExperienceSignals(StrictModel):
+    metrics: Optional[Mapping[str, Any]] = None
+    drift: Optional[ExperienceSignalsDrift] = None
+    fairness: Optional[ExperienceSignalsFairness] = None
+    latency: Optional[ExperienceSignalsLatency] = None
+    compliance: Optional[ExperienceSignalsCompliance] = None
+
+class Experience(StrictModel):
+    experience_id: UID
+    source: Literal["training", "inference", "governance", "ops"]
+    task: Task
+    context: ExperienceContext
+    signals: ExperienceSignals
+    ground_truth_lag_s: Optional[int] = Field(default=None, ge=0)
+    timestamp: ISO8601
+
+
+# ---------------------------
+# Insight
+# ---------------------------
+
+class Insight(StrictModel):
+    insight_id: UID
+    type: InsightType
+    scope: InsightScope
+    target_ref: Optional[str] = Field(default=None, description="e.g., model_key or policy path")
+    evidence: Mapping[str, Any]
+    confidence: float = Field(ge=0.0, le=1.0)
+    recommendation: Optional[
+        Literal["retrain", "reweight", "recalibrate", "hpo", "policy_tune", "segment_route"]
+    ] = None
+    timestamp: ISO8601
+
+
+# ---------------------------
+# AdaptationPlan (+ action variants)
+# ---------------------------
+
+class HPOBudget(StrictModel):
+    trials: Optional[int] = None
+    max_runtime_min: Optional[int] = None
+
+class ActionHPO(StrictModel):
+    type: Literal["hpo"] = "hpo"
+    target: str  # family or model_key
+    budget: HPOBudget
+    success_metric: str
+
+class ActionReweight(StrictModel):
+    type: Literal["reweight_specialists"] = "reweight_specialists"
+    weights: Mapping[str, float]  # e.g., {"Fairness": 1.05}
+
+class ActionPolicyDelta(StrictModel):
+    type: Literal["policy_delta"] = "policy_delta"
+    path: str  # e.g., governance.thresholds.min_calibration
+    **_from_to: Mapping[str, Any]  # to avoid Python keywords; implemented with validators
+
+    # use explicit fields to keep dump clean
+    from_: Any = Field(alias="from")
+    to: Any
+
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+class ActionCanary(StrictModel):
+    type: Literal["canary"] = "canary"
+    target_model: str
+    steps: List[int]
+
+AdaptationAction = Union[ActionHPO, ActionReweight, ActionPolicyDelta, ActionCanary]
+
+class AdaptationPlan(StrictModel):
+    plan_id: UID
+    actions: List[AdaptationAction] = Field(min_length=1)
+    expected_effect: Mapping[str, Any]
+    risk_controls: Mapping[str, Any]  # {"max_regret_pct": ..., "halt_on_drift_z": ...}
+    created_at: ISO8601
+    version: SemVer
+
+
+# ---------------------------
+# Snapshots
+# ---------------------------
+
+class GovernanceSnapshot(StrictModel):
+    snapshot_id: UID
+    instance_id: UID
+    version: SemVer
+    policies: Mapping[str, Any]
+    thresholds: Mapping[str, Any]
+    model_weights: Mapping[str, Any]
+    state_hash: Sha256
+    created_at: ISO8601
+
+class MLTSnapshot(StrictModel):
+    snapshot_id: UID
+    planner_version: SemVer
+    search_spaces: Mapping[str, Any]
+    weights: Mapping[str, Any]
+    policies: Mapping[str, Any]
+    active_jobs: List[Any]
+    hash: Sha256
+
+
+__all__ = [
+    # defs
+    "SemVer", "UID", "ISO8601", "Sha256",
+    # enums
+    "Task", "InsightType", "InsightScope",
+    # reports
+    "Candidate", "SpecialistReport",
+    # experience
+    "ExperienceContext", "ExperienceSignalsDrift", "ExperienceSignalsFairness",
+    "ExperienceSignalsLatency", "ExperienceSignalsCompliance", "ExperienceSignals",
+    "Experience",
+    # insight
+    "Insight",
+    # plans
+    "HPOBudget", "ActionHPO", "ActionReweight", "ActionPolicyDelta", "ActionCanary",
+    "AdaptationAction", "AdaptationPlan",
+    # snapshots
+    "GovernanceSnapshot", "MLTSnapshot",
+]

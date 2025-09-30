@@ -1,135 +1,245 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://grace.ai/schemas/ml-events/v1",
-  "title": "Grace ML Event Schemas",
-  "description": "Event schemas for Grace ML system",
+"""
+ml_events.py
+Grace ML Event Schemas — production-ready Pydantic v2 models for bus messages.
 
-  "$defs": {
-    "SemVer": {
-      "type": "string", 
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
-    },
-    "UID": {
-      "type": "string", 
-      "pattern": "^[a-z][a-z0-9_-]{4,64}$"
-    },
-    "ISO8601": {
-      "type": "string", 
-      "format": "date-time"
-    }
-  },
+Schema parity with: https://grace.ai/schemas/ml-events/v1
+"""
 
-  "events": [
-    {
-      "name": "EXPERIENCE_INGESTED",
-      "payload": {"$ref": "ml_schemas.json#/Experience"}
-    },
-    {
-      "name": "MLT_INSIGHT_READY",
-      "payload": {"$ref": "ml_schemas.json#/Insight"}
-    },
-    {
-      "name": "ADAPTATION_PLAN_PROPOSED",
-      "payload": {
-        "type": "object",
-        "required": ["correlation_id", "plan"],
-        "properties": {
-          "correlation_id": {"$ref": "#/$defs/UID"},
-          "plan": {"$ref": "ml_schemas.json#/AdaptationPlan"}
-        }
-      }
-    },
-    {
-      "name": "GOVERNANCE_VALIDATION",
-      "payload": {
-        "type": "object",
-        "required": ["correlation_id", "decision_subject", "inputs", "thresholds"],
-        "properties": {
-          "correlation_id": {"$ref": "#/$defs/UID"},
-          "decision_subject": {
-            "enum": ["action", "policy", "claim", "deployment"]
-          },
-          "inputs": {
-            "type": "object",
-            "properties": {
-              "plan": {"$ref": "ml_schemas.json#/AdaptationPlan"},
-              "unified_decision": {
-                "type": "object",
-                "description": "when used outside MLT"
-              }
-            }
-          },
-          "thresholds": {"type": "object"}
-        }
-      }
-    },
-    {
-      "name": "GOVERNANCE_APPROVED",
-      "payload": {
-        "type": "object",
-        "properties": {
-          "correlation_id": {"$ref": "#/$defs/UID"},
-          "decision_id": {"$ref": "#/$defs/UID"},
-          "rationale": {"type": "string"}
-        }
-      }
-    },
-    {
-      "name": "GOVERNANCE_REJECTED",
-      "payload": {
-        "type": "object",
-        "properties": {
-          "correlation_id": {"$ref": "#/$defs/UID"},
-          "decision_id": {"$ref": "#/$defs/UID"},
-          "rationale": {"type": "string"},
-          "failure_modes": {
-            "type": "array",
-            "items": {"type": "string"}
-          }
-        }
-      }
-    },
-    {
-      "name": "MLT_PLAN_APPLIED",
-      "payload": {
-        "type": "object",
-        "properties": {
-          "plan_id": {"$ref": "#/$defs/UID"},
-          "snapshot_id": {"$ref": "#/$defs/UID"}
-        }
-      }
-    },
-    {
-      "name": "MODEL_DRIFT_ALERT",
-      "payload": {
-        "type": "object",
-        "properties": {
-          "model_key": {"type": "string"},
-          "psi": {"type": "number"},
-          "zscore": {"type": "number"}
-        }
-      }
-    },
-    {
-      "name": "ROLLBACK_REQUESTED",
-      "payload": {
-        "type": "object",
-        "properties": {
-          "target": {"enum": ["governance", "mlt", "model"]},
-          "to_snapshot": {"type": "string"}
-        }
-      }
-    },
-    {
-      "name": "ROLLBACK_COMPLETED",
-      "payload": {
-        "type": "object",
-        "properties": {
-          "target": {"enum": ["governance", "mlt", "model"]},
-          "snapshot_id": {"type": "string"},
-          "at": {"$ref": "#/$defs/ISO8601"}
-        }
-      }
-    }
-  ]
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import StrEnum
+from typing import Any, Dict, List, Mapping, Optional, Type, Union
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+# ---------------------------
+# Helpers
+# ---------------------------
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+# ---------------------------
+# Enums
+# ---------------------------
+
+class MLEventType(StrEnum):
+    EXPERIENCE_INGESTED      = "EXPERIENCE_INGESTED"
+    MLT_INSIGHT_READY        = "MLT_INSIGHT_READY"
+    ADAPTATION_PLAN_PROPOSED = "ADAPTATION_PLAN_PROPOSED"
+    GOVERNANCE_VALIDATION    = "GOVERNANCE_VALIDATION"
+    GOVERNANCE_APPROVED      = "GOVERNANCE_APPROVED"
+    GOVERNANCE_REJECTED      = "GOVERNANCE_REJECTED"
+    MLT_PLAN_APPLIED         = "MLT_PLAN_APPLIED"
+    MODEL_DRIFT_ALERT        = "MODEL_DRIFT_ALERT"
+    ROLLBACK_REQUESTED       = "ROLLBACK_REQUESTED"
+    ROLLBACK_COMPLETED       = "ROLLBACK_COMPLETED"
+
+
+class DecisionSubject(StrEnum):
+    ACTION     = "action"
+    POLICY     = "policy"
+    CLAIM      = "claim"
+    DEPLOYMENT = "deployment"
+
+
+# ---------------------------
+# Payloads (opaque where $ref points to external ml_schemas.json)
+# ---------------------------
+
+class ExperiencePayload(BaseModel):
+    # $ref: ml_schemas.json#/Experience
+    __root__: Mapping[str, Any]
+
+
+class InsightPayload(BaseModel):
+    # $ref: ml_schemas.json#/Insight
+    __root__: Mapping[str, Any]
+
+
+class AdaptationPlanBody(BaseModel):
+    # $ref: ml_schemas.json#/AdaptationPlan
+    __root__: Mapping[str, Any]
+
+
+class AdaptationPlanProposedPayload(BaseModel):
+    correlation_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    plan: AdaptationPlanBody
+
+
+class GovernanceValidationInputs(BaseModel):
+    plan: Optional[AdaptationPlanBody] = None
+    unified_decision: Optional[Mapping[str, Any]] = None  # “when used outside MLT”
+
+
+class GovernanceValidationPayload(BaseModel):
+    correlation_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    decision_subject: DecisionSubject
+    inputs: GovernanceValidationInputs
+    thresholds: Mapping[str, Any]
+
+
+class GovernanceApprovedPayload(BaseModel):
+    correlation_id: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    decision_id:    Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    rationale:      Optional[str] = None
+
+
+class GovernanceRejectedPayload(BaseModel):
+    correlation_id: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    decision_id:    Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    rationale:      Optional[str] = None
+    failure_modes:  Optional[List[str]] = None
+
+    @field_validator("failure_modes", mode="after")
+    @classmethod
+    def _norm_failures(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        out, seen = [], set()
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    out.append(s)
+        return out
+
+
+class MLTPlanAppliedPayload(BaseModel):
+    plan_id:     Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    snapshot_id: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+
+
+class ModelDriftAlertPayload(BaseModel):
+    model_key: Optional[str] = None
+    psi:       Optional[float] = None
+    zscore:    Optional[float] = None
+
+
+class RollbackRequestedPayload(BaseModel):
+    target: str = Field(pattern=r"^(governance|mlt|model)$")
+    to_snapshot: str
+
+
+class RollbackCompletedPayload(BaseModel):
+    target: str = Field(pattern=r"^(governance|mlt|model)$")
+    snapshot_id: str
+    at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, dt: Optional[datetime]) -> datetime:
+        if dt and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt or _utcnow()
+
+
+# Map event type → payload schema
+EVENT_PAYLOAD_MAP: Dict[MLEventType, type[BaseModel]] = {
+    MLEventType.EXPERIENCE_INGESTED:      ExperiencePayload,
+    MLEventType.MLT_INSIGHT_READY:        InsightPayload,
+    MLEventType.ADAPTATION_PLAN_PROPOSED: AdaptationPlanProposedPayload,
+    MLEventType.GOVERNANCE_VALIDATION:    GovernanceValidationPayload,
+    MLEventType.GOVERNANCE_APPROVED:      GovernanceApprovedPayload,
+    MLEventType.GOVERNANCE_REJECTED:      GovernanceRejectedPayload,
+    MLEventType.MLT_PLAN_APPLIED:         MLTPlanAppliedPayload,
+    MLEventType.MODEL_DRIFT_ALERT:        ModelDriftAlertPayload,
+    MLEventType.ROLLBACK_REQUESTED:       RollbackRequestedPayload,
+    MLEventType.ROLLBACK_COMPLETED:       RollbackCompletedPayload,
 }
+
+
+# ---------------------------
+# Event envelope
+# ---------------------------
+
+class MLEvent(BaseModel):
+    event_type: MLEventType
+    correlation_id: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{4,64}$")
+    timestamp: datetime = Field(default_factory=_utcnow)
+    payload: Union[
+        ExperiencePayload,
+        InsightPayload,
+        AdaptationPlanProposedPayload,
+        GovernanceValidationPayload,
+        GovernanceApprovedPayload,
+        GovernanceRejectedPayload,
+        MLTPlanAppliedPayload,
+        ModelDriftAlertPayload,
+        RollbackRequestedPayload,
+        RollbackCompletedPayload,
+    ]
+    source: str = "ml_kernel"
+    version: str = "1.0.0"  # SemVer if you want to bump later
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _tz(cls, dt: Optional[datetime]) -> datetime:
+        if dt and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt or _utcnow()
+
+    @model_validator(mode="after")
+    def _ensure_payload_type(self) -> "MLEvent":
+        expected = EVENT_PAYLOAD_MAP.get(self.event_type)
+        if expected and not isinstance(self.payload, expected):
+            if isinstance(self.payload, Mapping):
+                object.__setattr__(self, "payload", expected.model_validate(self.payload))  # type: ignore[arg-type]
+            else:
+                raise TypeError(f"payload must be {expected.__name__} for {self.event_type}")
+        return self
+
+
+# ---------------------------
+# Factory
+# ---------------------------
+
+def make_event(
+    event_type: MLEventType,
+    payload: Mapping[str, Any] | BaseModel,
+    *,
+    correlation_id: Optional[str] = None,
+    source: str = "ml_kernel",
+    version: str = "1.0.0",
+    timestamp: Optional[datetime] = None,
+) -> MLEvent:
+    """
+    Build a validated MLEvent. Accepts a typed payload model or a plain mapping.
+    """
+    ts = timestamp or _utcnow()
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    expected = EVENT_PAYLOAD_MAP[event_type]
+    model_payload = payload if isinstance(payload, expected) else expected.model_validate(payload)  # type: ignore[arg-type]
+    return MLEvent(
+        event_type=event_type,
+        correlation_id=correlation_id,
+        timestamp=ts,
+        payload=model_payload,
+        source=source,
+        version=version,
+    )
+
+
+__all__ = [
+    "MLEventType",
+    "DecisionSubject",
+    "ExperiencePayload",
+    "InsightPayload",
+    "AdaptationPlanBody",
+    "AdaptationPlanProposedPayload",
+    "GovernanceValidationInputs",
+    "GovernanceValidationPayload",
+    "GovernanceApprovedPayload",
+    "GovernanceRejectedPayload",
+    "MLTPlanAppliedPayload",
+    "ModelDriftAlertPayload",
+    "RollbackRequestedPayload",
+    "RollbackCompletedPayload",
+    "MLEvent",
+    "make_event",
+]

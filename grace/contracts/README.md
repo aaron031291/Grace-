@@ -1,130 +1,208 @@
+Here’s a tightened, production-ready README you can drop in as `README.md` for the **Grace ML Contracts** package. It’s structured for engineers (validation, codegen, CI hooks), adds explicit versioning/compatibility guidance, and keeps all the details you provided—just clearer and more actionable.
+
+---
+
 # Grace ML Contracts
 
-This directory contains the JSON Schema definitions and contract specifications for Grace's Machine Learning components, particularly the MLT (Memory, Learning, Trust) kernel.
+Contracts and JSON Schemas for Grace’s Machine Learning components—especially the **MLT (Memory · Learning · Trust)** kernel. These specs are the single source of truth for events, APIs, storage, and inter-service types.
 
-## Files
+## What’s here
 
-### Schema Definitions
-- **`ml_schemas.json`** - Core ML data structure schemas (SpecialistReport, Experience, Insight, AdaptationPlan, etc.)
-- **`ml_events.json`** - Event schemas for system events and message passing
-- **`ml_api.json`** - REST API endpoint specifications
-- **`ml_database_schema.sql`** - Database schema for PostgreSQL/SQLite storage
+```
+grace-ml-contracts/
+├─ ml_schemas.json         # Core data structures (SpecialistReport, Experience, Insight, AdaptationPlan, …)
+├─ ml_events.json          # Event payload schemas used on the bus
+├─ ml_api.json             # REST API endpoint specification
+├─ ml_database_schema.sql  # Postgres DDL for MLT persistence
+└─ examples/
+   ├─ adaptation_plan.json
+   ├─ experience.json
+   ├─ insight.json
+   ├─ specialist_report.json
+   └─ governance_snapshot.json
+```
 
-### Examples
-The `examples/` directory contains sample JSON documents demonstrating the schema usage:
-- **`adaptation_plan.json`** - Sample adaptation plan with HPO, policy changes, and canary deployment
-- **`experience.json`** - Sample experience data from training pipeline
-- **`insight.json`** - Sample insight generated from experience analysis
-- **`specialist_report.json`** - Sample ML specialist evaluation report
-- **`governance_snapshot.json`** - Sample governance state snapshot
+## Schema overview
 
-## Schema Overview
+### Core `$defs`
 
-### Core Definitions ($defs)
-- **SemVer** - Semantic version pattern (e.g., "1.2.3")
-- **UID** - Unique identifier pattern (lowercase alphanumeric with dashes/underscores, 5-65 chars)
-- **ISO8601** - ISO 8601 date-time format
-- **Sha256** - SHA-256 hash with "sha256:" prefix
+* **SemVer**: `^[0-9]+\.[0-9]+\.[0-9]+$`
+* **UID**: `^[a-z][a-z0-9_-]{4,64}$`
+* **ISO8601**: RFC 3339/ISO 8601 timestamp
+* **Sha256**: `sha256:<64 hex>`
 
-### Task Types
-- `classification` - Classification tasks
-- `regression` - Regression tasks  
-- `clustering` - Clustering tasks
-- `dimred` - Dimensionality reduction tasks
-- `rl` - Reinforcement learning tasks
+### Tasks & metrics
 
-### Metrics by Task
-- **Classification**: accuracy, f1, auroc, logloss, calibration
-- **Regression**: rmse, mae, r2, mape
-- **Clustering**: silhouette, davies_bouldin
-- **Dimensionality Reduction**: explained_variance
-- **Reinforcement Learning**: episode_return, stability
+* **Tasks**: `classification | regression | clustering | dimred | rl`
+* **Metrics**:
 
-## Key Contract Types
+  * Classification: `accuracy, f1, auroc, logloss, calibration`
+  * Regression: `rmse, mae, r2, mape`
+  * Clustering: `silhouette, davies_bouldin`
+  * Dimensionality reduction: `explained_variance`
+  * RL: `episode_return, stability`
 
-### SpecialistReport
-ML specialist evaluation results containing:
-- Specialist identity and task type
-- Candidate models with metrics, artifacts, and validation hashes
-- Risk assessments and explanations (SHAP, feature importance)
-- Dataset information and evaluation notes
+## Key contract types
 
-### Experience  
-Training/inference experience data containing:
-- Source (training, inference, governance, ops)
-- Context (dataset, model, environment)
-- Signals (metrics, drift, fairness, latency, compliance)
-- Ground truth lag and timestamp
+* **SpecialistReport** — model selection outputs (candidates, artifacts, metrics, risks, SHAP/feature importance, dataset, notes).
+* **Experience** — training/inference telemetry: context (dataset/model/env), signals (metrics, drift, fairness, latency, compliance), GT lag, timestamp.
+* **Insight** — derived findings: type/scope, evidence, confidence, recommendation.
+* **AdaptationPlan** — concrete actions:
 
-### Insight
-Generated insights from experience analysis containing:
-- Insight type (performance, drift, fairness, calibration, stability, governance_alignment)
-- Scope (model, specialist, policy, dataset, segment)
-- Evidence and confidence level
-- Recommended actions
+  * `hpo` (target, budget, success_metric)
+  * `reweight_specialists` (weights)
+  * `policy_delta` (path/from/to)
+  * `canary` (target_model, steps)
+* **GovernanceSnapshot / MLTSnapshot** — state capture with sha256 hashes.
 
-### AdaptationPlan
-Concrete adaptation plans for system improvements containing:
-- Multiple action types:
-  - **HPO** - Hyperparameter optimization with budget and success metrics
-  - **Reweight Specialists** - Adjust specialist weights
-  - **Policy Delta** - Change governance policies
-  - **Canary** - Gradual model rollout
-- Expected effects and risk controls
-- Versioning and timestamps
+## API endpoints (ML kernel)
 
-## API Endpoints
-
-- `GET /health` - Health check with version
-- `POST /experience` - Submit experience data
-- `GET /insights` - Retrieve insights (optionally filtered by timestamp)
-- `POST /plan/propose` - Propose adaptation plan
-- `GET /plans/{id}/status` - Check plan approval status
-- `POST /snapshot/export` - Export system snapshot
-- `POST /rollback` - Request system rollback
-
-## Database Schema
-
-The database schema supports:
-- **mlt_experiences** - Experience data with indexed querying by source/task
-- **mlt_insights** - Insights with confidence-based indexing
-- **mlt_plans** - Adaptation plans with status tracking
-- **mlt_snapshots** - System state snapshots with hash verification
-- **mlt_specialist_reports** - ML model evaluation reports
-
-All tables include proper constraints, indexes, and PostgreSQL-specific features like JSONB and timestamp triggers.
+* `GET /health` — returns `{status:"ok", version:<SemVer>}`
+* `POST /experience` — submit **Experience**
+* `GET /insights?since=<ISO8601>` — fetch **Insight[]**
+* `POST /plan/propose` — submit **AdaptationPlan**
+* `GET /plans/{id}/status` — status: `pending|approved|rejected|applied`
+* `POST /snapshot/export` — snapshot id + URI
+* `POST /rollback` — request rollback (`governance|mlt|model`)
 
 ## Events
 
-System events for inter-component communication:
-- Experience ingestion and insight generation
-- Adaptation plan proposal and governance validation
-- Governance approval/rejection with rationale
-- Plan application and model drift alerts
-- System rollback requests and completion
+* `EXPERIENCE_INGESTED`, `MLT_INSIGHT_READY`
+* `ADAPTATION_PLAN_PROPOSED`
+* `GOVERNANCE_VALIDATION` → `GOVERNANCE_APPROVED|REJECTED`
+* `MLT_PLAN_APPLIED`, `MODEL_DRIFT_ALERT`
+* `ROLLBACK_REQUESTED` → `ROLLBACK_COMPLETED`
 
-## Validation
+All event payloads validate against **`ml_events.json`** and (where referenced) definitions in **`ml_schemas.json`**.
 
-All schemas include proper validation constraints:
-- Pattern matching for IDs and hashes
-- Enum validation for categorical fields
-- Numeric ranges for confidence scores and metrics
-- Required field validation
-- Type-specific structure validation
+## Database schema (PostgreSQL)
 
-## Usage
+Tables in `ml_database_schema.sql`:
 
-These contracts can be used for:
-1. **Validation** - Validate JSON documents against schemas
-2. **Code Generation** - Generate Pydantic models or other language bindings
-3. **API Documentation** - OpenAPI/Swagger documentation generation  
-4. **Database Design** - Reference for table structure and constraints
-5. **Testing** - Schema-based test data generation
+* `mlt_experiences` — indexed by `(source, task)` and `ts`
+* `mlt_insights` — indexed by `(type, scope)`, `ts`, `confidence DESC`
+* `mlt_plans` — status index + `updated_at` trigger
+* `mlt_snapshots` — hash-verified sha256 state
+* `mlt_specialist_reports` — specialist/task/time indexes
+
+> Constraints enforce UID/SemVer patterns, enums via CHECKs; JSONB used for flexible payloads.
+
+---
+
+## Quickstart: validate & lint
+
+### Validate a JSON document (CLI)
+
+```bash
+# Using ajv
+npx ajv -s ml_schemas.json -d examples/experience.json --spec=draft2020
+npx ajv -s ml_events.json  -d path/to/event.json --spec=draft2020
+```
+
+### Validate in Python (Pydantic v2)
+
+```python
+from ml_contracts import Experience, AdaptationPlan
+import json, pathlib
+
+data = json.loads(pathlib.Path("examples/experience.json").read_text())
+exp = Experience.model_validate(data)  # raises on violation
+print(exp.model_dump_json())
+```
+
+> We ship mirrored **Pydantic v2** models (`ml_contracts.py`, `ml_events.py`, `ml_api` handlers) that align 1:1 with these schemas.
+
+---
+
+## Code generation
+
+* **Python**: (already provided) Pydantic v2 models (`ml_contracts.py`, `ml_events.py`).
+* **Alt languages**: use `quicktype`, `openapi-generator`, or `jsonschema2pojo` against the JSON Schema files.
+* **OpenAPI**: `ml_api.json` defines endpoints; can be imported into Swagger tools.
+
+---
+
+## CI recommendations
+
+Add a pre-merge job that:
+
+1. **Schema lint**: `$ ajv compile -s ml_schemas.json ml_events.json ml_api.json`
+2. **Examples validation**: validate every file in `examples/` against its schema.
+3. **Round-trip check**: parse with Pydantic models → dump → re-validate with AJV.
+4. **DB drift**: run `ml_database_schema.sql` in ephemeral Postgres and `pg_dump -s` to compare.
+
+Example GitHub Actions step:
+
+```yaml
+- name: Validate schemas
+  run: |
+    npx ajv compile -s ml_schemas.json
+    npx ajv compile -s ml_events.json
+    npx ajv compile -s ml_api.json
+    for f in examples/*.json; do
+      npx ajv -s ml_schemas.json -d "$f" --spec=draft2020 || exit 1
+    done
+```
+
+---
+
+## Versioning & compatibility
+
+* **Schema SemVer**: bump **PATCH** for backward-compatible additions (new optional fields), **MINOR** for additive but breaking validation (new required fields), **MAJOR** for structural changes.
+* **Wire-compat** (events): never remove/rename fields without a **MAJOR** bump; prefer adding optional fields.
+* **DB schema**: provide migrations for non-compatible changes; keep JSONB field names consistent with contracts.
+
+Compatibility matrix (guidance):
+
+| Component              | Depends on                 | Notes                                |
+| ---------------------- | -------------------------- | ------------------------------------ |
+| ml_api.json            | ml_schemas.json            | Request/response shapes by `$ref`    |
+| ml_events.json         | ml_schemas.json (partial)  | Opaque where external `$ref` is used |
+| ml_database_schema.sql | ml_schemas.json            | IDs, enums, timestamps, JSONB shape  |
+| Pydantic models        | ml_schemas/events/api.json | 1:1 field parity & validation        |
+
+---
+
+## Conventions (must follow)
+
+* **UID**: `^[a-z][a-z0-9_-]{4,64}$` — generate lowercase, prefix by domain when helpful (`e_plan_…`, `i_insight_…`).
+* **Timestamps**: always UTC **with** offset (`Z` or `+00:00`).
+* **Hashes**: content digests formatted `sha256:<hex64>`.
+* **Enums**: use provided enum values exactly; avoid free-text categories.
+
+---
+
+## Usage patterns
+
+1. **Validation** — enforce contracts at API boundaries and message bus ingress/egress.
+2. **Codegen** — generate typed models for clients/services.
+3. **API docs** — import `ml_api.json` into Swagger UI / Redoc.
+4. **DB design** — `ml_database_schema.sql` as baseline; extend with migrations.
+5. **Testing** — seed fixtures from `examples/` and add property-based tests against schemas.
+
+---
 
 ## Integration with Grace
 
-These contracts integrate with existing Grace components:
-- Compatible with existing Pydantic v2 models in `grace/contracts/`
-- Extends MLT kernel functionality in `grace/mlt_kernel_ml/`
-- Supports governance validation workflows
-- Provides schema-based validation for API endpoints
+* Fully compatible with existing Pydantic v2 models under `grace/contracts/`.
+* Extends the MLT kernel (`grace/mlt_kernel_ml/`) for: experience ingestion, insight generation, adaptation planning, and governance validation.
+* Plays cleanly with Grace governance thresholds and snapshots (`GovernanceSnapshot`) for approval workflows.
+
+---
+
+## Security & data handling
+
+* Treat **Experience.signals** and **SpecialistReport.candidates** as potentially sensitive (model keys, dataset references).
+* Avoid including raw PII in contracts; if needed, reference de-identified artifacts by UID.
+* Snapshots include `sha256` state hashes—verify on restore and audit.
+
+---
+
+## Contributing
+
+* Keep changes **schema-first** (update JSON schemas, regenerate models, then services).
+* Add/adjust examples alongside any schema change.
+* Include a CHANGELOG entry describing compatibility impact and migration notes.
+
+---
+

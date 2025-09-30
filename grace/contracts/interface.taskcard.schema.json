@@ -1,138 +1,172 @@
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "interface.taskcard.schema.json",
-  "title": "Interface TaskCard Schema",
-  "description": "Task card data model for primary UX unit",
-  "definitions": {
-    "TaskCard": {
-      "type": "object",
-      "required": ["card_id", "title", "kind", "owner", "state", "created_at"],
-      "properties": {
-        "card_id": {
-          "type": "string",
-          "pattern": "card_[a-z0-9]{8,}"
-        },
-        "title": {"type": "string"},
-        "kind": {
-          "enum": ["analysis", "build", "ingest", "govern", "intel", "memory", "mlt", "debug"]
-        },
-        "owner": {"type": "string"},
-        "state": {
-          "enum": ["open", "running", "paused", "waiting_approval", "done", "failed"]
-        },
-        "context": {"type": "object"},
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "thread": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["msg_id", "author", "role", "at", "content"],
-            "properties": {
-              "msg_id": {"type": "string"},
-              "role": {
-                "enum": ["user", "grace", "specialist", "governance"]
-              },
-              "author": {"type": "string"},
-              "at": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "content": {"type": "object"}
-            }
-          }
-        },
-        "metrics": {
-          "type": "object",
-          "properties": {
-            "latency_ms": {"type": "number"},
-            "steps": {"type": "integer"}
-          }
-        },
-        "approvals": {
-          "type": "array",
-          "items": {"type": "string"}
-        }
-      }
-    },
-    "ConsentRecord": {
-      "type": "object",
-      "required": ["consent_id", "user_id", "scope", "status", "created_at"],
-      "properties": {
-        "consent_id": {"type": "string"},
-        "user_id": {"type": "string"},
-        "scope": {
-          "enum": ["autonomy", "pii_use", "external_share", "canary_participation"]
-        },
-        "status": {
-          "enum": ["granted", "denied", "revoked", "pending"]
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "expires_at": {
-          "type": "string",
-          "format": "date-time",
-          "nullable": true
-        },
-        "evidence_uri": {
-          "type": "string",
-          "nullable": true
-        }
-      }
-    },
-    "UIAction": {
-      "type": "object",
-      "required": ["action_id", "session_id", "type", "payload", "at"],
-      "properties": {
-        "action_id": {"type": "string"},
-        "session_id": {"type": "string"},
-        "type": {
-          "enum": [
-            "task.create", "task.update", "task.run", "task.pause", "task.cancel",
-            "memory.search", "intel.request", "ingress.register_source",
-            "governance.request_approval", "consent.grant", "consent.revoke",
-            "settings.update", "snapshot.export", "snapshot.rollback"
-          ]
-        },
-        "payload": {"type": "object"},
-        "at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "Notification": {
-      "type": "object",
-      "required": ["notif_id", "level", "message", "created_at"],
-      "properties": {
-        "notif_id": {"type": "string"},
-        "level": {
-          "enum": ["info", "success", "warning", "error"]
-        },
-        "message": {"type": "string"},
-        "actions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "label": {"type": "string"},
-              "action": {"type": "string"}
-            }
-          }
-        },
-        "read": {
-          "type": "boolean",
-          "default": false
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
+"""
+interface_taskcard_models.py
+Strict Pydantic v2 models for the Interface TaskCard contracts.
+
+Mirrors interface.taskcard.schema.json:
+- TaskCard
+- ConsentRecord
+- UIAction
+- Notification
+
+Adds:
+- UTC-safe datetime defaults
+- ID generators for card_/notif_ (optional helpers)
+- Light normalization for arrays
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, List, Mapping, Optional
+from uuid import uuid4
+
+from pydantic import BaseModel, Field, field_validator
+
+
+# ---------------------------
+# Helpers / IDs / Time
+# ---------------------------
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+def gen_card_id() -> str:
+    return f"card_{uuid4().hex[:10]}"
+
+def gen_notif_id() -> str:
+    return f"notif_{uuid4().hex[:10]}"
+
+def gen_action_id() -> str:
+    return f"act_{uuid4().hex[:10]}"
+
+
+# ---------------------------
+# Base config
+# ---------------------------
+
+class StrictModel(BaseModel):
+    model_config = {
+        "extra": "forbid",
+        "validate_assignment": True,
+        "use_enum_values": True,
+        "ser_json_bytes": "utf8",
+        "populate_by_name": True,
     }
-  }
-}
+
+
+# ---------------------------
+# Schemas
+# ---------------------------
+
+class ThreadMessage(StrictModel):
+    msg_id: str
+    role: str = Field(pattern=r"^(user|grace|specialist|governance)$")
+    author: str
+    at: datetime = Field(default_factory=_utcnow)
+    content: Mapping[str, Any]
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+
+class TaskMetrics(StrictModel):
+    latency_ms: Optional[float] = None
+    steps: Optional[int] = None
+
+
+class TaskCard(StrictModel):
+    card_id: str = Field(pattern=r"^card_[a-z0-9]{8,}$", default_factory=gen_card_id)
+    title: str
+    kind: str = Field(pattern=r"^(analysis|build|ingest|govern|intel|memory|mlt|debug)$")
+    owner: str
+    state: str = Field(pattern=r"^(open|running|paused|waiting_approval|done|failed)$", default="open")
+    context: Optional[Mapping[str, Any]] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    thread: Optional[List[ThreadMessage]] = None
+    metrics: Optional[TaskMetrics] = None
+    approvals: Optional[List[str]] = None
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+    @field_validator("approvals", mode="after")
+    @classmethod
+    def _norm_approvals(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        seen, out = set(), []
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    out.append(s)
+        return out
+
+
+class ConsentRecord(StrictModel):
+    consent_id: str
+    user_id: str
+    scope: str = Field(pattern=r"^(autonomy|pii_use|external_share|canary_participation)$")
+    status: str = Field(pattern=r"^(granted|denied|revoked|pending)$")
+    created_at: datetime = Field(default_factory=_utcnow)
+    expires_at: Optional[datetime] = None
+    evidence_uri: Optional[str] = None
+
+    @field_validator("created_at", "expires_at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return None
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+
+
+class UIAction(StrictModel):
+    action_id: str = Field(default_factory=gen_action_id)
+    session_id: str
+    type: str = Field(pattern=r"^(task\.create|task\.update|task\.run|task\.pause|task\.cancel|memory\.search|intel\.request|ingress\.register_source|governance\.request_approval|consent\.grant|consent\.revoke|settings\.update|snapshot\.export|snapshot\.rollback)$")
+    payload: Mapping[str, Any]
+    at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+
+class NotificationAction(StrictModel):
+    label: Optional[str] = None
+    action: Optional[str] = None
+
+
+class Notification(StrictModel):
+    notif_id: str = Field(default_factory=gen_notif_id)
+    level: str = Field(pattern=r"^(info|success|warning|error)$")
+    message: str
+    actions: Optional[List[NotificationAction]] = None
+    read: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+
+__all__ = [
+    "TaskCard",
+    "ThreadMessage",
+    "TaskMetrics",
+    "ConsentRecord",
+    "UIAction",
+    "Notification",
+    "NotificationAction",
+    # helpers
+    "gen_card_id",
+    "gen_notif_id",
+    "gen_action_id",
+]

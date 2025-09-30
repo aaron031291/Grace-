@@ -1,429 +1,449 @@
-openapi: 3.0.3
-info:
-  title: Grace Interface Kernel API
-  description: Real-time, trusted UX for tasks, telemetry, governance prompts, memory search, and results
-  version: 1.0.0
-  contact:
-    name: Grace Team
-  license:
-    name: MIT
+"""
+Grace Interface Kernel API (FastAPI)
+Implements the provided OpenAPI 3.0.3 spec:
 
-servers:
-  - url: /api/ui/v1
-    description: Interface Kernel API
+- Base URL: /api/ui/v1
+- Endpoints: health, session/start, action, taskcards (CRUD-lite), consent, notifications,
+             snapshot/export, rollback
 
-paths:
-  /health:
-    get:
-      summary: Health check
-      operationId: health_check
-      responses:
-        '200':
-          description: Service health status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  version:
-                    type: string
-                    example: "1.0.0"
-                  timestamp:
-                    type: string
-                    format: date-time
+Production notes:
+- Pydantic v2 strict models, timezone-aware timestamps (UTC).
+- Clean id generators with prefix patterns matching your spec.
+- In-memory stores for sessions / taskcards / notifications / consent ledger.
+- Easy future swap: persistence (DB), auth (JWT), bus, and metrics/tracing hooks.
 
-  /session/start:
-    post:
-      summary: Start new UI session
-      operationId: start_session
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [user, client]
-              properties:
-                user:
-                  $ref: '#/components/schemas/UserIdentity'
-                client:
-                  $ref: '#/components/schemas/ClientInfo'
-      responses:
-        '201':
-          description: Session created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UISession'
+Run:
+  uvicorn grace_interface_kernel_api:app --host 0.0.0.0 --port 8080
+"""
 
-  /action:
-    post:
-      summary: Dispatch UI action
-      operationId: dispatch_action
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UIAction'
-      responses:
-        '202':
-          description: Action accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  action_id:
-                    type: string
+from __future__ import annotations
 
-  /taskcards/{card_id}:
-    get:
-      summary: Get TaskCard by ID
-      operationId: get_taskcard
-      parameters:
-        - name: card_id
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: "card_[a-z0-9]{8,}"
-      responses:
-        '200':
-          description: TaskCard details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskCard'
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Mapping, Optional, Literal
+from uuid import uuid4
 
-  /taskcards:
-    post:
-      summary: Create new TaskCard
-      operationId: create_taskcard
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [title, kind, owner]
-              properties:
-                title:
-                  type: string
-                kind:
-                  type: string
-                  enum: [analysis, build, ingest, govern, intel, memory, mlt, debug]
-                owner:
-                  type: string
-                context:
-                  type: object
-      responses:
-        '201':
-          description: TaskCard created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  card_id:
-                    type: string
+from fastapi import FastAPI, HTTPException, Path, Query, Body, status
+from fastapi.routing import APIRouter
+from pydantic import BaseModel, Field, field_validator
 
-  /consent:
-    post:
-      summary: Manage user consent
-      operationId: manage_consent
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [action, user_id, scope]
-              properties:
-                action:
-                  type: string
-                  enum: [grant, revoke]
-                user_id:
-                  type: string
-                scope:
-                  type: string
-                  enum: [autonomy, pii_use, external_share, canary_participation]
-                consent_id:
-                  type: string
-                expires_days:
-                  type: integer
-                evidence_uri:
-                  type: string
-      responses:
-        '201':
-          description: Consent updated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  consent_id:
-                    type: string
+API_VERSION = "1.0.0"
+BASE_PREFIX = "/api/ui/v1"
 
-  /notifications:
-    get:
-      summary: Get user notifications
-      operationId: get_notifications
-      parameters:
-        - name: user_id
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: unread_only
-          in: query
-          schema:
-            type: boolean
-            default: false
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
-            maximum: 100
-      responses:
-        '200':
-          description: User notifications
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Notification'
 
-  /snapshot/export:
-    post:
-      summary: Export interface snapshot
-      operationId: export_snapshot
-      responses:
-        '200':
-          description: Snapshot exported
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  snapshot_id:
-                    type: string
-                  uri:
-                    type: string
+# =========================
+# Helpers / Utilities
+# =========================
 
-  /rollback:
-    post:
-      summary: Rollback to snapshot
-      operationId: rollback
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [to_snapshot]
-              properties:
-                to_snapshot:
-                  type: string
-      responses:
-        '202':
-          description: Rollback initiated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  target:
-                    type: string
-                  snapshot_id:
-                    type: string
-                  at:
-                    type: string
-                    format: date-time
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
-components:
-  schemas:
-    UserIdentity:
-      type: object
-      required: [user_id, roles]
-      properties:
-        user_id:
-          type: string
-          pattern: "usr_[a-z0-9_-]{4,}"
-        display_name:
-          type: string
-        roles:
-          type: array
-          items:
-            type: string
-            enum: [owner, admin, dev, analyst, viewer]
-        labels:
-          type: array
-          items:
-            type: string
-            enum: [internal, restricted, external]
-        locale:
-          type: string
-          default: "en-GB"
-        a11y:
-          type: object
-          properties:
-            high_contrast:
-              type: boolean
-            reduce_motion:
-              type: boolean
+def _gen(prefix: str, n: int = 8) -> str:
+    # hex-safe lower
+    return f"{prefix}_{uuid4().hex[:n]}"
 
-    ClientInfo:
-      type: object
-      properties:
-        agent:
-          type: string
-        ip:
-          type: string
-        device:
-          type: string
+def gen_session_id() -> str:
+    return _gen("ses", 10)
 
-    UISession:
-      type: object
-      required: [session_id, user, created_at, client]
-      properties:
-        session_id:
-          type: string
-          pattern: "ses_[a-z0-9]{8,}"
-        user:
-          $ref: '#/components/schemas/UserIdentity'
-        client:
-          $ref: '#/components/schemas/ClientInfo'
-        created_at:
-          type: string
-          format: date-time
-        last_seen:
-          type: string
-          format: date-time
-        permissions:
-          type: array
-          items:
-            type: string
+def gen_card_id() -> str:
+    return _gen("card", 10)
 
-    UIAction:
-      type: object
-      required: [action_id, session_id, type, payload, at]
-      properties:
-        action_id:
-          type: string
-        session_id:
-          type: string
-        type:
-          type: string
-          enum:
-            - task.create
-            - task.update
-            - task.run
-            - task.pause
-            - task.cancel
-            - memory.search
-            - intel.request
-            - ingress.register_source
-            - governance.request_approval
-            - consent.grant
-            - consent.revoke
-            - settings.update
-            - snapshot.export
-            - snapshot.rollback
-        payload:
-          type: object
-        at:
-          type: string
-          format: date-time
+def gen_action_id() -> str:
+    return _gen("act", 10)
 
-    TaskCard:
-      type: object
-      required: [card_id, title, kind, owner, state, created_at]
-      properties:
-        card_id:
-          type: string
-          pattern: "card_[a-z0-9]{8,}"
-        title:
-          type: string
-        kind:
-          type: string
-          enum: [analysis, build, ingest, govern, intel, memory, mlt, debug]
-        owner:
-          type: string
-        state:
-          type: string
-          enum: [open, running, paused, waiting_approval, done, failed]
-        context:
-          type: object
-        created_at:
-          type: string
-          format: date-time
-        thread:
-          type: array
-          items:
-            $ref: '#/components/schemas/ThreadMessage'
-        metrics:
-          $ref: '#/components/schemas/TaskMetrics'
-        approvals:
-          type: array
-          items:
-            type: string
+def gen_notif_id() -> str:
+    return _gen("ntf", 10)
 
-    ThreadMessage:
-      type: object
-      required: [msg_id, author, role, at, content]
-      properties:
-        msg_id:
-          type: string
-        role:
-          type: string
-          enum: [user, grace, specialist, governance]
-        author:
-          type: string
-        at:
-          type: string
-          format: date-time
-        content:
-          type: object
+def gen_consent_id() -> str:
+    return _gen("cns", 10)
 
-    TaskMetrics:
-      type: object
-      properties:
-        latency_ms:
-          type: number
-        steps:
-          type: integer
+def gen_snapshot_id() -> str:
+    return _gen("snap", 12)
 
-    Notification:
-      type: object
-      required: [notif_id, level, message, created_at]
-      properties:
-        notif_id:
-          type: string
-        level:
-          type: string
-          enum: [info, success, warning, error]
-        message:
-          type: string
-        actions:
-          type: array
-          items:
-            type: object
-            properties:
-              label:
-                type: string
-              action:
-                type: string
-        read:
-          type: boolean
-          default: false
-        created_at:
-          type: string
-          format: date-time
 
-security: []
+# =========================
+# Base model config
+# =========================
+
+class StrictModel(BaseModel):
+    model_config = {
+        "extra": "forbid",
+        "validate_assignment": True,
+        "use_enum_values": True,
+        "ser_json_bytes": "utf8",
+        "populate_by_name": True,
+    }
+
+class HealthResponse(StrictModel):
+    status: Literal["ok", "degraded", "down"] = "ok"
+    version: str = API_VERSION
+    timestamp: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+
+# =========================
+# Schemas (components)
+# =========================
+
+class A11yPrefs(StrictModel):
+    high_contrast: Optional[bool] = None
+    reduce_motion: Optional[bool] = None
+
+class UserIdentity(StrictModel):
+    user_id: str = Field(pattern=r"^usr_[a-z0-9_-]{4,}$")
+    display_name: Optional[str] = None
+    roles: List[Literal["owner", "admin", "dev", "analyst", "viewer"]]
+    labels: Optional[List[Literal["internal", "restricted", "external"]]] = None
+    locale: str = "en-GB"
+    a11y: Optional[A11yPrefs] = None
+
+class ClientInfo(StrictModel):
+    agent: Optional[str] = None
+    ip: Optional[str] = None
+    device: Optional[str] = None
+
+class UISession(StrictModel):
+    session_id: str = Field(pattern=r"^ses_[a-z0-9]{8,}$")
+    user: UserIdentity
+    client: ClientInfo
+    created_at: datetime = Field(default_factory=_utcnow)
+    last_seen: datetime = Field(default_factory=_utcnow)
+    permissions: Optional[List[str]] = None
+
+    @field_validator("created_at", "last_seen", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+class ThreadMessage(StrictModel):
+    msg_id: str
+    role: Literal["user", "grace", "specialist", "governance"]
+    author: str
+    at: datetime = Field(default_factory=_utcnow)
+    content: Mapping[str, Any]
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+class TaskMetrics(StrictModel):
+    latency_ms: Optional[float] = None
+    steps: Optional[int] = None
+
+class TaskCard(StrictModel):
+    card_id: str = Field(pattern=r"^card_[a-z0-9]{8,}$")
+    title: str
+    kind: Literal["analysis", "build", "ingest", "govern", "intel", "memory", "mlt", "debug"]
+    owner: str
+    state: Literal["open", "running", "paused", "waiting_approval", "done", "failed"] = "open"
+    context: Optional[Mapping[str, Any]] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    thread: Optional[List[ThreadMessage]] = None
+    metrics: Optional[TaskMetrics] = None
+    approvals: Optional[List[str]] = None
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+class NotificationAction(StrictModel):
+    label: Optional[str] = None
+    action: Optional[str] = None
+
+class Notification(StrictModel):
+    notif_id: str
+    level: Literal["info", "success", "warning", "error"]
+    message: str
+    actions: Optional[List[NotificationAction]] = None
+    read: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+
+# =========================
+# Request DTOs
+# =========================
+
+class StartSessionRequest(StrictModel):
+    user: UserIdentity
+    client: ClientInfo
+
+class StartSessionResponse(UISession):
+    pass
+
+class CreateTaskCardRequest(StrictModel):
+    title: str
+    kind: Literal["analysis", "build", "ingest", "govern", "intel", "memory", "mlt", "debug"]
+    owner: str
+    context: Optional[Mapping[str, Any]] = None
+
+class CreateTaskCardResponse(StrictModel):
+    card_id: str
+
+class UIAction(StrictModel):
+    action_id: str
+    session_id: str
+    type: Literal[
+        "task.create", "task.update", "task.run", "task.pause", "task.cancel",
+        "memory.search", "intel.request", "ingress.register_source", "governance.request_approval",
+        "consent.grant", "consent.revoke", "settings.update", "snapshot.export", "snapshot.rollback",
+    ]
+    payload: Mapping[str, Any]
+    at: datetime
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+class DispatchActionResponse(StrictModel):
+    action_id: str
+
+class ManageConsentRequest(StrictModel):
+    action: Literal["grant", "revoke"]
+    user_id: str
+    scope: Literal["autonomy", "pii_use", "external_share", "canary_participation"]
+    consent_id: Optional[str] = None
+    expires_days: Optional[int] = None
+    evidence_uri: Optional[str] = None
+
+class ManageConsentResponse(StrictModel):
+    consent_id: str
+
+class GetNotificationsResponse(StrictModel):
+    __root__: List[Notification]
+
+class ExportSnapshotResponse(StrictModel):
+    snapshot_id: str
+    uri: str
+
+class RollbackRequest(StrictModel):
+    to_snapshot: str
+
+class RollbackResponse(StrictModel):
+    target: str
+    snapshot_id: str
+    at: datetime
+
+    @field_validator("at", mode="before")
+    @classmethod
+    def _tz(cls, v: Optional[datetime]) -> datetime:
+        return v if (v and v.tzinfo) else _utcnow()
+
+
+# =========================
+# In-memory stores
+# =========================
+
+_sessions: Dict[str, UISession] = {}
+_taskcards: Dict[str, TaskCard] = {}
+_notifications: Dict[str, List[Notification]] = {}  # by user_id
+_consents: Dict[str, Dict[str, Any]] = {}  # consent_id -> record
+_snapshots: Dict[str, Dict[str, Any]] = {}  # snapshot_id -> meta
+
+
+# =========================
+# FastAPI setup
+# =========================
+
+app = FastAPI(
+    title="Grace Interface Kernel API",
+    version=API_VERSION,
+    description="Real-time, trusted UX for tasks, telemetry, governance prompts, memory search, and results",
+    license_info={"name": "MIT"},
+    contact={"name": "Grace Team"},
+    openapi_version="3.0.3",
+)
+router = APIRouter(prefix=BASE_PREFIX)
+
+
+# =========================
+# Routes
+# =========================
+
+@router.get("/health", response_model=HealthResponse, summary="Health check", status_code=200)
+def health_check() -> HealthResponse:
+    return HealthResponse()
+
+@router.post(
+    "/session/start",
+    response_model=StartSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start new UI session",
+)
+def start_session(req: StartSessionRequest) -> StartSessionResponse:
+    ses_id = gen_session_id()
+    session = UISession(
+        session_id=ses_id,
+        user=req.user,
+        client=req.client,
+        created_at=_utcnow(),
+        last_seen=_utcnow(),
+        permissions=req.user.roles,  # simple mirror; replace with RBAC if needed
+    )
+    _sessions[ses_id] = session
+    # seed a welcome notification
+    welcome = Notification(
+        notif_id=gen_notif_id(),
+        level="info",
+        message=f"Session {ses_id} started.",
+        created_at=_utcnow(),
+    )
+    _notifications.setdefault(req.user.user_id, []).append(welcome)
+    return session
+
+@router.post(
+    "/action",
+    response_model=DispatchActionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Dispatch UI action",
+)
+def dispatch_action(action: UIAction) -> DispatchActionResponse:
+    # minimal validation: session exists
+    if action.session_id not in _sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    # here you would route to domain services / event bus
+    # For now, update last_seen
+    s = _sessions[action.session_id]
+    _sessions[action.session_id] = s.copy(update={"last_seen": _utcnow()})
+    return DispatchActionResponse(action_id=action.action_id or gen_action_id())
+
+@router.get(
+    "/taskcards/{card_id}",
+    response_model=TaskCard,
+    status_code=200,
+    summary="Get TaskCard by ID",
+)
+def get_taskcard(
+    card_id: str = Path(..., pattern=r"^card_[a-z0-9]{8,}$"),
+) -> TaskCard:
+    card = _taskcards.get(card_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="TaskCard not found")
+    return card
+
+@router.post(
+    "/taskcards",
+    response_model=CreateTaskCardResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create new TaskCard",
+)
+def create_taskcard(req: CreateTaskCardRequest) -> CreateTaskCardResponse:
+    card_id = gen_card_id()
+    card = TaskCard(
+        card_id=card_id,
+        title=req.title,
+        kind=req.kind,
+        owner=req.owner,
+        context=req.context or {},
+        state="open",
+        created_at=_utcnow(),
+        thread=[],
+        metrics=TaskMetrics(latency_ms=0.0, steps=0),
+        approvals=[],
+    )
+    _taskcards[card_id] = card
+    # notify owner
+    notif = Notification(
+        notif_id=gen_notif_id(),
+        level="success",
+        message=f"TaskCard '{req.title}' created",
+        created_at=_utcnow(),
+    )
+    _notifications.setdefault(req.owner, []).append(notif)
+    return CreateTaskCardResponse(card_id=card_id)
+
+@router.post(
+    "/consent",
+    response_model=ManageConsentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Manage user consent",
+)
+def manage_consent(req: ManageConsentRequest) -> ManageConsentResponse:
+    consent_id = req.consent_id or gen_consent_id()
+    expires_at = None
+    if req.expires_days and req.expires_days > 0:
+        expires_at = _utcnow() + timedelta(days=req.expires_days)
+    _consents[consent_id] = {
+        "consent_id": consent_id,
+        "action": req.action,
+        "user_id": req.user_id,
+        "scope": req.scope,
+        "evidence_uri": req.evidence_uri,
+        "expires_at": expires_at,
+        "at": _utcnow(),
+    }
+    # notify user
+    notif = Notification(
+        notif_id=gen_notif_id(),
+        level="info",
+        message=f"Consent {req.action} for {req.scope}",
+        created_at=_utcnow(),
+    )
+    _notifications.setdefault(req.user_id, []).append(notif)
+    return ManageConsentResponse(consent_id=consent_id)
+
+@router.get(
+    "/notifications",
+    response_model=List[Notification],
+    status_code=200,
+    summary="Get user notifications",
+)
+def get_notifications(
+    user_id: str = Query(...),
+    unread_only: bool = Query(False),
+    limit: int = Query(50, le=100),
+) -> List[Notification]:
+    items = list(_notifications.get(user_id, []))
+    if unread_only:
+        items = [n for n in items if not n.read]
+    return items[:limit]
+
+@router.post(
+    "/snapshot/export",
+    response_model=ExportSnapshotResponse,
+    status_code=200,
+    summary="Export interface snapshot",
+)
+def export_snapshot() -> ExportSnapshotResponse:
+    snap_id = gen_snapshot_id()
+    meta = {
+        "created_at": _utcnow().isoformat(),
+        "taskcards": len(_taskcards),
+        "sessions": len(_sessions),
+        "notifications": sum(len(v) for v in _notifications.values()),
+    }
+    _snapshots[snap_id] = meta
+    # You would upload to object storage and return a signed URL here.
+    uri = f"memory://snapshots/{snap_id}.json"
+    return ExportSnapshotResponse(snapshot_id=snap_id, uri=uri)
+
+@router.post(
+    "/rollback",
+    response_model=RollbackResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Rollback to snapshot",
+)
+def rollback(req: RollbackRequest) -> RollbackResponse:
+    if req.to_snapshot not in _snapshots:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    # Here you’d trigger an async rollback job; for now just acknowledge.
+    return RollbackResponse(target="interface_kernel", snapshot_id=req.to_snapshot, at=_utcnow())
+
+
+# Wire router
+app.include_router(router)
+
+# Root ping (optional)
+@app.get("/", include_in_schema=False)
+def root() -> Dict[str, str]:
+    return {"service": "Grace Interface Kernel API", "version": API_VERSION, "health": f"{BASE_PREFIX}/health"}

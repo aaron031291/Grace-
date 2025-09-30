@@ -15,6 +15,7 @@ from .ide.grace_ide import GraceIDE
 from .multimodal_interface import MultimodalInterface
 from .enum_utils import safe_enum_parse, create_enum_mapper
 from .job_queue import job_queue, JobPriority
+from ..gtrace import get_tracer, MemoryTracer
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,10 @@ class GraceUnifiedOrbInterface:
         self.grace_intelligence = GraceIntelligence()
         self.grace_ide = GraceIDE()
         self.multimodal_interface = MultimodalInterface(self)
+        
+        # Initialize tracing
+        self.tracer = get_tracer()
+        self.memory_tracer = MemoryTracer(self.tracer)
 
         # Session management
         self.active_sessions: Dict[str, OrbSession] = {}
@@ -555,64 +560,139 @@ class GraceUnifiedOrbInterface:
     async def upload_document(self, user_id: str, file_path: str, file_type: str,
                               metadata: Optional[Dict[str, Any]] = None) -> str:
         """Upload and process a document into memory with background processing."""
-        if file_type.lower() not in self.supported_file_types:
-            raise ValueError(f"Unsupported file type: {file_type}")
-
-        fragment_id = f"fragment_{uuid.uuid4().hex[:8]}"
-        content = await self._process_document(file_path, file_type)
-        trust_score = self._calculate_document_trust_score(file_path, file_type, metadata)
-
-        fragment = MemoryFragment(
-            fragment_id=fragment_id,
-            content=content,
-            fragment_type=file_type,
-            source=f"upload:{file_path}",
-            trust_score=trust_score,
-            timestamp=datetime.utcnow().isoformat(),
-            tags=metadata.get("tags", []) if metadata else [],
-            metadata=metadata or {}
-        )
-
-        # Store fragment immediately
-        self.memory_fragments[fragment_id] = fragment
         
-        # Queue background ingest processing (idempotent)
-        job_id = await job_queue.enqueue(
-            job_type="document_ingest",
-            payload={
-                "file_path": file_path,
-                "file_type": file_type,
-                "user_id": user_id,
-                "fragment_id": fragment_id
-            },
-            priority=JobPriority.MEDIUM
-        )
-        
-        # Store job ID in fragment metadata for tracking
-        fragment.metadata["background_job_id"] = job_id
-        
-        logger.info(f"Uploaded document {file_path} as fragment {fragment_id}, queued job {job_id}")
-        return fragment_id
+        # Start copilot operation trace
+        async with self.tracer.async_span(
+            "copilot.upload_document",
+            tags={
+                "user.id": user_id,
+                "file.path": file_path,
+                "file.type": file_type,
+                "operation.type": "document_upload"
+            }
+        ) as upload_span:
+            if file_type.lower() not in self.supported_file_types:
+                upload_span.set_tag("error.unsupported_type", file_type)
+                raise ValueError(f"Unsupported file type: {file_type}")
+
+            fragment_id = f"fragment_{uuid.uuid4().hex[:8]}"
+            upload_span.set_tag("fragment.id", fragment_id)
+            
+            # Process document with tracing
+            async with self.tracer.async_span(
+                "copilot.process_document",
+                parent_context=upload_span.context,
+                tags={"file.type": file_type}
+            ) as process_span:
+                content = await self._process_document(file_path, file_type)
+                process_span.set_tag("content.length", len(content))
+                
+            trust_score = self._calculate_document_trust_score(file_path, file_type, metadata)
+            upload_span.set_tag("trust.score", trust_score)
+
+            fragment = MemoryFragment(
+                fragment_id=fragment_id,
+                content=content,
+                fragment_type=file_type,
+                source=f"upload:{file_path}",
+                trust_score=trust_score,
+                timestamp=datetime.utcnow().isoformat(),
+                tags=metadata.get("tags", []) if metadata else [],
+                metadata={
+                    **(metadata or {}),
+                    "trace_id": upload_span.context.trace_id,
+                    "copilot_operation": "document_upload"
+                }
+            )
+
+            # Store fragment immediately
+            self.memory_fragments[fragment_id] = fragment
+            
+            # Queue background ingest processing (idempotent)
+            async with self.tracer.async_span(
+                "copilot.queue_background_job",
+                parent_context=upload_span.context
+            ) as job_span:
+                job_id = await job_queue.enqueue(
+                    job_type="document_ingest",
+                    payload={
+                        "file_path": file_path,
+                        "file_type": file_type,
+                        "user_id": user_id,
+                        "fragment_id": fragment_id,
+                        "trace_id": upload_span.context.trace_id
+                    },
+                    priority=JobPriority.MEDIUM
+                )
+                
+                job_span.set_tag("job.id", job_id)
+            
+            # Store job ID in fragment metadata for tracking
+            fragment.metadata["background_job_id"] = job_id
+            
+            upload_span.log("document_uploaded", {
+                "fragment_id": fragment_id,
+                "job_id": job_id,
+                "content_length": len(content)
+            })
+            
+            logger.info(f"Uploaded document {file_path} as fragment {fragment_id}, queued job {job_id}")
+            return fragment_id
 
     async def search_memory(self, session_id: str, query: str,
                             filters: Optional[Dict[str, Any]] = None) -> List[MemoryFragment]:
         """Basic search over stored fragments."""
-        results: List[MemoryFragment] = []
-        q = query.lower()
+        
+        # Start copilot memory search trace
+        async with self.tracer.async_span(
+            "copilot.search_memory",
+            tags={
+                "session.id": session_id,
+                "search.query": query[:100],  # Truncate long queries
+                "search.query_length": len(query),
+                "operation.type": "memory_search"
+            }
+        ) as search_span:
+            results: List[MemoryFragment] = []
+            q = query.lower()
+            search_span.set_tag("fragments.total", len(self.memory_fragments))
 
-        for fragment in self.memory_fragments.values():
-            if q in fragment.content.lower():
-                if filters:
-                    if "fragment_type" in filters and fragment.fragment_type != filters["fragment_type"]:
-                        continue
-                    if "min_trust_score" in filters and fragment.trust_score < filters["min_trust_score"]:
-                        continue
-                    if "tags" in filters and not any(tag in fragment.tags for tag in filters["tags"]):
-                        continue
-                results.append(fragment)
+            # Apply filters and search
+            filtered_count = 0
+            for fragment in self.memory_fragments.values():
+                if q in fragment.content.lower():
+                    if filters:
+                        if "fragment_type" in filters and fragment.fragment_type != filters["fragment_type"]:
+                            continue
+                        if "min_trust_score" in filters and fragment.trust_score < filters["min_trust_score"]:
+                            continue
+                        if "tags" in filters and not any(tag in fragment.tags for tag in filters["tags"]):
+                            continue
+                    results.append(fragment)
+                    filtered_count += 1
 
-        results.sort(key=lambda f: f.trust_score, reverse=True)
-        return results[:20]
+            # Sort by trust score
+            results.sort(key=lambda f: f.trust_score, reverse=True)
+            final_results = results[:20]
+            
+            # Add search result metrics to trace
+            search_span.set_tag("search.matches_found", len(results))
+            search_span.set_tag("search.results_returned", len(final_results))
+            search_span.set_tag("search.filtered_count", filtered_count)
+            
+            if filters:
+                search_span.set_tag("search.filters_applied", len(filters))
+                for key, value in filters.items():
+                    search_span.set_tag(f"filter.{key}", str(value))
+            
+            search_span.log("memory_search_completed", {
+                "query": query[:100],
+                "matches": len(results),
+                "returned": len(final_results),
+                "avg_trust_score": sum(f.trust_score for f in final_results) / len(final_results) if final_results else 0
+            })
+            
+            return final_results
 
     def get_memory_stats(self) -> Dict[str, Any]:
         stats = {

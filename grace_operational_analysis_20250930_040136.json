@@ -1,0 +1,259 @@
+{
+  "timestamp": "2025-09-30 04:01:36.188174",
+  "grace_version": "1.0.0",
+  "overall_operational_status": "PARTIALLY OPERATIONAL",
+  "operational_score": 0.7066666666666667,
+  "dependency_status": [
+    {
+      "name": "psutil",
+      "required": true,
+      "installed": true,
+      "version": "7.1.0",
+      "import_error": null
+    },
+    {
+      "name": "numpy",
+      "required": true,
+      "installed": true,
+      "version": "2.3.3",
+      "import_error": null
+    },
+    {
+      "name": "asyncio",
+      "required": true,
+      "installed": true,
+      "version": "unknown",
+      "import_error": null
+    },
+    {
+      "name": "sqlite3",
+      "required": true,
+      "installed": true,
+      "version": "unknown",
+      "import_error": null
+    },
+    {
+      "name": "fastapi",
+      "required": false,
+      "installed": true,
+      "version": "0.118.0",
+      "import_error": null
+    },
+    {
+      "name": "uvicorn",
+      "required": false,
+      "installed": true,
+      "version": "0.37.0",
+      "import_error": null
+    },
+    {
+      "name": "pydantic",
+      "required": false,
+      "installed": true,
+      "version": "2.11.9",
+      "import_error": null
+    },
+    {
+      "name": "scikit-learn",
+      "required": false,
+      "installed": false,
+      "version": null,
+      "import_error": "No module named 'scikit-learn'"
+    }
+  ],
+  "dependencies_satisfied": true,
+  "component_statuses": [
+    {
+      "name": "EventBus",
+      "operational": true,
+      "health_status": "healthy",
+      "response_time": 0.623485803604126,
+      "dependencies_met": true,
+      "capabilities": [
+        "basic"
+      ],
+      "error_details": null,
+      "operational_score": 0.688257098197937
+    },
+    {
+      "name": "MemoryCore",
+      "operational": true,
+      "health_status": "healthy",
+      "response_time": 0.0004553794860839844,
+      "dependencies_met": true,
+      "capabilities": [
+        "basic"
+      ],
+      "error_details": null,
+      "operational_score": 0.999772310256958
+    },
+    {
+      "name": "GovernanceEngine",
+      "operational": false,
+      "health_status": "degraded",
+      "response_time": 1.5020370483398438e-05,
+      "dependencies_met": true,
+      "capabilities": [],
+      "error_details": "Instantiation failed: GovernanceEngine.__init__() missing 4 required positional arguments: 'event_bus', 'memory_core', 'verifier', and 'unifier'",
+      "operational_score": 0.5
+    },
+    {
+      "name": "VerificationEngine",
+      "operational": true,
+      "health_status": "healthy",
+      "response_time": 0.0004513263702392578,
+      "dependencies_met": true,
+      "capabilities": [
+        "basic"
+      ],
+      "error_details": null,
+      "operational_score": 0.9997743368148804
+    },
+    {
+      "name": "Parliament",
+      "operational": false,
+      "health_status": "degraded",
+      "response_time": 1.7642974853515625e-05,
+      "dependencies_met": true,
+      "capabilities": [],
+      "error_details": "Instantiation failed: Parliament.__init__() missing 2 required positional arguments: 'event_bus' and 'memory_core'",
+      "operational_score": 0.5
+    },
+    {
+      "name": "TrustCore",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 5.173683166503906e-05,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.governance.trust_engine'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "AuditLogs",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.0005075931549072266,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.layer_04_audit_logs.audit_logs'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "EventMesh",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.010657548904418945,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.layer_02_event_mesh.event_mesh'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "OrchestrationKernel",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.00044226646423339844,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.orchestration_kernel.orchestration_kernel'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "ResilienceKernel",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.0003578662872314453,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.resilience_kernel.resilience_kernel'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "IngressKernel",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.03556251525878906,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.ingress_kernel.ingress_kernel'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "InterfaceKernel",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.00022459030151367188,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.interface_kernel.interface_kernel'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "MLDLKernel",
+      "operational": true,
+      "health_status": "healthy",
+      "response_time": 0.00860738754272461,
+      "dependencies_met": true,
+      "capabilities": [
+        "basic"
+      ],
+      "error_details": null,
+      "operational_score": 0.9956963062286377
+    },
+    {
+      "name": "MLTKernel",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.0004048347473144531,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.mlt_kernel_ml.mlt_kernel'",
+      "operational_score": 0.0
+    },
+    {
+      "name": "MTLKernel",
+      "operational": false,
+      "health_status": "missing",
+      "response_time": 0.00020623207092285156,
+      "dependencies_met": false,
+      "capabilities": [],
+      "error_details": "Import failed: No module named 'grace.mtl_kernel.mtl_kernel'",
+      "operational_score": 0.0
+    }
+  ],
+  "total_components": 15,
+  "operational_components": 4,
+  "performance_metrics": {
+    "memory_usage_percent": 9.6,
+    "cpu_usage_percent": 0.3,
+    "disk_usage_gb": 49.66,
+    "load_average": [
+      0.23046875,
+      0.2587890625,
+      0.1611328125
+    ],
+    "network_connections": 25,
+    "uptime_seconds": 547.1972134113312
+  },
+  "communication_functional": true,
+  "governance_functional": true,
+  "ooda_loop_functional": true,
+  "audit_systems_active": false,
+  "readiness_assessment": {
+    "overall_score": 0.7066666666666667,
+    "production_ready": false,
+    "critical_issues": [],
+    "warnings": [
+      "Component health score low: 26.7%"
+    ],
+    "recommendations": [
+      "Investigate and fix failing components",
+      "Address critical issues before production deployment",
+      "Implement comprehensive monitoring",
+      "Regular operational health checks recommended"
+    ],
+    "immediate_actions": []
+  },
+  "detailed_findings": {}
+}

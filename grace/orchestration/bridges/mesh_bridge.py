@@ -130,12 +130,15 @@ class MeshBridge:
         """Route event through trigger mesh."""
         try:
             if hasattr(self.trigger_mesh, 'route_event'):
-                await self.trigger_mesh.route_event(
-                    event['event_name'],
-                    event['payload'],
-                    event['event_id'],
-                    event['source']
-                )
+                # Construct event dict as expected by TriggerMesh
+                event_dict = {
+                    "type": event.get("event_name"),
+                    "payload": event.get("payload"),
+                    "event_id": event.get("event_id"),
+                    "source": event.get("source"),
+                    "correlation_id": event.get("correlation_id"),
+                }
+                await self.trigger_mesh.route_event(event_dict)
             else:
                 logger.debug(f"Mock trigger mesh route: {event['event_name']}")
         except Exception as e:

@@ -39,25 +39,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const formData = new URLSearchParams()
-      formData.append('username', username)
-      formData.append('password', password)
+      const payload = {
+        user_id: username,
+        roles: ['user']
+      }
 
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/v1/auth/token', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
         },
-        body: formData,
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
         const data = await response.json()
         setToken(data.access_token)
         localStorage.setItem('grace_token', data.access_token)
-        
         // Fetch user info
-        const userResponse = await fetch('/api/auth/me', {
+        const userResponse = await fetch('/api/v1/auth/me', {
           headers: {
             'Authorization': `Bearer ${data.access_token}`,
           },

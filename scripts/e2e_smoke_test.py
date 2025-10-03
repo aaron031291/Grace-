@@ -2,8 +2,11 @@
 End-to-End Smoke Test for Grace Kernel
 Boots the kernel, processes a dummy governance request, verifies audit entry, and clean shutdown.
 """
-import asyncio
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'grace')))
 from grace.governance.grace_governance_kernel import GraceGovernanceKernel
+import asyncio
 from grace.audit.golden_path_auditor import append_audit
 
 def run_smoke_test():

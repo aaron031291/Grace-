@@ -358,16 +358,14 @@ class GraceGovernanceKernel:
             # Route through trigger mesh
             trigger_mesh = self.components['trigger_mesh']
             
-            correlation_id = await trigger_mesh.route_event(
-                "GOVERNANCE_VALIDATION",
-                {
-                    "decision_subject": decision_subject,
-                    "inputs": inputs,
-                    "thresholds": thresholds or {}
-                },
-                correlation_id=None,
-                source_component="external_request"
-            )
+            event_dict = {
+                "type": "GOVERNANCE_VALIDATION",
+                "decision_subject": decision_subject,
+                "inputs": inputs,
+                "thresholds": thresholds or {},
+                "source_component": "external_request"
+            }
+            correlation_id = await trigger_mesh.route_event(event_dict)
             
             # Wait for result (simplified - in practice would use async result handling)
             await asyncio.sleep(0.1)  # Allow processing

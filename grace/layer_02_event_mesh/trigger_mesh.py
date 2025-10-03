@@ -493,7 +493,18 @@ class TriggerMesh:
             transformation_rules={},
             timeout_ms=1000
         ))
-        
+
+        # Add routing rule for GOVERNANCE_VALIDATION
+        self.add_routing_rule(RoutingRule(
+            event_pattern="GOVERNANCE_VALIDATION",
+            target_components=["governance_engine"],
+            priority=RoutingPriority.HIGH,
+            mode=RoutingMode.UNICAST,
+            filter_conditions={},
+            transformation_rules={},
+            timeout_ms=2000
+        ))
+
         # High priority governance events
         self.add_routing_rule(RoutingRule(
             event_pattern="governance_*",
@@ -504,7 +515,7 @@ class TriggerMesh:
             transformation_rules={},
             timeout_ms=2000
         ))
-        
+
         # Normal system events
         self.add_routing_rule(RoutingRule(
             event_pattern="system_*",
@@ -513,7 +524,7 @@ class TriggerMesh:
             mode=RoutingMode.UNICAST,
             filter_conditions={},
             transformation_rules={},
-            timeout_ms=5000
+            timeout_ms=3000
         ))
     
     def get_routing_metrics(self) -> Dict[str, Any]:

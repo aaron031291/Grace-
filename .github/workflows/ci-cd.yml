@@ -1,0 +1,49 @@
+name: Grace Kernel CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: grace_governance
+          POSTGRES_USER: grace_user
+          POSTGRES_PASSWORD: grace_pass
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run unit tests
+        run: |
+          pytest --maxfail=1 --disable-warnings
+      - name: Build Docker image
+        run: |
+          docker build -t grace-kernel:latest .
+      - name: Push Docker image (if on main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Push to registry step here (add your registry login and push commands)"
+      - name: Deploy (if on main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Trigger deployment step here (add your deployment script or integration)"

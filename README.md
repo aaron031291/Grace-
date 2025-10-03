@@ -11,6 +11,18 @@
 - Immutable audit trail and trust management
 - Core governance, memory, learning loop, and LLM integration
 
+**Deployment & Operations:**
+- [Deployment Guide](docs/deployment/DEPLOYMENT_GUIDE.md)
+- [Runbook](RUNBOOK.md)
+
+**Canonical Entrypoint:**
+- `grace_core_runner.py` (boots EventBus, Governance, Trigger Mesh, MLDL quorum, API)
+- `watchdog.py` (global exception catcher, heartbeat, auto-restart)
+
+**Testing & Audit:**
+- End-to-end smoke test: `scripts/e2e_smoke_test.py`
+- Golden path audit: `scripts/verify_chain.py`
+
 **h
 
 See the documentation links below for details on completed features and guides.

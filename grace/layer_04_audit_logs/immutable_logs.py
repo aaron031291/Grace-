@@ -258,7 +258,7 @@ class ImmutableLogs:
                               transparency_level: str) -> str:
         """Create and store an immutable log entry."""
         # Generate unique entry ID
-        entry_id = f"{category}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(self.log_chain):06d}"
+        entry_id = f"{category}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{len(self.log_chain):06d}"
         
         # Validate transparency level
         if transparency_level not in self.transparency_levels:

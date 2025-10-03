@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
   # PostgreSQL for persistent storage
@@ -147,7 +147,7 @@ services:
   # Grace Worker Service
   worker:
     build: .
-    container_name: grace_worker
+  # container_name removed to allow scaling with replicas
     depends_on:
       - postgres
       - redis

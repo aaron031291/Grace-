@@ -598,6 +598,27 @@ class MemoryCore:
         
         logger.debug(f"Stored experience: {memory_id}")
         return memory_id
+
+
+    async def store_snapshot(self, snapshot: 'GovernanceSnapshot') -> str:
+        """
+        Store a GovernanceSnapshot object in memory for rollback/state management.
+        Returns the snapshot ID.
+        """
+        snapshot_id = f"snapshot_{int(datetime.now().timestamp() * 1000000)}"
+        snapshot_content = snapshot.to_dict() if hasattr(snapshot, 'to_dict') else dict(snapshot)
+        memory_id = await self.store_structured_memory(
+            memory_type="governance_snapshot",
+            content=snapshot_content,
+            metadata={
+                "snapshot_id": snapshot_id,
+                "created_at": datetime.now().isoformat(),
+                "source": "governance_engine"
+            },
+            importance_score=1.0
+        )
+        logger.info(f"Stored governance snapshot: {snapshot_id}")
+        return memory_id
     
     async def close(self):
         """Close database connections."""

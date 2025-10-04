@@ -12,7 +12,9 @@
 - ✅ Security hardening and compliance
 - ✅ Full operational documentation
 
-**Quick Reference:** [PRODUCTION_READINESS_QUICK_REF.md](PRODUCTION_READINESS_QUICK_REF.md)
+**Documentation:**
+- [Production Readiness FAQ](PRODUCTION_READINESS_FAQ.md) - Quick answers to common questions
+- [Quick Reference Guide](PRODUCTION_READINESS_QUICK_REF.md) - One-page reference card
 
 ---
 

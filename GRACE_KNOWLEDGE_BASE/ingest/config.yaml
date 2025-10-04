@@ -1,0 +1,19 @@
+chunk:
+  max_chars: 1400
+  overlap_chars: 120
+  min_chars: 300
+metadata:
+  default_version: "1.0.0"
+  default_competency: "intermediate"
+paths:
+  include:
+    - "../playbooks/**/*.md"
+    - "../cheatsheets/**/*.md"
+    - "../patterns/**/*.md"
+    - "../templates/**/*.md"
+    - "../reference/**/*.md"
+    - "../debug_guides/**/*.md"
+    - "../policies/**/*.md"
+    - "../glossary/**/*.md"
+output:
+  jsonl: "./out/knowledge.jsonl"

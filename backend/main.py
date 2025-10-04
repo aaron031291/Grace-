@@ -152,6 +152,13 @@ def create_app() -> FastAPI:
     from .auth import create_access_token, create_refresh_token, verify_token
     from pydantic import BaseModel
 
+    # Wire OpenTelemetry tracing
+    try:
+        from backend.observability.tracing import init_tracing
+        init_tracing(app)
+    except Exception as e:
+        logger.warning(f"OpenTelemetry tracing not initialized: {e}")
+
     class TokenRequest(BaseModel):
         username: str
         password: str

@@ -6,7 +6,7 @@ import jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 
-from ..config import get_settings
+from backend.config import get_settings
 
 settings = get_settings()
 
@@ -66,7 +66,7 @@ def verify_token(token: str) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired"
         )
-    except jwt.JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"

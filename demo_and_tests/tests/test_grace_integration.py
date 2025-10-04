@@ -11,6 +11,7 @@ Validates all implemented functionality from the audit recommendations:
 
 import asyncio
 import logging
+import os
 import sys
 import tempfile
 from pathlib import Path

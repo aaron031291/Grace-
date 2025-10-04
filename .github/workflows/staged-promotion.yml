@@ -35,6 +35,8 @@ jobs:
         with:
           url: ${{ secrets.STAGING_APPROVAL_URL }}
           method: 'POST'
+        env:
+          STAGING_APPROVAL_URL: ${{ secrets.STAGING_APPROVAL_URL }}
       - name: Deploy to Staging
         run: echo "Deploying to staging..."
 
@@ -49,5 +51,7 @@ jobs:
         with:
           url: ${{ secrets.PROD_APPROVAL_URL }}
           method: 'POST'
+        env:
+          PROD_APPROVAL_URL: ${{ secrets.PROD_APPROVAL_URL }}
       - name: Deploy to Production
         run: echo "Deploying to production..."

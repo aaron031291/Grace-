@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GraceKnowledgeItem",
+  "type": "object",
+  "required": ["id", "title", "body", "tags", "domain", "layer", "source"],
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "body": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "domain": { "type": "string" },
+    "layer": { "type": "string" },
+    "source": { "type": "string" },
+    "version": { "type": "string" },
+    "competency": { "type": "string" }
+  }
+}

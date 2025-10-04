@@ -148,9 +148,26 @@ def create_app() -> FastAPI:
             response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
             return response
 
+
+    app = FastAPI(
+        title="Grace Backend",
+        description="Comprehensive AI governance system backend",
+        version="1.0.0",
+        docs_url="/api/docs" if settings.debug else None,
+        redoc_url="/api/redoc" if settings.debug else None,
+        lifespan=lifespan
+    )
+
     app.add_middleware(SecurityHeadersMiddleware)
-    from .auth import create_access_token, create_refresh_token, verify_token
-    from pydantic import BaseModel
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.add_middleware(RateLimitMiddleware, rate=5, capacity=10)
+    app.add_middleware(IdempotencyMiddleware)
 
     # Wire OpenTelemetry tracing
     try:
@@ -158,6 +175,9 @@ def create_app() -> FastAPI:
         init_tracing(app)
     except Exception as e:
         logger.warning(f"OpenTelemetry tracing not initialized: {e}")
+
+    from .auth import create_access_token, create_refresh_token, verify_token
+    from pydantic import BaseModel
 
     class TokenRequest(BaseModel):
         username: str
@@ -191,42 +211,15 @@ def create_app() -> FastAPI:
             return TokenResponse(access_token=access_token, refresh_token=refresh_token)
         except Exception:
             return JSONResponse(status_code=401, content={"error": {"code": "INVALID_REFRESH_TOKEN", "message": "Invalid or expired refresh token."}})
-    """Create and configure FastAPI application."""
-    
-    app = FastAPI(
-        title="Grace Backend",
-        description="Comprehensive AI governance system backend",
-        version="1.0.0",
-        docs_url="/api/docs" if settings.debug else None,
-        redoc_url="/api/redoc" if settings.debug else None,
-        lifespan=lifespan
-    )
-    
-    # Configure CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
-        # Add global rate-limit middleware (per-IP, token bucket)
-        app.add_middleware(RateLimitMiddleware, rate=5, capacity=10)
+    @app.get("/api/health", response_model=HealthCheckResponse)
+    async def health_check() -> HealthCheckResponse:
+        return HealthCheckResponse(
+            status="healthy",
+            version="1.0.0",
+            service="grace-backend"
+        )
 
-        # Add idempotency key middleware for mutating endpoints
-        app.add_middleware(IdempotencyMiddleware)
-    
-    # Basic health endpoint
-        @app.get("/api/health", response_model=HealthCheckResponse)
-        async def health_check() -> HealthCheckResponse:
-            return HealthCheckResponse(
-                status="healthy",
-                version="1.0.0",
-                service="grace-backend"
-            )
-    
-    # Global exception handler with standardized error envelope
     import uuid
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
@@ -243,7 +236,7 @@ def create_app() -> FastAPI:
                 }
             }
         )
-    
+
     return app
 
 

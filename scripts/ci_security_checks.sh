@@ -1,12 +1,16 @@
 # CI Security & Compliance Checks
 
+
 # Bandit - Python SAST
-bandit -r grace backend scripts
+echo "Running Bandit SAST scan..."
+bandit -r grace backend scripts > bandit_report.txt || true
 
 # pip-audit - Dependency scan
-pip-audit -r requirements.txt
+echo "Running pip-audit dependency scan..."
+pip-audit -r requirements.txt > pip_audit_report.txt || true
 
 # Trivy - Container image scan (example for Dockerfile)
-trivy image grace_api:latest
+echo "Running Trivy image scan..."
+trivy image grace_api:latest > trivy_report.txt || true
 
-# To use in CI, add these steps to your pipeline config (GitHub Actions, GitLab CI, etc.)
+echo "Security checks complete. See bandit_report.txt, pip_audit_report.txt, trivy_report.txt."

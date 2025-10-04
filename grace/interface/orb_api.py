@@ -277,6 +277,20 @@ async def root():
                 "voice": "/api/orb/v1/multimodal/voice/",
                 "background_tasks": "/api/orb/v1/multimodal/tasks/",
             },
+            "unified_spec": {
+                "stats": "/api/orb/v1/unified/stats",
+                "health": "/api/orb/v1/unified/health",
+                "context": "/api/orb/v1/unified/context",
+                "memory_folder": "/api/orb/v1/unified/memory/folder",
+                "memory_search": "/api/orb/v1/unified/memory/search",
+                "anomaly_detect": "/api/orb/v1/unified/anomaly/detect",
+                "anomaly_rca": "/api/orb/v1/unified/anomaly/rca",
+                "healing_execute": "/api/orb/v1/unified/healing/execute",
+                "voice_mode": "/api/orb/v1/unified/voice/mode",
+                "voice_command": "/api/orb/v1/unified/voice/command",
+                "trust_update": "/api/orb/v1/unified/trust/update",
+                "kpi_record": "/api/orb/v1/unified/kpi/record",
+            },
             "websocket": "/ws/{session_id}",
             "stats": "/api/orb/v1/stats",
         },
@@ -1275,15 +1289,213 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, token: Optio
 async def startup_event():
     logger.info("Grace Unified Orb Interface API starting up...")
     logger.info(f"Orb Interface version: {orb_interface.version}")
+    
+    # Start unified orchestrator if available
+    if orb_interface.unified_spec:
+        await orb_interface.start_unified_orchestrator()
+        logger.info("Unified orchestrator started")
+    
     logger.info("API ready to serve requests")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Grace Unified Orb Interface API shutting down...")
+    
+    # Stop unified orchestrator if running
+    if orb_interface.unified_spec:
+        await orb_interface.stop_unified_orchestrator()
+    
     for sid in list(orb_interface.active_sessions.keys()):
         await orb_interface.end_session(sid)
     logger.info("Shutdown complete")
+
+
+# ---------------------------
+# Unified Spec Endpoints
+# ---------------------------
+
+@app.get("/api/orb/v1/unified/stats")
+async def get_unified_stats():
+    """Get comprehensive unified operating spec stats."""
+    stats = orb_interface.get_unified_stats()
+    if "error" in stats:
+        raise HTTPException(status_code=503, detail=stats["error"])
+    return stats
+
+
+@app.get("/api/orb/v1/unified/health")
+async def get_orchestrator_health():
+    """Get health pulse endpoint for loop orchestrator."""
+    health = orb_interface.get_orchestrator_health()
+    if "error" in health:
+        raise HTTPException(status_code=503, detail=health["error"])
+    return health
+
+
+@app.get("/api/orb/v1/unified/context")
+async def get_context_bus_state():
+    """Get current context bus state (unified 'now')."""
+    context = orb_interface.get_context_bus_state()
+    if "error" in context:
+        raise HTTPException(status_code=503, detail=context["error"])
+    return context
+
+
+class MemoryFolderRequest(BaseModel):
+    folder_id: str
+    purpose: str
+    domain: str
+    policies: List[str] = []
+
+
+@app.post("/api/orb/v1/unified/memory/folder")
+async def create_memory_folder(request: MemoryFolderRequest):
+    """Create a memory folder with context manifest."""
+    result = await orb_interface.create_memory_folder(
+        folder_id=request.folder_id,
+        purpose=request.purpose,
+        domain=request.domain,
+        policies=request.policies
+    )
+    if "error" in result:
+        raise HTTPException(status_code=503, detail=result["error"])
+    return result
+
+
+class MemorySearchRequest(BaseModel):
+    query: str
+    filters: Optional[Dict[str, Any]] = None
+
+
+@app.post("/api/orb/v1/unified/memory/search")
+async def search_unified_memory(request: MemorySearchRequest):
+    """Search memory using unified memory explorer with trust ranking."""
+    results = await orb_interface.search_unified_memory(
+        query=request.query,
+        filters=request.filters
+    )
+    return {"results": results}
+
+
+class AnomalyDetectRequest(BaseModel):
+    metric_name: str
+    current_value: float
+    expected_value: float
+    threshold: float = 0.2
+
+
+@app.post("/api/orb/v1/unified/anomaly/detect")
+async def detect_anomaly(request: AnomalyDetectRequest):
+    """Detect anomalies using AVN engine."""
+    anomaly = await orb_interface.detect_anomaly(
+        metric_name=request.metric_name,
+        current_value=request.current_value,
+        expected_value=request.expected_value,
+        threshold=request.threshold
+    )
+    if anomaly is None:
+        return {"anomaly": None, "message": "No anomaly detected"}
+    return {"anomaly": anomaly}
+
+
+class RCARequest(BaseModel):
+    anomaly_id: str
+
+
+@app.post("/api/orb/v1/unified/anomaly/rca")
+async def perform_rca(request: RCARequest):
+    """Perform root cause analysis using Memory Explorer patterns."""
+    hypotheses = await orb_interface.perform_root_cause_analysis(request.anomaly_id)
+    return {"hypotheses": hypotheses}
+
+
+class HealingRequest(BaseModel):
+    hypothesis_id: str
+    sandbox: bool = True
+
+
+@app.post("/api/orb/v1/unified/healing/execute")
+async def execute_healing(request: HealingRequest):
+    """Execute healing action with sandbox proof."""
+    result = await orb_interface.execute_healing_action(
+        hypothesis_id=request.hypothesis_id,
+        sandbox=request.sandbox
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+class VoiceModeRequest(BaseModel):
+    mode: str  # solo_voice, text_only, co_partner, silent_autonomous
+
+
+@app.post("/api/orb/v1/unified/voice/mode")
+async def set_voice_mode(request: VoiceModeRequest):
+    """Set voice mode."""
+    try:
+        await orb_interface.set_unified_voice_mode(request.mode)
+        return {"status": "success", "mode": request.mode}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class VoiceCommandRequest(BaseModel):
+    intent: str
+    user_id: str
+
+
+@app.post("/api/orb/v1/unified/voice/command")
+async def execute_voice_command(request: VoiceCommandRequest):
+    """Execute a voice command with intent logging."""
+    result = await orb_interface.execute_unified_voice_command(
+        intent=request.intent,
+        user_id=request.user_id
+    )
+    if "error" in result:
+        raise HTTPException(status_code=503, detail=result["error"])
+    return result
+
+
+class TrustUpdateRequest(BaseModel):
+    component_id: str
+    trust_score: float
+    confidence: float = 1.0
+
+
+@app.post("/api/orb/v1/unified/trust/update")
+async def update_trust(request: TrustUpdateRequest):
+    """Update trust metric for a component."""
+    result = await orb_interface.update_component_trust(
+        component_id=request.component_id,
+        trust_score=request.trust_score,
+        confidence=request.confidence
+    )
+    if "error" in result:
+        raise HTTPException(status_code=503, detail=result["error"])
+    return result
+
+
+class KPIRecordRequest(BaseModel):
+    metric_type: str  # mttr, mttu, governance_latency, learning_gain, kpi_perf
+    value: float
+    unit: str
+    target: Optional[float] = None
+
+
+@app.post("/api/orb/v1/unified/kpi/record")
+async def record_kpi(request: KPIRecordRequest):
+    """Record a KPI metric."""
+    result = await orb_interface.record_performance_kpi(
+        metric_type=request.metric_type,
+        value=request.value,
+        unit=request.unit,
+        target=request.target
+    )
+    if "error" in result:
+        raise HTTPException(status_code=503, detail=result["error"])
+    return result
 
 
 if __name__ == "__main__":

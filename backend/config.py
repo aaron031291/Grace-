@@ -16,13 +16,13 @@ class Settings(BaseSettings):
     
     # Basic settings
     debug: bool = Field(default=False, env="DEBUG")
-    secret_key: str = Field(default="dev-secret-change-in-prod", env="SECRET_KEY")
+    secret_key: str = Field(default_factory=lambda: os.getenv("SECRET_KEY", ""), env="SECRET_KEY")
     
     # Database
-    database_url: str = Field(default="postgresql://grace_user:grace_pass@localhost:5432/grace", env="DATABASE_URL")
+    database_url: str = Field(default="postgresql://grace_user:grace_pass@localhost:5432/grace_governance", env="DATABASE_URL")
     
     # Redis
-    redis_url: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
+    redis_url: str = Field(default="redis://localhost:6379", env="REDIS_URL")
     
     # Vector database
     vector_db_url: str = Field(default="http://localhost:8000", env="VECTOR_DB_URL")
@@ -31,15 +31,15 @@ class Settings(BaseSettings):
     # Storage
     storage_type: str = Field(default="minio", env="STORAGE_TYPE")  # minio or s3
     storage_endpoint: str = Field(default="http://localhost:9000", env="STORAGE_ENDPOINT")
-    storage_access_key: str = Field(default="minio", env="STORAGE_ACCESS_KEY")
-    storage_secret_key: str = Field(default="minio123", env="STORAGE_SECRET_KEY")
+    storage_access_key: str = Field(default_factory=lambda: os.getenv("STORAGE_ACCESS_KEY", ""), env="STORAGE_ACCESS_KEY")
+    storage_secret_key: str = Field(default_factory=lambda: os.getenv("STORAGE_SECRET_KEY", ""), env="STORAGE_SECRET_KEY")
     storage_bucket: str = Field(default="grace-media", env="STORAGE_BUCKET")
     
     # JWT
-    jwt_secret_key: str = Field(default="jwt-secret-change-in-prod", env="JWT_SECRET_KEY")
-    jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
-    jwt_access_token_expire_minutes: int = Field(default=30, env="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
-    jwt_refresh_token_expire_days: int = Field(default=7, env="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
+    jwt_secret_key: str = Field(default_factory=lambda: os.getenv("JWT_SECRET_KEY", ""))
+    jwt_algorithm: str = Field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
+    jwt_access_token_expire_minutes: int = Field(default_factory=lambda: int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30")))
+    jwt_refresh_token_expire_days: int = Field(default_factory=lambda: int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7")))
     
     # Rate limiting
     rate_limit_requests: int = Field(default=1000, env="RATE_LIMIT_REQUESTS")
@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     # Security
     enable_antivirus: bool = Field(default=False, env="ENABLE_ANTIVIRUS")
     antivirus_endpoint: str = Field(default="", env="ANTIVIRUS_ENDPOINT")
+
+    # Pool limits and timeouts
+    pg_pool_size: int = Field(default=10, env="PG_POOL_SIZE")
+    pg_pool_timeout: int = Field(default=30, env="PG_POOL_TIMEOUT")
+    redis_pool_size: int = Field(default=10, env="REDIS_POOL_SIZE")
+    redis_pool_timeout: int = Field(default=30, env="REDIS_POOL_TIMEOUT")
+
+    # Circuit breaker config
+    circuit_breaker_fail_max: int = Field(default=5, env="CB_FAIL_MAX")
+    circuit_breaker_reset_timeout: int = Field(default=60, env="CB_RESET_TIMEOUT")
     
     class Config:
         env_file = ".env"

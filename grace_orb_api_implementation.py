@@ -644,3 +644,12 @@ def setup_orb_api_routes(app, grace_kernel):
             raise HTTPException(status_code=404, detail="Task not found")
 
     logger.info("All Orb API routes configured successfully")
+
+        # ConversationalOps endpoint
+        try:
+            from grace.interface.conversational_ops import build_router as build_converse_router
+            converse_router = build_converse_router()
+            app.include_router(converse_router, prefix="/api/orb/v1/converse")
+            logger.info("ConversationalOps routes mounted at /api/orb/v1/converse")
+        except Exception as e:
+            logger.error(f"Failed to mount ConversationalOps routes: {e}")

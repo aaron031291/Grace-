@@ -262,6 +262,15 @@ class GraceUnifiedOrbInterface:
         
         self.notification_priority_mapper = create_enum_mapper({}, NotificationPriority, NotificationPriority.MEDIUM)
 
+        # Unified Operating Specification Integration
+        try:
+            from .unified_spec_integration import UnifiedOrbSpecIntegration
+            self.unified_spec = UnifiedOrbSpecIntegration()
+            logger.info("Unified Operating Specification integration enabled")
+        except ImportError as e:
+            logger.warning(f"Unified spec integration not available: {e}")
+            self.unified_spec = None
+
         logger.info("Grace Unified Orb Interface initialized")
 
     # -----------------------------
@@ -1205,3 +1214,194 @@ class GraceUnifiedOrbInterface:
 
     def get_voice_settings(self, user_id: str) -> Dict[str, Any]:
         return self.multimodal_interface.get_voice_settings(user_id)
+
+    # -----------------------------
+    # Unified Operating Specification Integration
+    # -----------------------------
+    
+    async def start_unified_orchestrator(self):
+        """Start the unified loop orchestrator."""
+        if self.unified_spec:
+            await self.unified_spec.start()
+            logger.info("Unified orchestrator started")
+    
+    async def stop_unified_orchestrator(self):
+        """Stop the unified loop orchestrator."""
+        if self.unified_spec:
+            await self.unified_spec.stop()
+            logger.info("Unified orchestrator stopped")
+    
+    async def create_memory_folder(self, folder_id: str, purpose: str, domain: str, 
+                                  policies: List[str] = None) -> Dict[str, Any]:
+        """Create a memory folder with context manifest (File-Explorer interface)."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        manifest = await self.unified_spec.memory_explorer.create_memory_folder(
+            folder_id, purpose, domain, policies
+        )
+        return {
+            "folder_id": manifest.folder_id,
+            "purpose": manifest.purpose,
+            "domain": manifest.domain,
+            "policies": manifest.policies,
+            "created_at": manifest.created_at
+        }
+    
+    async def search_unified_memory(self, query: str, filters: Optional[Dict] = None) -> List[Dict[str, Any]]:
+        """Search memory using unified memory explorer with trust ranking."""
+        if not self.unified_spec:
+            return []
+        
+        items = await self.unified_spec.memory_explorer.search_with_context(query, filters)
+        return [
+            {
+                "id": item.id,
+                "path": item.path,
+                "tags": item.tags,
+                "trust": item.trust,
+                "last_used": item.last_used,
+                "vector_ref": item.vector_ref
+            }
+            for item in items
+        ]
+    
+    async def detect_anomaly(self, metric_name: str, current_value: float, 
+                            expected_value: float, threshold: float = 0.2) -> Optional[Dict[str, Any]]:
+        """Detect anomalies using AVN engine."""
+        if not self.unified_spec:
+            return None
+        
+        anomaly = await self.unified_spec.avn_engine.detect_anomaly(
+            metric_name, current_value, expected_value, threshold
+        )
+        
+        if anomaly:
+            return {
+                "anomaly_id": anomaly.anomaly_id,
+                "detected_at": anomaly.detected_at,
+                "metric_name": anomaly.metric_name,
+                "current_value": anomaly.current_value,
+                "expected_value": anomaly.expected_value,
+                "deviation": anomaly.deviation,
+                "severity": anomaly.severity,
+                "trace_id": anomaly.trace_id
+            }
+        return None
+    
+    async def perform_root_cause_analysis(self, anomaly_id: str) -> List[Dict[str, Any]]:
+        """Perform RCA using Memory Explorer patterns."""
+        if not self.unified_spec:
+            return []
+        
+        if anomaly_id not in self.unified_spec.avn_engine.anomalies:
+            return []
+        
+        anomaly = self.unified_spec.avn_engine.anomalies[anomaly_id]
+        hypotheses = await self.unified_spec.avn_engine.perform_rca(anomaly)
+        
+        return [
+            {
+                "hypothesis_id": h.hypothesis_id,
+                "root_cause": h.root_cause,
+                "confidence": h.confidence,
+                "evidence": h.evidence,
+                "suggested_fix": h.suggested_fix
+            }
+            for h in hypotheses
+        ]
+    
+    async def execute_healing_action(self, hypothesis_id: str, sandbox: bool = True) -> Dict[str, Any]:
+        """Execute healing action with sandbox proof."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        if hypothesis_id not in self.unified_spec.avn_engine.hypotheses:
+            return {"error": "Hypothesis not found"}
+        
+        hypothesis = self.unified_spec.avn_engine.hypotheses[hypothesis_id]
+        result = await self.unified_spec.avn_engine.execute_healing(hypothesis, sandbox)
+        
+        return result
+    
+    async def set_unified_voice_mode(self, mode: str):
+        """Set voice mode (solo_voice, text_only, co_partner, silent_autonomous)."""
+        if not self.unified_spec:
+            return
+        
+        from .unified_spec_integration import VoiceMode
+        voice_mode = VoiceMode(mode)
+        await self.unified_spec.set_voice_mode(voice_mode)
+    
+    async def execute_unified_voice_command(self, intent: str, user_id: str) -> Dict[str, Any]:
+        """Execute a voice command with intent logging."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        command = await self.unified_spec.execute_voice_command(intent, user_id)
+        return {
+            "command_id": command.command_id,
+            "mode": command.mode.value,
+            "intent": command.intent,
+            "trace_id": command.trace_id,
+            "executed": command.executed
+        }
+    
+    async def update_component_trust(self, component_id: str, trust_score: float, 
+                                    confidence: float = 1.0) -> Dict[str, Any]:
+        """Update trust metric for a component."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        from .unified_spec_integration import TrustMetricType
+        metric = await self.unified_spec.update_trust_metric(
+            component_id, TrustMetricType.COMPONENT, trust_score, confidence
+        )
+        
+        return {
+            "metric_id": metric.metric_id,
+            "component_id": metric.component_id,
+            "trust_score": metric.trust_score,
+            "trust_drift": metric.trust_drift,
+            "samples": metric.samples
+        }
+    
+    async def record_performance_kpi(self, metric_type: str, value: float, 
+                                    unit: str, target: Optional[float] = None) -> Dict[str, Any]:
+        """Record a KPI metric (MTTR, MTTU, governance_latency, etc.)."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        from .unified_spec_integration import KPIMetricType
+        kpi_type = KPIMetricType(metric_type)
+        metric = await self.unified_spec.record_kpi(kpi_type, value, unit, target)
+        
+        return {
+            "metric_id": metric.metric_id,
+            "metric_type": metric.metric_type.value,
+            "value": metric.value,
+            "unit": metric.unit,
+            "status": metric.status,
+            "timestamp": metric.timestamp
+        }
+    
+    def get_unified_stats(self) -> Dict[str, Any]:
+        """Get comprehensive unified operating spec stats."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        return self.unified_spec.get_unified_stats()
+    
+    def get_orchestrator_health(self) -> Dict[str, Any]:
+        """Get health pulse endpoint for loop orchestrator."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        return self.unified_spec.loop_orchestrator.get_health_status()
+    
+    def get_context_bus_state(self) -> Dict[str, Any]:
+        """Get current context bus state (unified 'now')."""
+        if not self.unified_spec:
+            return {"error": "Unified spec not available"}
+        
+        return self.unified_spec.context_bus.get_all_context()

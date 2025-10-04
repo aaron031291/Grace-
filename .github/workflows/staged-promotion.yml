@@ -20,14 +20,15 @@ jobs:
       - name: Build Docker Image
         run: docker build -t grace_api:latest .
       - name: Push to Dev Registry
-        run: docker push ${{ secrets.DEV_REGISTRY }}/grace_api:latest
+        env:
+          DEV_REGISTRY: ${{ secrets.DEV_REGISTRY }}
+        run: docker push $DEV_REGISTRY/grace_api:latest
 
   promote-to-staging:
     needs: build
     runs-on: ubuntu-latest
     environment:
       name: staging
-      url: ${{ secrets.STAGING_URL }}
     steps:
       - name: Manual Approval
         uses: fjogeleit/http-request-action@v1.14.0
@@ -42,7 +43,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ secrets.PROD_URL }}
     steps:
       - name: Manual Approval
         uses: fjogeleit/http-request-action@v1.14.0

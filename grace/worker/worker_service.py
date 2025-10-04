@@ -34,6 +34,8 @@ class GraceWorker:
         self.running = False
         self.tasks: Dict[str, asyncio.Task] = {}
         self.queues = [q.strip() for q in self.settings.worker_queues.split(',')]
+        # Bounded concurrency: semaphore per queue
+        self.queue_semaphores = {q: asyncio.Semaphore(getattr(self.settings, f"queue_{q}_concurrency", 5)) for q in self.queues}
         
     async def start(self):
         """Start the worker service."""
@@ -87,22 +89,19 @@ class GraceWorker:
         logger.info("Grace Worker service stopped")
     
     async def _process_queue(self, queue_name: str):
-        """Process tasks from a specific queue."""
+        """Process tasks from a specific queue with bounded concurrency."""
         logger.info(f"Processing queue: {queue_name}")
-        
+        semaphore = self.queue_semaphores[queue_name]
         while self.running:
             try:
                 # Block-pop from Redis list (queue)
                 result = await self.redis_client.blpop(f"grace:queue:{queue_name}", timeout=5)
-                
                 if result is None:
                     continue  # Timeout, continue loop
-                
                 queue_key, task_data = result
-                
-                with ObservabilityContext(queue=queue_name, task_id=task_data[:8]):
-                    await self._process_task(queue_name, task_data)
-                    
+                async with semaphore:
+                    with ObservabilityContext(queue=queue_name, task_id=task_data[:8]):
+                        await self._process_task(queue_name, task_data)
             except asyncio.CancelledError:
                 logger.info(f"Queue processor for {queue_name} cancelled")
                 break
@@ -111,12 +110,19 @@ class GraceWorker:
                 await asyncio.sleep(1)  # Brief pause before retrying
     
     async def _process_task(self, queue_name: str, task_data: str):
-        """Process a single task."""
+        MAX_RETRIES = 5
+        import hashlib
+        task_id = None
+        try:
+            task = json.loads(task_data)
+            task_id = task.get('id', None)
+        except Exception:
+            pass
+        """Process a single task with idempotency (fingerprint/dedupe)."""
+        import hashlib
         start_time = asyncio.get_event_loop().time()
-        
         try:
             ACTIVE_TASKS.labels(queue=queue_name).inc()
-            
             # Parse task data
             try:
                 task = json.loads(task_data)
@@ -124,12 +130,38 @@ class GraceWorker:
                 logger.error(f"Invalid JSON in task data: {task_data}")
                 TASKS_PROCESSED.labels(queue=queue_name, status="error").inc()
                 return
-            
+
+            # Poison-pill detection (retry count)
+            retry_key = None
+            if task_id:
+                retry_key = f"grace:task_retry:{task_id}"
+                if self.redis_client:
+                    retries = await self.redis_client.get(retry_key)
+                    retries = int(retries) if retries else 0
+                    if retries >= MAX_RETRIES:
+                        # Quarantine poison-pill
+                        quarantine_key = f"grace:quarantine:{queue_name}"
+                        await self.redis_client.rpush(quarantine_key, task_data)
+                        logger.error(f"Poison-pill detected for task {task_id} (retries={retries}), quarantined.")
+                        TASKS_PROCESSED.labels(queue=queue_name, status="quarantined").inc()
+                        return
+
+            # Compute fingerprint for deduplication
+            fingerprint = hashlib.sha256(task_data.encode()).hexdigest()
+            dedupe_key = f"grace:task_fingerprint:{fingerprint}"
+            # Check Redis for fingerprint
+            if self.redis_client:
+                exists = await self.redis_client.get(dedupe_key)
+                if exists:
+                    logger.info(f"Duplicate task detected (fingerprint: {fingerprint}), skipping.")
+                    TASKS_PROCESSED.labels(queue=queue_name, status="deduped").inc()
+                    return
+                await self.redis_client.setex(dedupe_key, 3600, "1")  # 1 hour TTL
+
             task_type = task.get('type', 'unknown')
             task_id = task.get('id', 'unknown')
-            
             logger.info(f"Processing task {task_id} of type {task_type} from queue {queue_name}")
-            
+
             # Route to appropriate processor
             if queue_name == 'ingestion':
                 await self._process_ingestion_task(task)
@@ -141,22 +173,32 @@ class GraceWorker:
                 logger.warning(f"Unknown queue: {queue_name}")
                 TASKS_PROCESSED.labels(queue=queue_name, status="error").inc()
                 return
-            
+
             # Record success
             duration = asyncio.get_event_loop().time() - start_time
             TASK_DURATION.labels(queue=queue_name).observe(duration)
             TASKS_PROCESSED.labels(queue=queue_name, status="success").inc()
-            
             logger.info(f"Task {task_id} completed successfully in {duration:.2f}s")
-            
+
+            # Reset retry count on success
+            if retry_key and self.redis_client:
+                await self.redis_client.delete(retry_key)
+
         except Exception as e:
             # Record failure
             duration = asyncio.get_event_loop().time() - start_time
             TASK_DURATION.labels(queue=queue_name).observe(duration)
             TASKS_PROCESSED.labels(queue=queue_name, status="error").inc()
-            
             logger.error(f"Task processing failed: {e}", exc_info=True)
-            
+            # Push failed task to DLQ
+            if self.redis_client:
+                dlq_key = f"grace:dlq:{queue_name}"
+                await self.redis_client.rpush(dlq_key, task_data)
+                # Increment retry count
+                if retry_key:
+                    retries = await self.redis_client.get(retry_key)
+                    retries = int(retries) if retries else 0
+                    await self.redis_client.set(retry_key, retries + 1)
         finally:
             ACTIVE_TASKS.labels(queue=queue_name).dec()
     

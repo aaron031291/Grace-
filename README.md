@@ -54,21 +54,12 @@ Grace is now fully productionized. See below for architecture, usage, and furthe
 Grace implements a comprehensive governance architecture with the following components:
 
 ### Core Governance Layer (`grace/governance/`)
-- **Verification Engine** - Truth validation and claim analysis with constitutional reasoning
-- **Unified Logic** - Cross-layer synthesis and arbitration of specialist inputs
-- **Governance Engine** - Main orchestrator with policy enforcement and event management
-- **Parliament** - Democratic review system for major decisions
-- **Trust Core Kernel** - Trust and credibility weighting for sources and components
 
 ### Event Infrastructure (`grace/layer_02_event_mesh/`)
 - **Trigger Mesh** - Sub-millisecond event routing with priority queues and constitutional validators
-
 ### Audit System (`grace/layer_04_audit_logs/` → `grace/audit/`)
-- **Immutable Logs** - Blockchain-like tamper-proof audit trail with transparency controls
 - **Golden Path Auditor** - Concrete append/verify implementation for all memory operations
-- **Accessible via**: `grace/audit/immutable_logs.py` (symlinked for convenience)
 
-### Health Monitoring (`grace/immune/`)
 - **Enhanced AVN Core** - Anomaly detection, predictive alerts, and automated healing
 
 ### ML/DL Consensus (`grace/mldl/`)
@@ -144,36 +135,12 @@ async def main():
     kernel = GraceGovernanceKernel()
     await kernel.start()
     
-    # Process a governance request
-    result = await kernel.process_governance_request(
-        "policy",  # decision type
-        {
-            "claims": [...],     # Claims to validate
-            "context": {...}     # Decision context
-        }
     )
     
-    print(f"Decision: {result['outcome']}")
-    await kernel.shutdown()
 
-asyncio.run(main())
 ```
 
 ### Governance Enforcement Hooks
-
-Grace provides runtime enforcement through several key components:
-
-#### Constitutional Decorator
-```python
-from grace.governance.constitutional_decorator import constitutional_check
-
-@constitutional_check(policy="strict", transparency_level="public")
-async def sensitive_operation(data, rationale="Automated operation"):
-    # Your sensitive operation here
-    return {"result": "processed", "governance": {...}}
-```
-
-#### Trust Middleware
 ```python
 from grace.governance.constitutional_decorator import trust_middleware
 
@@ -182,41 +149,22 @@ async def high_trust_operation(data):
     # Operation requiring high trust score
     return data
 ```
-
-#### Golden Path Auditing
-```python
-from grace.audit.golden_path_auditor import append_audit
-
 # In your API endpoints or operations:
 audit_id = await append_audit(
-    operation_type="memory_write",
     operation_data={"action": "data_ingestion"},
     user_id="user123",
-    transparency_level="democratic_oversight"
-)
-```
 
 #### Policy Enforcement Middleware
-Applied automatically to all API routes in `grace.api.api_service`:
 - Validates operations against policy rules
 - Blocks unauthorized actions
-- Logs policy violations
-- Enforces constitutional compliance
 
 ## Development Workflow
-
-Grace provides automated Git workflow tools to streamline development across environments:
-
 ### Git Workflow Helper
 ```bash
 # Linux/macOS
-./scripts/git-workflow.sh <command>
 
-# Windows PowerShell
 .\scripts\git-workflow.ps1 <command>
 ```
-
-Common commands:
 - `setup` - Configure Git settings
 - `new-branch feature/my-feature` - Create new feature branch
 - `workflow fix governance "fix validation bug"` - Complete workflow (test, commit, push)

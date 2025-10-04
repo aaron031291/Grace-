@@ -1,0 +1,53 @@
+# Example GitHub Actions Workflow for Staged Promotion
+# .github/workflows/staged-promotion.yml
+
+name: Staged Promotion
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build & Test
+        run: |
+          ./scripts/ci_security_checks.sh
+          ./scripts/ci_coverage_check.sh
+      - name: Build Docker Image
+        run: docker build -t grace_api:latest .
+      - name: Push to Dev Registry
+        run: docker push ${{ secrets.DEV_REGISTRY }}/grace_api:latest
+
+  promote-to-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ secrets.STAGING_URL }}
+    steps:
+      - name: Manual Approval
+        uses: fjogeleit/http-request-action@v1.14.0
+        with:
+          url: ${{ secrets.STAGING_APPROVAL_URL }}
+          method: 'POST'
+      - name: Deploy to Staging
+        run: echo "Deploying to staging..."
+
+  promote-to-prod:
+    needs: promote-to-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ secrets.PROD_URL }}
+    steps:
+      - name: Manual Approval
+        uses: fjogeleit/http-request-action@v1.14.0
+        with:
+          url: ${{ secrets.PROD_APPROVAL_URL }}
+          method: 'POST'
+      - name: Deploy to Production
+        run: echo "Deploying to production..."

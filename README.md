@@ -4,11 +4,15 @@
 
 **Grace is production-ready!** For a comprehensive production readiness assessment, see **[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)**
 
+**Quick validation:** Run `python3 validate_production_readiness.py` to verify your environment
+
 - ✅ 100% System Health (24/24 kernels operational)
 - ✅ Complete test coverage and validation
 - ✅ Production infrastructure and monitoring
 - ✅ Security hardening and compliance
 - ✅ Full operational documentation
+
+**Quick Reference:** [PRODUCTION_READINESS_QUICK_REF.md](PRODUCTION_READINESS_QUICK_REF.md)
 
 ---
 

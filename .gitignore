@@ -214,3 +214,8 @@ grace_data.db
 grace_p0_demo.html
 __pycache__/
 *.pyc
+
+# Grace analysis reports (timestamped, auto-generated)
+GRACE_COMPREHENSIVE_ANALYSIS_REPORT_*.md
+grace_comprehensive_analysis_*.json
+system_health_report_*.json

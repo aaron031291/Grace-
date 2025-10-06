@@ -1,8 +1,10 @@
 """MTL Kernel - Main orchestration for Memory, Trust, Learning."""
 from typing import Dict, List, Optional
+import asyncio
 
 from ..contracts.dto_common import MemoryEntry
 from ..contracts.governed_decision import GovernedDecision
+from ..clarity_framework.base_component import BaseComponent
 from .schemas import MemoryStore
 from .memory_service import MemoryService
 from .trust_service import TrustService
@@ -11,18 +13,38 @@ from .trigger_ledger import TriggerLedger
 from .w5h_indexer import W5HIndexer
 from .librarian import Librarian
 from .llm.kernel import LLMKernel
+from .mtl_service import MTLService
+from .memory_orchestrator import MemoryOrchestrator
+from .trust_core import TrustCore
+from .immutable_logger import ImmutableLogger
 
 
-class MTLKernel:
-    """Main MTL kernel orchestrating all memory, trust, and learning operations."""
+class MTLKernel(BaseComponent):
+    """
+    Main MTL kernel orchestrating all memory, trust, and learning operations.
+    
+    Integrates:
+    - Memory Orchestrator (unified memory API)
+    - Trust Core (real-time trust scoring)
+    - Immutable Logger (blockchain-style audit)
+    - MTL Service (unified governance API)
+    - Legacy services (for backward compatibility)
+    """
     
     def __init__(self):
-        # Initialize shared store
+        super().__init__(component_type="mtl_kernel", version="2.0.0")
+        
+        # Initialize new MTL stack
+        self.mtl_service = MTLService()
+        self.orchestrator = self.mtl_service.memory
+        self.trust_core = self.mtl_service.trust
+        self.audit_logger = self.mtl_service.logger
+        
+        # Initialize shared store (legacy)
         self.store = MemoryStore()
         
-        # Initialize services with shared store
+        # Initialize legacy services for backward compatibility
         self.memory_service = MemoryService()
-        # Share the store instance
         self.memory_service.store = self.store
         
         self.trust_service = TrustService(self.store)
@@ -31,6 +53,59 @@ class MTLKernel:
         self.w5h_indexer = W5HIndexer()
         self.llm_kernel = LLMKernel()
         self.librarian = Librarian(self.memory_service, self.llm_kernel)
+    
+    async def activate(self) -> bool:
+        """Activate the MTL kernel."""
+        try:
+            # Register MTL kernel in trust system
+            await self.trust_core.register_entity(
+                "mtl_kernel",
+                entity_type="component",
+                initial_trust=0.9
+            )
+            
+            # Log activation
+            await self.audit_logger.log(
+                event_type="SYSTEM_EVENT",
+                component_id="mtl_kernel",
+                payload={"action": "activated"},
+                trust_score=0.9,
+                constitutional_compliance=1.0
+            )
+            
+            self.status = self.status.__class__.ACTIVE
+            self.logger.info("MTL Kernel activated successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to activate MTL Kernel: {e}")
+            self.status = self.status.__class__.ERROR
+            self._last_error = str(e)
+            return False
+    
+    async def deactivate(self) -> bool:
+        """Deactivate the MTL kernel."""
+        try:
+            # Log deactivation
+            await self.audit_logger.log(
+                event_type="SYSTEM_EVENT",
+                component_id="mtl_kernel",
+                payload={"action": "deactivated"},
+                trust_score=0.9,
+                constitutional_compliance=1.0
+            )
+            
+            self.status = self.status.__class__.INACTIVE
+            self.logger.info("MTL Kernel deactivated successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to deactivate MTL Kernel: {e}")
+            return False
+    
+    async def health_check(self) -> Dict[str, str]:
+        """Check health of MTL kernel and all components."""
+        return await self.mtl_service.health_check()
     
     def write(self, entry: MemoryEntry) -> str:
         """Write entry with full MTL fan-out: store → trust.init → immutable.append → trigger.record."""
@@ -144,20 +219,31 @@ class MTLKernel:
         """Get Merkle proof for audit record."""
         return self.immutable_log.proof(audit_id)
     
-    def get_stats(self) -> Dict:
+    async def get_stats(self) -> Dict:
         """Get comprehensive MTL kernel statistics."""
+        # Get new MTL stats
+        mtl_stats = await self.mtl_service.get_stats()
+        
+        # Include legacy stats for compatibility
         return {
-            "memory_entries": len(self.store.entries),
-            "trust_records": sum(len(attestations) for attestations in self.store.trust_records.values()),
-            "audit_records": len(self.store.audit_log),
-            "trigger_events": len(self.store.trigger_events),
-            "merkle_root": self.store.get_merkle_root(),
+            **mtl_stats,
+            "legacy": {
+                "memory_entries": len(self.store.entries),
+                "trust_records": sum(len(attestations) for attestations in self.store.trust_records.values()),
+                "audit_records": len(self.store.audit_log),
+                "trigger_events": len(self.store.trigger_events),
+                "merkle_root": self.store.get_merkle_root(),
+            },
             "services": {
                 "memory": True,
                 "trust": True,
                 "immutable_log": True,
                 "trigger_ledger": True,
                 "librarian": True,
-                "llm": True
+                "llm": True,
+                "mtl_service": True,
+                "orchestrator": True,
+                "trust_core": True,
+                "audit_logger": True
             }
         }

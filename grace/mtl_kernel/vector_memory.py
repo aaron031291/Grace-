@@ -189,10 +189,20 @@ class VectorMemory:
             collection_stats = {}
             total_vectors = 0
             
+            # Calculate stats without calling get_collection_stats (avoid deadlock)
             for name in self.COLLECTIONS:
-                stats = await self.get_collection_stats(name)
+                entries = self._collections[name]
+                avg_dim = 0
+                if entries:
+                    avg_dim = sum(len(e.embedding) for e in entries) / len(entries)
+                
+                stats = {
+                    "name": name,
+                    "count": len(entries),
+                    "avg_embedding_dim": round(avg_dim, 1)
+                }
                 collection_stats[name] = stats
-                total_vectors += stats["count"]
+                total_vectors += len(entries)
             
             uptime = time.time() - self._stats["start_time"]
             
@@ -230,17 +240,17 @@ class VectorMemory:
         
         In production, this would use a real embedding model.
         """
-        # Use hash to generate deterministic values
-        hash_val = int(hashlib.sha256(text.encode()).hexdigest(), 16)
+        # Use hash to generate deterministic values (optimized version)
+        hash_val = hash(text) % (2**31)
         
-        # Generate normalized vector
+        # Generate normalized vector (simpler calculation)
         values = [
-            math.sin(hash_val / (i + 1)) 
+            (hash_val / (i + 1)) % 1.0
             for i in range(dimensions)
         ]
         
-        # Normalize
-        magnitude = math.sqrt(sum(v * v for v in values))
+        # Simple normalization
+        magnitude = sum(v * v for v in values) ** 0.5
         if magnitude > 0:
             values = [v / magnitude for v in values]
         

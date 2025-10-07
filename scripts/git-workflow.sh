@@ -269,7 +269,14 @@ main() {
             sync_main
             ;;
         "commit")
-            commit_changes "$2" "$3" "$4"
+            # Handle optional scope parameter
+            if [ -n "$4" ]; then
+                # Has scope: commit <type> <scope> <message>
+                commit_changes "$2" "$3" "$4"
+            else
+                # No scope: commit <type> <message>
+                commit_changes "$2" "" "$3"
+            fi
             ;;
         "push")
             push_changes
@@ -284,7 +291,14 @@ main() {
             run_tests
             ;;
         "workflow")
-            complete_workflow "$2" "$3" "$4"
+            # Handle optional scope parameter
+            if [ -n "$4" ]; then
+                # Has scope: workflow <type> <scope> <message>
+                complete_workflow "$2" "$3" "$4"
+            else
+                # No scope: workflow <type> <message>
+                complete_workflow "$2" "" "$3"
+            fi
             ;;
         "help"|*)
             echo "Grace Git Workflow Helper"

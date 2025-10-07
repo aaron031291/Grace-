@@ -272,12 +272,30 @@ switch ($Command) {
     "setup" { Set-GitConfig }
     "new-branch" { New-Branch $Arg1 }
     "sync" { Sync-Main }
-    "commit" { Commit-Changes $Arg1 $Arg2 $Arg3 }
+    "commit" { 
+        # Handle optional scope parameter
+        if ($Arg3) {
+            # Has scope: commit <type> <scope> <message>
+            Commit-Changes $Arg1 $Arg2 $Arg3
+        } else {
+            # No scope: commit <type> <message>
+            Commit-Changes $Arg1 "" $Arg2
+        }
+    }
     "push" { Push-Changes }
     "pr" { New-PullRequest }
     "status" { Show-Status }
     "test" { Test-Grace }
-    "workflow" { Complete-Workflow $Arg1 $Arg2 $Arg3 }
+    "workflow" { 
+        # Handle optional scope parameter
+        if ($Arg3) {
+            # Has scope: workflow <type> <scope> <message>
+            Complete-Workflow $Arg1 $Arg2 $Arg3
+        } else {
+            # No scope: workflow <type> <message>
+            Complete-Workflow $Arg1 "" $Arg2
+        }
+    }
     default {
         Write-Host "Grace Git Workflow Helper (PowerShell)"
         Write-Host ""

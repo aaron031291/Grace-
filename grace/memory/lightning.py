@@ -171,3 +171,20 @@ class LightningMemory:
                 "uptime_seconds": round(uptime, 1),
                 "stats": self._stats.copy(),
             }
+
+    def delete(self, key: str) -> bool:
+        """Delete a key from the cache. Returns True if deleted, False if missing."""
+        try:
+            with self._lock:
+                if key in self._cache:
+                    del self._cache[key]
+                    return True
+                return False
+        except Exception:
+            logger.exception("Error deleting key from LightningMemory")
+            return False
+
+    def health_check(self) -> Dict[str, Any]:
+        """Return a simple health/status report for the cache."""
+        with self._lock:
+            return {"healthy": True, "entries": len(self._cache)}

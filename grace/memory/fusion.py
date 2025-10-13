@@ -15,6 +15,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta
+from ..utils.time import now_utc
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import hashlib
@@ -40,7 +41,7 @@ class FusionEntry:
         self.content_type = content_type
         self.tags = tags or []
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
+    self.created_at = now_utc()
 
         # Calculate size and hash
         self.value_json = json.dumps(value, default=str)
@@ -115,7 +116,7 @@ class FusionMemory:
             "total_size_bytes": 0,
             "compressed_size_bytes": 0,
             "archived_entries": 0,
-            "start_time": datetime.utcnow(),
+            "start_time": now_utc(),
         }
 
         logger.info(f"Fusion Memory initialized at {storage_path}")

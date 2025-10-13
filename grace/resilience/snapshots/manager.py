@@ -255,6 +255,7 @@ class SnapshotManager:
             logger.error(f"Failed to rollback to snapshot {to_snapshot}: {e}")
             raise
 
+
     def get_snapshot(self, snapshot_id: str) -> Optional[Dict[str, Any]]:
         """Get snapshot by ID."""
         try:
@@ -442,3 +443,7 @@ class SnapshotManager:
     async def stop(self):
         """Stop snapshot manager."""
         self.close()
+
+
+# Backwards-compatible alias expected by older tests
+ResilienceSnapshotManager = SnapshotManager

@@ -38,3 +38,5 @@ Next steps (optional actions I can take):
 - Help with a manual interactive merge against `origin/main` and resolve conflicts.
 
 If you'd like, I can open a PR now with this description, or prepare a smaller change set if you prefer a more incremental merge strategy.
+
+# commit marker

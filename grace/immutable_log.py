@@ -26,7 +26,7 @@ _use_orm = False
 try:
     from grace.db.session import get_session
     from grace.db.models_phase_a import ImmutableEntry
-    from grace.db.models_phase_a import UserAccount
+    from grace.db.models_phase_a import UserAccount, EventLog
     if DATABASE_URL:
         _use_orm = True
 except Exception:
@@ -260,13 +260,49 @@ def _check_read_access(request, allowed_roles: Optional[list] = None):
     return True
 
 
+def _check_write_access(request, allowed_roles: Optional[list] = None):
+    """Simple RBAC for writes. Default allowed roles: ['admin','logger']"""
+    if allowed_roles is None:
+        allowed_roles = ["admin", "logger"]
+
+    if not _use_orm:
+        return True
+
+    actor_id = None
+    try:
+        actor_id = request.headers.get("X-Actor-Id") or request.headers.get("X-User-Id")
+    except Exception:
+        actor_id = None
+
+    if not actor_id:
+        raise HTTPException(status_code=403, detail="missing actor id")
+
+    try:
+        sess = get_session()
+        user = sess.query(UserAccount).filter(UserAccount.user_id == actor_id).first()
+        sess.close()
+    except Exception:
+        raise HTTPException(status_code=503, detail="user lookup failed")
+
+    if not user:
+        raise HTTPException(status_code=403, detail="unknown actor")
+
+    if getattr(user, "role", None) not in allowed_roles:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    return True
+
+
 @router.post("/api/v1/logs")
-async def append_entry(entry: Dict[str, Any]):
+async def append_entry(entry: Dict[str, Any], request=None):
     """Append an immutable log entry. Returns entry_id and entry_cid."""
     try:
         entry_id = str(uuid.uuid4())
         entry_cid = entry.get("entry_cid") or f"cid:sha256:{uuid.uuid4().hex}"
         timestamp = entry.get("timestamp") or iso_now_utc()
+
+        # Write RBAC
+        _check_write_access(request)
 
         # Prefer ORM path if available
         if _use_orm:
@@ -302,7 +338,15 @@ async def append_entry(entry: Dict[str, Any]):
                 sess.rollback()
                 raise
             finally:
-                sess.close()
+                # Log an append event for audit
+                try:
+                    evt = EventLog(event_type="immutable_append", payload_json={"entry_cid": entry_cid}, severity="info")
+                    sess.add(evt)
+                    sess.commit()
+                except Exception:
+                    sess.rollback()
+                finally:
+                    sess.close()
         else:
             db_type, conn = _get_conn()
 
@@ -390,7 +434,10 @@ async def append_entry(entry: Dict[str, Any]):
 
 
 @router.get("/api/v1/logs/{entry_cid}")
-async def get_entry(entry_cid: str):
+async def get_entry(entry_cid: str, request=None):
+    # RBAC check
+    _check_read_access(request)
+
     if _use_orm:
         sess = get_session()
         obj = sess.query(ImmutableEntry).filter(ImmutableEntry.entry_cid == entry_cid).first()
@@ -421,7 +468,7 @@ async def get_entry(entry_cid: str):
 
 
 @router.post("/api/v1/logs/search")
-async def search_logs(body: Dict[str, Any]):
+async def search_logs(body: Dict[str, Any], request=None):
     """Hybrid search: conservative implementation.
 
     Body fields: query, filters (from/to/tags/error_code), mode (exact|semantic|hybrid), limit
@@ -457,6 +504,9 @@ async def search_logs(body: Dict[str, Any]):
 
     sql += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
+
+    # RBAC check
+    _check_read_access(request)
 
     if _use_orm:
         sess = get_session()

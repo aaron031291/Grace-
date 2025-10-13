@@ -6,6 +6,7 @@ Comprehensive interface with chat, panels, memory management, multimodal, and go
 import uuid
 import logging
 from datetime import datetime
+from grace.utils.time import iso_now_utc, now_utc, to_utc
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -127,8 +128,8 @@ class GovernanceTask:
     status: str = "pending"  # pending, in_progress, completed, failed
     requester_id: Optional[str] = None
     assignee_id: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: iso_now_utc())
+    updated_at: str = field(default_factory=lambda: iso_now_utc())
 
 
 @dataclass
@@ -177,8 +178,8 @@ class MemoryExplorerItem:
     children: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    modified_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: iso_now_utc())
+    modified_at: str = field(default_factory=lambda: iso_now_utc())
     is_editable: bool = True
 
 
@@ -193,8 +194,8 @@ class CollaborationSession:
     discussion_points: List[Dict[str, Any]] = field(default_factory=list)
     action_items: List[Dict[str, Any]] = field(default_factory=list)
     shared_workspace: Dict[str, Any] = field(default_factory=dict)
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: iso_now_utc())
+    updated_at: str = field(default_factory=lambda: iso_now_utc())
 
 
 @dataclass
@@ -275,8 +276,6 @@ class GraceUnifiedOrbInterface:
             "wav",
             "screen_recording",
             "audio_recording",
-            "video_recording",
-        ]
 
         # Panel templates
         self.panel_templates = self._initialize_panel_templates()
@@ -416,8 +415,8 @@ class GraceUnifiedOrbInterface:
         session = OrbSession(
             session_id=session_id,
             user_id=user_id,
-            start_time=datetime.utcnow().isoformat(),
-            last_activity=datetime.utcnow().isoformat(),
+            start_time=iso_now_utc(),
+            last_activity=iso_now_utc(),
             preferences=preferences or {},
         )
 
@@ -458,7 +457,7 @@ class GraceUnifiedOrbInterface:
         if session_id in self.active_sessions:
             self.active_sessions[
                 session_id
-            ].last_activity = datetime.utcnow().isoformat()
+            ].last_activity = iso_now_utc()
 
     # -----------------------------
     # Chat
@@ -475,14 +474,14 @@ class GraceUnifiedOrbInterface:
         session = self.active_sessions[session_id]
         message_id = f"msg_{uuid.uuid4().hex[:8]}"
 
-        user_message = ChatMessage(
-            message_id=message_id,
-            user_id=session.user_id,
-            content=content,
-            timestamp=datetime.utcnow().isoformat(),
-            message_type="user",
-            attachments=attachments or [],
-        )
+            user_message = ChatMessage(
+                message_id=message_id,
+                user_id=session.user_id,
+                content=content,
+                timestamp=iso_now_utc(),
+                message_type="user",
+                attachments=attachments or [],
+            )
         session.chat_messages.append(user_message)
         await self.update_session_activity(session_id)
 
@@ -501,7 +500,7 @@ class GraceUnifiedOrbInterface:
                 message_id=f"msg_{uuid.uuid4().hex[:8]}",
                 user_id="grace",
                 content=result.response,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=iso_now_utc(),
                 message_type="assistant",
                 reasoning_trace_id=f"trace_{message_id}",
             )
@@ -524,7 +523,7 @@ class GraceUnifiedOrbInterface:
                 message_id=f"msg_{uuid.uuid4().hex[:8]}",
                 user_id="grace",
                 content=f"I encountered an error while processing your request: {str(e)}",
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=iso_now_utc(),
                 message_type="system",
             )
             session.chat_messages.append(error_message)

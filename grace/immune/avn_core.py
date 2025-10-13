@@ -5,6 +5,7 @@ Enhanced AVN Core - Health monitoring and anomaly detection for Grace governance
 import asyncio
 from typing import Dict, List, Any, Optional, Callable
 from datetime import datetime, timedelta
+from grace.utils.time import now_utc, iso_now_utc, to_utc
 from dataclasses import dataclass
 import statistics
 import logging
@@ -42,7 +43,7 @@ class HealthMetric:
     value: float
     threshold_min: Optional[float] = None
     threshold_max: Optional[float] = None
-    timestamp: datetime = datetime.now()
+    timestamp: datetime = now_utc()
 
     def is_healthy(self) -> bool:
         """Check if metric is within healthy thresholds."""
@@ -75,7 +76,7 @@ class ComponentHealth:
     def __init__(self, component_id: str):
         self.component_id = component_id
         self.metrics: Dict[str, List[HealthMetric]] = {}
-        self.last_heartbeat = datetime.now()
+    self.last_heartbeat = now_utc()
         self.status = "healthy"
         self.alert_count = 0
         self.performance_baseline = {}
@@ -92,7 +93,7 @@ class ComponentHealth:
         if len(self.metrics[metric.metric_name]) > 1000:
             self.metrics[metric.metric_name] = self.metrics[metric.metric_name][-1000:]
 
-        self.last_heartbeat = datetime.now()
+    self.last_heartbeat = now_utc()
 
     def get_latest_metric(self, metric_name: str) -> Optional[HealthMetric]:
         """Get the latest metric value."""
@@ -165,7 +166,7 @@ class ComponentHealth:
                     health_factors.append(0.5)  # Unhealthy but unknown deviation
 
         # Check heartbeat freshness
-        time_since_heartbeat = (datetime.now() - self.last_heartbeat).total_seconds()
+    time_since_heartbeat = (now_utc() - self.last_heartbeat).total_seconds()
         if time_since_heartbeat > 300:  # 5 minutes
             health_factors.append(0.0)
         elif time_since_heartbeat > 60:  # 1 minute
@@ -196,10 +197,20 @@ class EnhancedAVNCore:
         self.anomaly_thresholds = self._initialize_anomaly_thresholds()
         self.predictive_window = 300  # seconds for predictive analysis
 
+        # Self-healing engine (optional). Keeps governance hooks but is non-blocking if not provided.
+        self.self_healing_engine: Optional[SelfHealingEngine] = None
+
         # Start monitoring tasks
         asyncio.create_task(self._start_health_monitoring())
         asyncio.create_task(self._start_anomaly_detection())
         asyncio.create_task(self._start_predictive_analysis())
+
+        # If available, instantiate a default SelfHealingEngine that uses local hooks.
+        try:
+            self.self_healing_engine = SelfHealingEngine(self, event_bus=event_bus)
+        except Exception:
+            # Keep default behavior if engine cannot be created (non-fatal)
+            self.self_healing_engine = None
 
     def _initialize_anomaly_thresholds(self) -> Dict[str, Dict[str, float]]:
         """Initialize anomaly detection thresholds."""

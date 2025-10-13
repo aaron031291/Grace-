@@ -16,6 +16,7 @@ import logging
 import sqlite3
 import uuid
 from datetime import datetime
+from grace.utils.time import iso_now_utc, now_utc, to_utc
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import pickle
@@ -103,6 +104,7 @@ class GraceSnapshotManager:
         self.object_store = object_store or ObjectStore()
         self.conn = None
 
+        # Initialize database connection and schema
         self._initialize_db()
 
         # Blue/green deployment support
@@ -173,7 +175,7 @@ class GraceSnapshotManager:
                 (instance_name, current_snapshots, status, last_updated) 
                 VALUES (?, ?, ?, ?)
             """,
-                (instance, json.dumps({}), "standby", datetime.utcnow().isoformat()),
+                (instance, json.dumps({}), "standby", iso_now_utc()),
             )
 
         # Set blue as active
@@ -240,7 +242,7 @@ class GraceSnapshotManager:
                     description or f"{component_type} snapshot at {timestamp}",
                     object_key,
                     state_hash,
-                    datetime.utcnow().isoformat(),
+                    iso_now_utc(),
                     created_by,
                     size_bytes,
                     json.dumps(metadata),
@@ -258,7 +260,7 @@ class GraceSnapshotManager:
                 "object_key": object_key,
                 "state_hash": f"sha256:{state_hash}",
                 "size_bytes": size_bytes,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": iso_now_utc(),
                 "description": description,
             }
 
@@ -318,16 +320,16 @@ class GraceSnapshotManager:
                     reason, triggered_by, status, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-                (
-                    rollback_id,
-                    component_type,
-                    backup_snapshot["snapshot_id"],
-                    to_snapshot,
-                    reason,
-                    triggered_by,
-                    "in_progress",
-                    datetime.utcnow().isoformat(),
-                ),
+                    (
+                        rollback_id,
+                        component_type,
+                        backup_snapshot["snapshot_id"],
+                        to_snapshot,
+                        reason,
+                        triggered_by,
+                        "in_progress",
+                        iso_now_utc(),
+                    ),
             )
 
             self.conn.commit()
@@ -352,7 +354,7 @@ class GraceSnapshotManager:
                     SET status = ?, completed_at = ?
                     WHERE rollback_id = ?
                 """,
-                    ("completed", datetime.utcnow().isoformat(), rollback_id),
+                    ("completed", iso_now_utc(), rollback_id),
                 )
 
                 status = "completed"
@@ -367,7 +369,7 @@ class GraceSnapshotManager:
                     (
                         "failed",
                         "Rollback execution failed",
-                        datetime.utcnow().isoformat(),
+                        iso_now_utc(),
                         rollback_id,
                     ),
                 )
@@ -385,7 +387,7 @@ class GraceSnapshotManager:
                 "status": status,
                 "reason": reason,
                 "triggered_by": triggered_by,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": iso_now_utc(),
             }
 
         except Exception as e:
@@ -398,7 +400,7 @@ class GraceSnapshotManager:
                     SET status = ?, error_message = ?, completed_at = ?
                     WHERE rollback_id = ?
                 """,
-                    ("failed", str(e), datetime.utcnow().isoformat(), rollback_id),
+                    ("failed", str(e), iso_now_utc(), rollback_id),
                 )
                 self.conn.commit()
             except Exception:

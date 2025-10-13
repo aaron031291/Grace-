@@ -15,7 +15,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta
-from ..utils.time import now_utc
+from ..utils.time import now_utc, iso_now_utc
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import hashlib
@@ -41,7 +41,7 @@ class FusionEntry:
         self.content_type = content_type
         self.tags = tags or []
         self.metadata = metadata or {}
-    self.created_at = now_utc()
+        self.created_at = now_utc()
 
         # Calculate size and hash
         self.value_json = json.dumps(value, default=str)
@@ -388,7 +388,7 @@ class FusionMemory:
 
         try:
             with self._lock:
-                cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+                cutoff_date = now_utc() - timedelta(days=older_than_days)
 
                 with sqlite3.connect(self.db_path) as conn:
                     # Get entries to archive
@@ -407,7 +407,7 @@ class FusionMemory:
 
                     # Create archive file
                     archive_filename = (
-                        f"archive_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json.gz"
+                        f"archive_{now_utc().strftime('%Y%m%d_%H%M%S')}.json.gz"
                     )
                     archive_path = self.storage_path / "archives" / archive_filename
                     archive_path.parent.mkdir(exist_ok=True)
@@ -420,7 +420,7 @@ class FusionMemory:
                                 "entry_id": row[0],
                                 "key": row[1],
                                 "value_json": row[2],
-                                "archived_at": datetime.utcnow().isoformat(),
+                                "archived_at": iso_now_utc(),
                             }
                         )
 

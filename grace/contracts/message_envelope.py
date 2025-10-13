@@ -1,6 +1,7 @@
 """Grace Message Envelope (GME) - Standard message format for all Grace events."""
 
 from datetime import datetime
+from grace.utils.time import now_utc, to_utc
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import uuid
@@ -58,7 +59,7 @@ class GraceMessageEnvelope(BaseModel):
     idempotency_key: str = Field(
         default_factory=lambda: f"idem_{uuid.uuid4().hex[:12]}"
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
     retry_count: int = Field(default=0, ge=0)
     ttl_seconds: int = Field(default=3600, ge=1)
     schema_version: str = Field(default="1.0.0", pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -75,7 +76,7 @@ class GraceMessageEnvelope(BaseModel):
 
     def is_expired(self) -> bool:
         """Check if message has exceeded its TTL."""
-        age_seconds = (datetime.utcnow() - self.timestamp).total_seconds()
+        age_seconds = (now_utc() - to_utc(self.timestamp)).total_seconds()
         return age_seconds > self.ttl_seconds
 
     def increment_retry(self) -> None:
@@ -107,7 +108,7 @@ class GraceMessageEnvelope(BaseModel):
             headers=headers,
             payload=data["payload"],
             idempotency_key=data["idempotency_key"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
+            timestamp=to_utc(datetime.fromisoformat(data["timestamp"])),
             retry_count=data.get("retry_count", 0),
             ttl_seconds=data.get("ttl_seconds", 3600),
             schema_version=data.get("schema_version", "1.0.0"),

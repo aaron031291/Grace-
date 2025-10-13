@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime
+from ..utils.time import iso_now_utc
 from typing import Dict, Any
 from fastapi import (
     FastAPI,
@@ -21,6 +22,7 @@ from .consent import ConsentService
 from .notifications import NotificationService
 from .snapshots import SnapshotManager
 from .bridges import GovernanceBridge, MemoryBridge, MLTBridge
+from ..immutable_log import router as immutable_router
 
 # Elite NLP imports
 try:
@@ -96,6 +98,8 @@ class InterfaceService:
 
         # Register routes
         self._register_routes(app)
+        # Immutable log routes
+        app.include_router(immutable_router)
 
         return app
 
@@ -108,7 +112,7 @@ class InterfaceService:
             return {
                 "status": "ok",
                 "version": "1.0.0",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": iso_now_utc(),
             }
 
         # Session management

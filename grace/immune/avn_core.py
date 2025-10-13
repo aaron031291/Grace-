@@ -70,6 +70,139 @@ class AnomalyAlert:
     auto_resolve: bool = False
 
 
+class WeightedQuorumConsensus:
+    """Simple weighted quorum aggregator.
+
+    Collects votes where each vote contains:
+    - confidence: float (0..1)
+    - trust: float (0..1)
+    - context_weight: float (domain relevance)
+
+    Returns a weighted score and boolean decision based on threshold.
+    """
+
+    def __init__(self, threshold: float = 0.6):
+        self.threshold = threshold
+
+    def aggregate_votes(self, votes: List[Dict[str, float]]) -> Dict[str, Any]:
+        total_weight = 0.0
+        weighted_sum = 0.0
+        for v in votes:
+            conf = float(v.get("confidence", 0.0))
+            trust = float(v.get("trust", 0.5))
+            ctx = float(v.get("context_weight", 1.0))
+            weight = conf * trust * ctx
+            weighted_sum += weight * conf
+            total_weight += weight
+
+        score = weighted_sum / total_weight if total_weight > 0 else 0.0
+        decision = score >= self.threshold
+        return {"score": score, "decision": decision, "total_weight": total_weight}
+
+
+class NeuralAuditBuffer:
+    """Short-lived audit buffer capturing pre/post states for self-healing actions.
+
+    Keeps a bounded list of entries and exposes recent history for retraining.
+    """
+
+    def __init__(self, capacity: int = 128):
+        self.capacity = capacity
+        self.buffer: List[Dict[str, Any]] = []
+
+    def append(self, pre_state: Dict[str, Any], post_state: Dict[str, Any], metadata: Dict[str, Any] | None = None):
+        entry = {
+            "ts": iso_now_utc(),
+            "pre": pre_state,
+            "post": post_state,
+            "meta": metadata or {},
+        }
+        self.buffer.append(entry)
+        if len(self.buffer) > self.capacity:
+            self.buffer.pop(0)
+
+    def recent(self, n: int = 20) -> List[Dict[str, Any]]:
+        return list(self.buffer[-n:])
+
+
+class SelfHealingEngine:
+    """Conservative self-healing engine that proposes and executes healing actions.
+
+    - Uses a WeightedQuorumConsensus to evaluate proposals.
+    - Records pre/post states in a NeuralAuditBuffer.
+    - Publishes events to the event bus and calls registered healing actions on the AVN core.
+    """
+
+    def __init__(self, avn_core: "EnhancedAVNCore", event_bus, governance_bridge=None):
+        self.avn_core = avn_core
+        self.event_bus = event_bus
+        self.governance_bridge = governance_bridge
+        self.consensus = WeightedQuorumConsensus()
+        self.audit_buffer = NeuralAuditBuffer()
+
+    async def propose_and_execute(self, action: str, component_id: str, context: Dict[str, Any] | None = None) -> bool:
+        """Propose a healing action and run it if the weighted quorum agrees.
+
+        The votes are derived conservatively from component health and recent alerts.
+        """
+        context = context or {}
+
+        # Gather lightweight votes: derive from AVN's component health and alert history
+        comp = self.avn_core.component_health.get(component_id)
+        votes: List[Dict[str, float]] = []
+        if comp:
+            health_score = comp.calculate_health_score()
+            # confidence ~ health deficit, trust ~ 1.0 (could come from governance)
+            votes.append({"confidence": max(0.0, 1.0 - health_score), "trust": 1.0, "context_weight": 1.0})
+
+        # Include recent alert signals as votes
+        recent_alerts = [a for a in self.avn_core.alert_history[-10:] if a.component_id == component_id]
+        for a in recent_alerts:
+            votes.append({"confidence": a.confidence, "trust": 0.8, "context_weight": 1.0})
+
+        # If no votes, fall back to conservative decision (do not auto-heal)
+        if not votes:
+            await self.event_bus.publish("HEALING_PROPOSAL", {"action": action, "component_id": component_id, "decision": False, "reason": "no_votes"})
+            return False
+
+        agg = self.consensus.aggregate_votes(votes)
+
+        # Publish proposal event for transparency
+        await self.event_bus.publish("HEALING_PROPOSAL", {"action": action, "component_id": component_id, "aggregate": agg, "votes": votes})
+
+        if not agg.get("decision"):
+            return False
+
+        # Execute: capture pre-state, run healing action registered in avn_core, capture post-state
+        pre_state = {"health": comp.calculate_health_score() if comp else None, "alerts": [a.alert_id for a in recent_alerts]}
+
+        # Attempt to run the healing action via avn_core registered healing actions
+        success = False
+        try:
+            if action in self.avn_core.healing_actions:
+                func = self.avn_core.healing_actions[action]
+                # support async or sync healing functions
+                res = func(component_id, context)  # may be coroutine
+                if asyncio.iscoroutine(res):
+                    res = await res
+                success = bool(res)
+
+            # Log to audit buffer
+            post_state = {"health": comp.calculate_health_score() if comp else None}
+            self.audit_buffer.append(pre_state, post_state, {"action": action, "success": success})
+
+            # Publish execution event
+            await self.event_bus.publish("HEALING_EXECUTED", {"action": action, "component_id": component_id, "success": success, "timestamp": iso_now_utc()})
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Self-healing execution failed: {e}")
+            await self.event_bus.publish("HEALING_EXECUTED", {"action": action, "component_id": component_id, "success": False, "error": str(e), "timestamp": iso_now_utc()})
+            return False
+
+
+
 class ComponentHealth:
     """Tracks health status for a single component."""
 

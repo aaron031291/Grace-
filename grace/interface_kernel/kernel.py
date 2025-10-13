@@ -513,7 +513,7 @@ class InterfaceKernel:
             try:
                 await connection.send_json(event_data)
                 active_connections.append(connection)
-            except:
+            except Exception:
                 # Connection is dead, skip it
                 pass
 

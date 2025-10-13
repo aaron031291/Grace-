@@ -249,7 +249,7 @@ class SnapshotManager:
                     ("failed", datetime.now().isoformat(), str(e), rollback_id),
                 )
                 self.conn.commit()
-            except:
+            except Exception:
                 pass
 
             logger.error(f"Failed to rollback to snapshot {to_snapshot}: {e}")

@@ -263,7 +263,7 @@ class SnapshotManager:
                     ("failed", str(e), datetime.now().isoformat(), rollback_id),
                 )
                 self.conn.commit()
-            except:
+            except Exception:
                 pass
             raise
 

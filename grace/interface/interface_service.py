@@ -501,7 +501,7 @@ class InterfaceService:
         for connection_id, websocket in self.ws_connections.items():
             try:
                 await websocket.send_json(event_data)
-            except:
+            except Exception:
                 disconnected.append(connection_id)
 
         # Clean up disconnected clients

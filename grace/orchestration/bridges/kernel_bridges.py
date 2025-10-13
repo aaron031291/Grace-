@@ -258,7 +258,7 @@ class KernelBridges:
             if kernel_instance and hasattr(kernel_instance, "get_version"):
                 try:
                     kernel_info.version = await kernel_instance.get_version()
-                except:
+                except Exception:
                     kernel_info.version = "unknown"
 
             self.kernels[kernel_name] = kernel_info

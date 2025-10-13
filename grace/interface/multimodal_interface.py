@@ -337,7 +337,7 @@ class MultimodalInterface:
         """Get file size in bytes."""
         try:
             return os.path.getsize(file_path) if os.path.exists(file_path) else 0
-        except:
+        except Exception:
             return 0
 
     # Voice Interface Methods

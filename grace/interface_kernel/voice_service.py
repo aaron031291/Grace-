@@ -368,7 +368,7 @@ class VoiceService:
         if self.tts_engine:
             try:
                 self.tts_engine.stop()
-            except:
+            except Exception:
                 pass
 
         logger.info("Voice service cleaned up")

@@ -6,6 +6,7 @@ Test script for Grace Communications Schema validation.
 import sys
 import json
 from pathlib import Path
+import os
 
 # Add the Grace root to Python path
 sys.path.insert(

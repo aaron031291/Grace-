@@ -225,7 +225,7 @@ class BaseModelAdapter(ABC):
                 return len(X) > 0
             else:
                 return False
-        except:
+        except Exception:
             return False
 
     def get_model_info(self) -> Dict[str, Any]:

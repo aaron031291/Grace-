@@ -258,7 +258,7 @@ class HighPerformanceEventMesh:
             # Use 2x CPU count for I/O bound async work
             optimal = min(cpu_count * 2, 16)  # Cap at 16 workers
             return max(optimal, 4)  # Minimum 4 workers
-        except:
+        except Exception:
             return 8  # Safe default
 
     async def start(self) -> None:

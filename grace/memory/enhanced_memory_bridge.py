@@ -660,19 +660,19 @@ class EnhancedMemoryBridge:
         try:
             if self.traditional_memory:
                 stats["traditional_stats"] = self.traditional_memory.get_memory_stats()
-        except:
+        except Exception:
             pass
 
         try:
             if self.vector_memory:
                 stats["vector_stats"] = self.vector_memory.get_stats()
-        except:
+        except Exception:
             pass
 
         try:
             if self.quantum_storage:
                 stats["quantum_stats"] = self.quantum_storage.get_stats()
-        except:
+        except Exception:
             pass
 
         return stats

@@ -401,7 +401,7 @@ class GraceSnapshotManager:
                     ("failed", str(e), datetime.utcnow().isoformat(), rollback_id),
                 )
                 self.conn.commit()
-            except:
+            except Exception:
                 pass
             raise
 
@@ -525,7 +525,7 @@ class GraceSnapshotManager:
                     (active_instance, active_instance, standby_instance),
                 )
                 self.conn.commit()
-            except:
+            except Exception:
                 pass
             raise
 

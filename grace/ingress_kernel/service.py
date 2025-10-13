@@ -4,7 +4,7 @@ Provides REST API endpoints for ingress operations.
 """
 import asyncio
 import logging
-from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ class HealthResponse(BaseModel):
     """Health check response."""
     status: str
     version: str = "1.0.0"
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: str = Field(default_factory=lambda: now_utc().isoformat())
 
 
 class SourceRegistrationRequest(BaseModel):
@@ -189,7 +189,7 @@ class IngressService:
         async def replay_from_snapshot(request: ReplayRequest):
             """Replay data from snapshot offsets."""
             try:
-                job_id = f"replay_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+                job_id = f"replay_{now_utc().strftime('%Y%m%d_%H%M%S')}"
                 
                 # Mock implementation - would start replay process
                 return ReplayResponse(job_id=job_id)
@@ -234,7 +234,7 @@ class IngressService:
                 # Mock metrics data
                 timeseries = [
                     {
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": now_utc().isoformat(),
                         "source_id": source_id or "all",
                         "events_processed": 100,
                         "success_rate": 0.95,

@@ -120,8 +120,23 @@ class TrustCoreKernel:
         # Initialize with some baseline trust profiles
         self._initialize_baseline_profiles()
         
-        # Setup decay task
-        asyncio.create_task(self._periodic_trust_decay())
+        # Do not auto-start background tasks in __init__ to avoid leaking tasks during tests.
+        # Tasks can be started explicitly via start().
+        self._decay_task: Optional[asyncio.Task] = None
+
+    async def start(self) -> None:
+        """Start background tasks for the TrustCoreKernel."""
+        if self._decay_task is None:
+            self._decay_task = asyncio.create_task(self._periodic_trust_decay())
+
+    async def stop(self) -> None:
+        """Stop background tasks started by the TrustCoreKernel."""
+        if getattr(self, "_decay_task", None):
+            self._decay_task.cancel()
+            try:
+                await self._decay_task
+            except asyncio.CancelledError:
+                pass
     
     def _initialize_baseline_profiles(self):
         """Initialize trust profiles for core components."""

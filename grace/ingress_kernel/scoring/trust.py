@@ -4,7 +4,8 @@ Trust and Quality Scoring System for Ingress Kernel.
 import logging
 import hashlib
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import timedelta
+from grace.utils.time import now_utc
 import math
 
 from grace.contracts.ingress_contracts import NormRecord, SourceConfig
@@ -112,7 +113,7 @@ class TrustScorer:
                 self.reputation_history[source_id] = []
             
             self.reputation_history[source_id].append({
-                "timestamp": datetime.utcnow(),
+                "timestamp": now_utc(),
                 "old_reputation": current_rep,
                 "new_reputation": new_rep,
                 "outcome_score": outcome_score,
@@ -197,7 +198,7 @@ class TrustScorer:
             self.content_signatures[content_sig].append({
                 "source_id": record.source.source_id,
                 "record_id": record.record_id,
-                "timestamp": datetime.utcnow()
+                "timestamp": now_utc()
             })
             
             # Calculate agreement score
@@ -328,7 +329,7 @@ class TrustScorer:
         
         recent_history = [
             h for h in history 
-            if h["timestamp"] > datetime.utcnow() - timedelta(days=7)
+            if h["timestamp"] > now_utc() - timedelta(days=7)
         ]
         
         return {

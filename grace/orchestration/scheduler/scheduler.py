@@ -163,6 +163,8 @@ class Scheduler:
         
         # Internal
         self._scheduler_task = None
+        # keep references to per-task futures started by the scheduler
+        self._task_futures: Dict[str, asyncio.Task] = {}
         self._lock = asyncio.Lock()
         
     async def start(self):
@@ -193,7 +195,15 @@ class Scheduler:
                 await self._scheduler_task
             except asyncio.CancelledError:
                 pass
-        
+        # Cancel any outstanding per-task futures created by _process_task_queue
+        for fut in list(self._task_futures.values()):
+            if fut and not fut.done():
+                fut.cancel()
+                try:
+                    await fut
+                except asyncio.CancelledError:
+                    pass
+
         self.state = SchedulerState.STOPPED
         logger.info("Orchestration scheduler stopped")
     
@@ -351,8 +361,10 @@ class Scheduler:
         task.started_at = datetime.now()
         self.active_tasks[task.task_id] = task
         
-        # Execute task asynchronously
-        asyncio.create_task(self._execute_task(task))
+        # Execute task asynchronously and keep a reference so we can cancel on stop
+        task_future = asyncio.create_task(self._execute_task(task))
+        # store future keyed by task id for cancellation during shutdown
+        self._task_futures[task.task_id] = task_future
     
     async def _execute_task(self, task: TaskRequest):
         """Execute a task (placeholder for actual loop execution)."""

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime
+from grace.utils.time import now_utc, iso_now_utc
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 
@@ -149,7 +150,7 @@ class IngressKernel:
             # Initialize health tracking
             self.health_status[source_config.source_id] = {
                 "status": "registered",
-                "last_check": datetime.utcnow(),
+                "last_check": now_utc(),
                 "error_count": 0
             }
             
@@ -193,7 +194,7 @@ class IngressKernel:
             kind=source_config.parser.value,
             payload=payload,
             headers=headers,
-            offset=f"manual_{datetime.utcnow().isoformat()}",
+            offset=f"manual_{iso_now_utc()}",
             hash=self._compute_content_hash(payload)
         )
         
@@ -231,16 +232,14 @@ class IngressKernel:
     async def export_snapshot(self) -> IngressSnapshot:
         """Export system snapshot for rollback."""
         snapshot = IngressSnapshot(
-            snapshot_id=f"ing_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            snapshot_id=f"ing_{now_utc().strftime('%Y-%m-%dT%H:%M:%SZ')}",
             active_sources=list(self.sources.keys()),
             registry_hash=self._compute_registry_hash(),
             parser_versions={"html": "1.3.0", "pdf": "2.1.4", "asr.en": "2.4.1"},
             dedupe_threshold=self.config["dedupe"]["threshold"],
             pii_policy_defaults="mask",
-            offsets={src_id: f"current_{datetime.utcnow().isoformat()}" 
-                    for src_id in self.sources.keys()},
-            watermarks={src_id: datetime.utcnow() 
-                       for src_id in self.sources.keys()},
+            offsets={src_id: f"current_{iso_now_utc()}" for src_id in self.sources.keys()},
+            watermarks={src_id: now_utc() for src_id in self.sources.keys()},
             gold_views_version="1.2.0",
             hash=""
         )
@@ -423,7 +422,7 @@ class IngressKernel:
             try:
                 for source_id in self.sources.keys():
                     self.health_status[source_id].update({
-                        "last_check": datetime.utcnow(),
+                        "last_check": now_utc(),
                         "status": "ok"
                     })
                 

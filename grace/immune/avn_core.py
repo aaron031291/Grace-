@@ -185,9 +185,30 @@ class EnhancedAVNCore:
         self.predictive_window = 300  # seconds for predictive analysis
         
         # Start monitoring tasks
-        asyncio.create_task(self._start_health_monitoring())
-        asyncio.create_task(self._start_anomaly_detection())
-        asyncio.create_task(self._start_predictive_analysis())
+        # Do not auto-start monitoring tasks during construction; start explicitly with start()
+        self._health_task = None
+        self._anomaly_task = None
+        self._predictive_task = None
+
+    async def start(self) -> None:
+        """Start background monitoring tasks."""
+        if self._health_task is None:
+            self._health_task = asyncio.create_task(self._start_health_monitoring())
+        if self._anomaly_task is None:
+            self._anomaly_task = asyncio.create_task(self._start_anomaly_detection())
+        if self._predictive_task is None:
+            self._predictive_task = asyncio.create_task(self._start_predictive_analysis())
+
+    async def stop(self) -> None:
+        """Cancel and await background tasks started by the AVN core."""
+        for tname in ("_health_task", "_anomaly_task", "_predictive_task"):
+            task = getattr(self, tname, None)
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
     
     def _initialize_anomaly_thresholds(self) -> Dict[str, Dict[str, float]]:
         """Initialize anomaly detection thresholds."""

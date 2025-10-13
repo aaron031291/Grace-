@@ -2,7 +2,7 @@
 from typing import Dict, List, Optional
 from abc import ABC, abstractmethod
 import statistics
-from datetime import datetime
+from grace.utils.time import now_utc
 
 from ...contracts.quorum_feed import QuorumFeedItem
 
@@ -20,7 +20,7 @@ class BaseSpecialist:
     def analyze(self, feed_items: List[QuorumFeedItem], context: Optional[Dict] = None) -> Dict:
         """Base analysis with common preprocessing."""
         self.analysis_count += 1
-        self.last_analysis = datetime.utcnow()
+        self.last_analysis = now_utc()
         
         if not feed_items:
             return self._empty_analysis()

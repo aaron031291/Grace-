@@ -3,7 +3,7 @@ Ingress-Event Mesh Bridge - Connects Ingress Kernel to Event Mesh/Trigger System
 """
 import asyncio
 import logging
-from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, Any, Optional, List
 import uuid
 
@@ -74,7 +74,7 @@ class IngressMeshBridge:
             event_dict = event.dict()
             event_dict["bridge"] = {
                 "source": "ingress_mesh_bridge",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": now_utc().isoformat(),
                 "routing_rules": self.routing_rules.get(event.event_type, [])
             }
             
@@ -168,7 +168,7 @@ class IngressMeshBridge:
                 "trigger_id": str(uuid.uuid4()),
                 "source": "ingress_kernel",
                 "event_type": event["event_type"],
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": now_utc().isoformat(),
                 "payload": event["payload"],
                 "correlation_id": event.get("correlation_id")
             }
@@ -195,7 +195,7 @@ class IngressMeshBridge:
                 payload={
                     "target": "ingress",
                     "snapshot_id": snapshot_id,
-                    "at": datetime.utcnow().isoformat()
+                    "at": now_utc().isoformat()
                 }
             )
             

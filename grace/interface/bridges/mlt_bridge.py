@@ -1,6 +1,6 @@
 """Bridge to MLT kernel for adaptation plan transparency."""
 import asyncio
-from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional, Any
 import logging
 
@@ -39,7 +39,7 @@ class MLTBridge:
         """Create structured summary of adaptation plan."""
         summary = {
             "plan_id": getattr(plan, 'plan_id', 'unknown'),
-            "created_at": getattr(plan, 'created_at', datetime.utcnow()).isoformat(),
+            "created_at": getattr(plan, 'created_at', now_utc()).isoformat(),
             "status": getattr(plan, 'status', 'unknown'),
             "priority": getattr(plan, 'priority', 5),
             "summary": {
@@ -187,7 +187,7 @@ class MLTBridge:
                 for exp in raw_experiences:
                     experience_summary = {
                         "exp_id": getattr(exp, 'experience_id', 'unknown'),
-                        "timestamp": getattr(exp, 'timestamp', datetime.utcnow()).isoformat(),
+                        "timestamp": getattr(exp, 'timestamp', now_utc()).isoformat(),
                         "category": getattr(exp, 'category', 'unknown'),
                         "metrics": getattr(exp, 'metrics', {}),
                         "insights_generated": getattr(exp, 'insights_count', 0)
@@ -210,7 +210,7 @@ class MLTBridge:
                 for insight in raw_insights:
                     insight_summary = {
                         "insight_id": getattr(insight, 'insight_id', 'unknown'),
-                        "timestamp": getattr(insight, 'timestamp', datetime.utcnow()).isoformat(),
+                        "timestamp": getattr(insight, 'timestamp', now_utc()).isoformat(),
                         "type": getattr(insight, 'insight_type', 'unknown'),
                         "confidence": getattr(insight, 'confidence', 0.0),
                         "summary": getattr(insight, 'summary', 'No summary available')

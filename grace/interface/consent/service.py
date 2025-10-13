@@ -1,5 +1,6 @@
 """Consent and autonomy flow management."""
-from datetime import datetime, timedelta
+from datetime import timedelta
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional
 import logging
 import uuid
@@ -21,14 +22,14 @@ class ConsentService:
         
         expires_at = None
         if expires_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_days)
+            expires_at = now_utc() + timedelta(days=expires_days)
         
         consent = ConsentRecord(
             consent_id=consent_id,
             user_id=user_id,
             scope=scope,
             status="granted",
-            created_at=datetime.utcnow(),
+            created_at=now_utc(),
             expires_at=expires_at,
             evidence_uri=evidence_uri
         )
@@ -58,7 +59,7 @@ class ConsentService:
             user_id=user_id,
             scope=scope,
             status="denied",
-            created_at=datetime.utcnow(),
+            created_at=now_utc(),
             evidence_uri=evidence_uri
         )
         
@@ -69,8 +70,8 @@ class ConsentService:
     
     def check_consent(self, user_id: str, scope: str) -> bool:
         """Check if user has valid consent for scope."""
-        current_time = datetime.utcnow()
-        
+        current_time = now_utc()
+
         user_consents = [
             c for c in self.consents.values()
             if c.user_id == user_id and c.scope == scope
@@ -111,8 +112,8 @@ class ConsentService:
     
     def get_expiring_consents(self, days_ahead: int = 30) -> List[ConsentRecord]:
         """Get consents expiring within specified days."""
-        cutoff_date = datetime.utcnow() + timedelta(days=days_ahead)
-        
+        cutoff_date = now_utc() + timedelta(days=days_ahead)
+
         return [
             c for c in self.consents.values()
             if c.status == "granted" 
@@ -122,7 +123,7 @@ class ConsentService:
     
     def cleanup_expired_consents(self) -> int:
         """Mark expired consents as revoked and return count."""
-        current_time = datetime.utcnow()
+        current_time = now_utc()
         expired_count = 0
         
         for consent in self.consents.values():
@@ -170,7 +171,7 @@ class ConsentService:
             user_id=user_id,
             scope=scope,
             status="pending",
-            created_at=datetime.utcnow()
+            created_at=now_utc()
         )
         
         self.consents[consent_id] = consent

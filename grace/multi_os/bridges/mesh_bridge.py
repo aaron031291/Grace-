@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
+from grace.utils.time import iso_now_utc
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class MeshBridge:
                 "payload": payload,
                 "host_id": host_id,
                 "metadata": metadata or {},
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": iso_now_utc(),
                 "source": "multi_os_kernel"
             }
             
@@ -298,7 +299,7 @@ class MeshBridge:
             {
                 "target": target,
                 "snapshot_id": snapshot_id,
-                "at": datetime.utcnow().isoformat()
+                "at": iso_now_utc()
             }
         )
     

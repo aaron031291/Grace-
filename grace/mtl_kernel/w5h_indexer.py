@@ -1,6 +1,6 @@
 """W5H Indexer - Who/What/When/Where/Why/How indexing system."""
 import re
-from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional, Set
 
 from ..contracts.dto_common import W5HIndex, MemoryEntry
@@ -67,7 +67,7 @@ class W5HIndexer:
             index.how.extend(matches)
         
         # WHEN - Set current timestamp (could be enhanced with NLP)
-        index.when = datetime.utcnow()
+        index.when = now_utc()
         
         # Deduplicate and clean up
         index.who = list(set(index.who))

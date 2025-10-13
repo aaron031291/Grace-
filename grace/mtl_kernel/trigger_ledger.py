@@ -1,5 +1,5 @@
 """Trigger ledger - event recording and notification system."""
-from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional
 
 from ..contracts.dto_common import TriggerEvent
@@ -38,14 +38,14 @@ class TriggerLedger:
     
     def clear_old_events(self, max_age_days: int = 30) -> int:
         """Clear old events (optional cleanup)."""
-        cutoff = datetime.utcnow().timestamp() - (max_age_days * 24 * 60 * 60)
-        
+        cutoff = now_utc().timestamp() - (max_age_days * 24 * 60 * 60)
+
         old_events = [
             event for event in self.store.trigger_events 
             if event.created_at.timestamp() < cutoff
         ]
-        
+
         for event in old_events:
             self.store.trigger_events.remove(event)
-        
+
         return len(old_events)

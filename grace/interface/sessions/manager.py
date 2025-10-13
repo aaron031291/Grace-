@@ -2,6 +2,7 @@
 import asyncio
 import time
 from datetime import datetime, timedelta
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional
 import logging
 
@@ -31,8 +32,8 @@ class SessionManager:
                 session_id=session_id,
                 user=user_identity,
                 client=client_info,
-                created_at=datetime.utcnow(),
-                last_seen=datetime.utcnow()
+                created_at=now_utc(),
+                last_seen=now_utc()
             )
             
             self.sessions[session_id] = session
@@ -48,7 +49,7 @@ class SessionManager:
     def touch(self, session_id: str) -> None:
         """Update session last_seen timestamp."""
         if session_id in self.sessions:
-            self.sessions[session_id].last_seen = datetime.utcnow()
+            self.sessions[session_id].last_seen = now_utc()
     
     def get_session(self, session_id: str) -> Optional[UISession]:
         """Get session by ID."""
@@ -97,7 +98,7 @@ class SessionManager:
         """Background task to remove expired sessions."""
         while True:
             try:
-                current_time = datetime.utcnow()
+                current_time = now_utc()
                 expired_sessions = []
                 
                 for session_id, session in self.sessions.items():
@@ -122,23 +123,24 @@ class SessionManager:
     
     def get_stats(self) -> Dict:
         """Get session manager statistics."""
-        current_time = datetime.utcnow()
-        
+        current_time = now_utc()
+
         # Calculate session age distribution
         session_ages = []
         for session in self.sessions.values():
-            age = (current_time - session.created_at).total_seconds()
-            session_ages.append(age)
-        
+            if session.created_at:
+                age = (current_time - session.created_at).total_seconds()
+                session_ages.append(age)
+
         # Count by roles
         role_counts = {}
         for session in self.sessions.values():
-            for role in session.user.roles:
+            for role in getattr(session.user, "roles", []):
                 role_counts[role] = role_counts.get(role, 0) + 1
-        
+
         return {
             "total_sessions": len(self.sessions),
             "session_timeout_minutes": self.session_timeout.total_seconds() / 60,
             "role_distribution": role_counts,
-            "avg_session_age_seconds": sum(session_ages) / len(session_ages) if session_ages else 0
+            "avg_session_age_seconds": (sum(session_ages) / len(session_ages)) if session_ages else 0,
         }

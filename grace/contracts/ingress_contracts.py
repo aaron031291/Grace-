@@ -1,6 +1,7 @@
 """
 Ingress Kernel Contracts - Data models for ingestion pipeline.
 """
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
@@ -25,6 +26,7 @@ def generate_source_id(prefix: str = "src") -> str:
 
 class SourceKind(str, Enum):
     """Source types for ingestion."""
+
     HTTP = "http"
     RSS = "rss"
     S3 = "s3"
@@ -42,6 +44,7 @@ class SourceKind(str, Enum):
 
 class AuthMode(str, Enum):
     """Authentication modes."""
+
     NONE = "none"
     BEARER = "bearer"
     BASIC = "basic"
@@ -54,6 +57,7 @@ class AuthMode(str, Enum):
 
 class ParserType(str, Enum):
     """Parser types for content processing."""
+
     JSON = "json"
     CSV = "csv"
     HTML = "html"
@@ -65,6 +69,7 @@ class ParserType(str, Enum):
 
 class PIIPolicy(str, Enum):
     """PII handling policies."""
+
     BLOCK = "block"
     MASK = "mask"
     HASH = "hash"
@@ -73,6 +78,7 @@ class PIIPolicy(str, Enum):
 
 class GovernanceLabel(str, Enum):
     """Governance classification labels."""
+
     PUBLIC = "public"
     INTERNAL = "internal"
     RESTRICTED = "restricted"
@@ -80,6 +86,7 @@ class GovernanceLabel(str, Enum):
 
 class RawEventKind(str, Enum):
     """Raw event content types."""
+
     JSON = "json"
     CSV = "csv"
     HTML = "html"
@@ -92,6 +99,7 @@ class RawEventKind(str, Enum):
 
 class SourceConfig(BaseModel):
     """Source registration configuration."""
+
     source_id: str = Field(..., pattern=r"src_[a-z0-9_-]{3,40}")
     kind: SourceKind
     uri: str
@@ -109,6 +117,7 @@ class SourceConfig(BaseModel):
 
 class RawEvent(BaseModel):
     """Raw event before normalization (Bronze tier)."""
+
     event_id: str = Field(..., pattern=r"rev_[a-z0-9]{8,}")
     source_id: str
     kind: RawEventKind
@@ -122,6 +131,7 @@ class RawEvent(BaseModel):
 
 class SourceInfo(BaseModel):
     """Source information in normalized record."""
+
     source_id: str
     uri: str
     fetched_at: datetime
@@ -131,6 +141,7 @@ class SourceInfo(BaseModel):
 
 class QualityMetrics(BaseModel):
     """Quality metrics for normalized record."""
+
     validity_score: float = Field(..., ge=0.0, le=1.0)
     completeness: float = Field(..., ge=0.0, le=1.0)
     freshness_minutes: float = Field(..., ge=0.0)
@@ -140,12 +151,14 @@ class QualityMetrics(BaseModel):
 
 class LineageInfo(BaseModel):
     """Lineage information for traceability."""
+
     raw_event_id: str
     transforms: List[str] = Field(default_factory=list)
 
 
 class NormRecord(BaseModel):
     """Normalized record (Silver tier)."""
+
     record_id: str = Field(..., pattern=r"rec_[a-z0-9]{8,}")
     contract: str  # e.g., contract:article.v1
     body: Dict[str, Any]  # conforms to contract schema
@@ -158,6 +171,7 @@ class NormRecord(BaseModel):
 # Contract schemas for specific content types
 class ArticleContract(BaseModel):
     """Article content contract (contract:article.v1)."""
+
     title: str
     author: Optional[str] = None
     published_at: Optional[datetime] = None
@@ -173,6 +187,7 @@ class ArticleContract(BaseModel):
 
 class TranscriptSegment(BaseModel):
     """Transcript segment."""
+
     t0: float  # start time
     t1: float  # end time
     text: str
@@ -181,6 +196,7 @@ class TranscriptSegment(BaseModel):
 
 class TranscriptContract(BaseModel):
     """Transcript content contract (contract:transcript.v1)."""
+
     media_id: str
     start_at: Optional[datetime] = None
     duration_s: Optional[float] = None
@@ -191,12 +207,14 @@ class TranscriptContract(BaseModel):
 
 class TabularColumn(BaseModel):
     """Column definition for tabular data."""
+
     name: str
     type: str  # data type
 
 
 class TabularContract(BaseModel):
     """Tabular data contract (contract:tabular.v1)."""
+
     dataset_id: str
     columns: List[TabularColumn]
     rows_uri: str  # pointer to parquet/csv
@@ -206,6 +224,7 @@ class TabularContract(BaseModel):
 # Experience data for MLT feedback
 class IngressExperience(BaseModel):
     """Experience data sent to MLT for learning."""
+
     exp_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_id: str
     stage: str  # capture, parse, normalize, validate, enrich, persist, publish
@@ -217,6 +236,7 @@ class IngressExperience(BaseModel):
 # Snapshot structure for rollback capability
 class IngressSnapshot(BaseModel):
     """Ingress system snapshot for rollback."""
+
     snapshot_id: str
     active_sources: List[str]
     registry_hash: str

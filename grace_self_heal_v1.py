@@ -34,21 +34,27 @@ from typing import Any, Dict, List, Optional, Tuple, Callable
 # Utilities
 # -----------------------------
 
+
 def now_ts() -> float:
     return time.time()
+
 
 def new_id() -> str:
     return str(uuid.uuid4())
 
+
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
 
 def pretty(d: Any) -> str:
     return json.dumps(d, ensure_ascii=False, indent=2, sort_keys=True)
 
+
 # -----------------------------
 # Immutable Log + Annotations (append-only, in-memory; replace with DB later)
 # -----------------------------
+
 
 @dataclass
 class LogEntry:
@@ -61,6 +67,7 @@ class LogEntry:
     prev_hash: Optional[str]
     self_hash: str
 
+
 @dataclass
 class Annotation:
     id: int
@@ -70,12 +77,15 @@ class Annotation:
     data: Dict[str, Any]
     created_at: float
 
+
 class ImmutableLog:
     def __init__(self):
         self._entries: List[LogEntry] = []
         self._ann: List[Annotation] = []
 
-    def append(self, service: str, level: str, event_type: str, payload: Dict[str, Any]) -> int:
+    def append(
+        self, service: str, level: str, event_type: str, payload: Dict[str, Any]
+    ) -> int:
         prev_hash = self._entries[-1].self_hash if self._entries else None
         base = {
             "ts": now_ts(),
@@ -86,21 +96,36 @@ class ImmutableLog:
             "prev_hash": prev_hash or "",
         }
         h = sha256_hex(pretty(base))
-        entry = LogEntry(id=len(self._entries)+1, ts=base["ts"], service=service,
-                         level=level, event_type=event_type, payload=payload,
-                         prev_hash=prev_hash, self_hash=h)
+        entry = LogEntry(
+            id=len(self._entries) + 1,
+            ts=base["ts"],
+            service=service,
+            level=level,
+            event_type=event_type,
+            payload=payload,
+            prev_hash=prev_hash,
+            self_hash=h,
+        )
         self._entries.append(entry)
         return entry.id
 
-    def annotate(self, log_id: int, kind: str, author: str, data: Dict[str, Any]) -> int:
-        ann = Annotation(id=len(self._ann)+1, log_id=log_id, kind=kind,
-                         author=author, data=data, created_at=now_ts())
+    def annotate(
+        self, log_id: int, kind: str, author: str, data: Dict[str, Any]
+    ) -> int:
+        ann = Annotation(
+            id=len(self._ann) + 1,
+            log_id=log_id,
+            kind=kind,
+            author=author,
+            data=data,
+            created_at=now_ts(),
+        )
         self._ann.append(ann)
         return ann.id
 
     def get(self, log_id: int) -> Optional[LogEntry]:
         if 1 <= log_id <= len(self._entries):
-            return self._entries[log_id-1]
+            return self._entries[log_id - 1]
         return None
 
     def find_latest_id_by_event(self, event_type: str) -> Optional[int]:
@@ -115,9 +140,11 @@ class ImmutableLog:
     def dump_annotations(self) -> List[Dict[str, Any]]:
         return [asdict(a) for a in self._ann]
 
+
 # -----------------------------
 # Layer 3: Execution → KPIs/Trust → Meta-Learning
 # -----------------------------
+
 
 @dataclass
 class KPIs:
@@ -130,12 +157,14 @@ class KPIs:
             else:
                 self.snapshot[key] = value
 
+
 @dataclass
 class TrustLedger:
     scores: Dict[str, float] = field(default_factory=dict)
 
     def update(self, service: str, score: float):
         self.scores[service] = score
+
 
 @dataclass
 class MetaLearning:
@@ -144,9 +173,11 @@ class MetaLearning:
     def update(self, model: str, threshold: float):
         self.thresholds[model] = threshold
 
+
 # -----------------------------
 # Layer 2: Group/SubSystem Consensus
 # -----------------------------
+
 
 class EventBus:
     def __init__(self):
@@ -162,9 +193,11 @@ class EventBus:
             for callback in self._subscribers[event_type]:
                 callback(data)
 
+
 # -----------------------------
 # Layer 1: Individual File Consensus
 # -----------------------------
+
 
 class SLOAnomalyDetector:
     def __init__(self, kpis: KPIs):
@@ -177,6 +210,7 @@ class SLOAnomalyDetector:
             if value > 100:  # Arbitrary threshold for demo
                 anomalies.append(key)
         return anomalies
+
 
 class RCACorrelator:
     def __init__(self, log: ImmutableLog):
@@ -191,6 +225,7 @@ class RCACorrelator:
             correlations[entry["event_type"]] += 1
         return correlations
 
+
 class AutoPatchProposer:
     def __init__(self, correlations: Dict[str, int]):
         self.correlations = correlations
@@ -202,6 +237,7 @@ class AutoPatchProposer:
             if value > 1:  # Arbitrary threshold for demo
                 proposals.append(f"Patch for {key}")
         return proposals
+
 
 class L1Consensus:
     def __init__(self, log: ImmutableLog):
@@ -217,6 +253,7 @@ class L1Consensus:
         # Return the event type with the highest votes
         return max(votes.items(), key=lambda x: x[1])[0]
 
+
 class L2Consensus:
     def __init__(self, bus: EventBus):
         self.bus = bus
@@ -224,23 +261,28 @@ class L2Consensus:
     def decide(self):
         # Dummy implementation: listen to events and decide based on latest
         latest_event = None
+
         def listener(data):
             nonlocal latest_event
             latest_event = data
+
         self.bus.subscribe("layer1_decision", listener)
         # Wait for a decision from Layer 1
         while latest_event is None:
             time.sleep(0.1)
         return latest_event
 
+
 # -----------------------------
 # Sandbox, Governance, Blue/Green Deployer
 # -----------------------------
+
 
 class SandboxExecutor:
     def execute(self, patch: str):
         # Dummy implementation: just log the execution
         print(f"Sandbox executing: {patch}")
+
 
 class GovernanceGate:
     def __init__(self, bus: EventBus):
@@ -251,19 +293,23 @@ class GovernanceGate:
         print(f"Governance approved: {decision}")
         self.bus.publish("governance_approved", decision)
 
+
 class BlueGreenDeployer:
     def deploy(self, version: str):
         # Dummy implementation: just log the deployment
         print(f"Blue/Green deploying: {version}")
 
+
 # -----------------------------
 # Metrics, Forensics, Health
 # -----------------------------
+
 
 class MetricsEmitter:
     def emit(self, data: Dict[str, float]):
         # Dummy implementation: just print the metrics
         print("Metrics emitted:", data)
+
 
 class ForensicTools:
     def analyze(self, log: ImmutableLog):
@@ -272,14 +318,17 @@ class ForensicTools:
         for entry in log.dump():
             print(f"- {entry['event_type']} at {entry['ts']}")
 
+
 class PipelineHealth:
     def check(self):
         # Dummy implementation: always healthy
         return True
 
+
 # -----------------------------
 # The System: orchestrates all layers and components
 # -----------------------------
+
 
 class System:
     def __init__(self):
@@ -306,25 +355,38 @@ class System:
         # Step 1: Detect anomalies
         anomalies = self.detector.detect()
         if anomalies:
-            self.log.append("anomaly_detector", "info", "anomaly_detected", {"anomalies": anomalies})
+            self.log.append(
+                "anomaly_detector", "info", "anomaly_detected", {"anomalies": anomalies}
+            )
 
         # Step 2: Correlate RCA
         correlations = self.correlator.correlate()
-        self.log.append("rca_correlator", "info", "rca_correlated", {"correlations": correlations})
+        self.log.append(
+            "rca_correlator", "info", "rca_correlated", {"correlations": correlations}
+        )
 
         # Step 3: Propose patches
         self.proposer = AutoPatchProposer(correlations)
         patch_proposals = self.proposer.propose()
         if patch_proposals:
-            self.log.append("patch_proposer", "info", "patch_proposed", {"proposals": patch_proposals})
+            self.log.append(
+                "patch_proposer",
+                "info",
+                "patch_proposed",
+                {"proposals": patch_proposals},
+            )
 
         # Step 4: L1 Consensus
         l1_decision = self.l1_consensus.decide()
-        self.log.append("l1_consensus", "info", "l1_decision", {"decision": l1_decision})
+        self.log.append(
+            "l1_consensus", "info", "l1_decision", {"decision": l1_decision}
+        )
 
         # Step 5: L2 Consensus
         l2_decision = self.l2_consensus.decide()
-        self.log.append("l2_consensus", "info", "l2_decision", {"decision": l2_decision})
+        self.log.append(
+            "l2_consensus", "info", "l2_decision", {"decision": l2_decision}
+        )
 
         # Step 6: Sandbox execution
         self.sandbox.execute(l2_decision)
@@ -358,13 +420,22 @@ class System:
         else:
             self.log.append("pipeline_health", "info", "pipeline_healthy", {})
 
+
 # -----------------------------
 # Demo function: showcases the system in action
 # -----------------------------
 
+
 async def demo():
     sys = System()
-    print("\n== BEFORE == KPIs:", sys.kpis.snapshot, "Trust:", sys.trust.scores, "Thresholds:", sys.meta.thresholds)
+    print(
+        "\n== BEFORE == KPIs:",
+        sys.kpis.snapshot,
+        "Trust:",
+        sys.trust.scores,
+        "Thresholds:",
+        sys.meta.thresholds,
+    )
 
     # Kick one full loop
     await sys.run_once()
@@ -372,7 +443,14 @@ async def demo():
     # Wait a bit for async handlers to cascade
     await asyncio.sleep(0.5)
 
-    print("\n== AFTER  == KPIs:", sys.kpis.snapshot, "Trust:", sys.trust.scores, "Thresholds:", sys.meta.thresholds)
+    print(
+        "\n== AFTER  == KPIs:",
+        sys.kpis.snapshot,
+        "Trust:",
+        sys.trust.scores,
+        "Thresholds:",
+        sys.meta.thresholds,
+    )
 
     # Show latest immutable log summary (last 12 entries)
     last_entries = sys.log.dump()[-12:]
@@ -389,6 +467,7 @@ async def demo():
     await sys.run_pipeline_probe()
 
     print("\n== PIPELINE PROBE DONE ==")
+
 
 if __name__ == "__main__":
     asyncio.run(demo())

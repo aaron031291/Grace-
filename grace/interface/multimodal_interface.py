@@ -9,14 +9,14 @@ Enhanced capabilities for the Grace Unified Orb Interface:
 - Background/parallel processing
 - Private LLM integration
 """
+
 import uuid
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
-import tempfile
 import os
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class MediaType(Enum):
     """Types of media content."""
+
     SCREEN_RECORDING = "screen_recording"
     AUDIO_RECORDING = "audio_recording"
     VIDEO_RECORDING = "video_recording"
@@ -34,6 +35,7 @@ class MediaType(Enum):
 
 class ProcessingState(Enum):
     """Background processing states."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -43,6 +45,7 @@ class ProcessingState(Enum):
 @dataclass
 class MediaSession:
     """Media session for screen sharing or recording."""
+
     session_id: str
     media_type: MediaType
     user_id: str
@@ -57,6 +60,7 @@ class MediaSession:
 @dataclass
 class VoiceSettings:
     """Voice input/output settings."""
+
     enabled: bool = False
     input_device: Optional[str] = None
     output_device: Optional[str] = None
@@ -70,6 +74,7 @@ class VoiceSettings:
 @dataclass
 class BackgroundTask:
     """Background processing task."""
+
     task_id: str
     task_type: str
     status: ProcessingState
@@ -87,32 +92,32 @@ class MultimodalInterface:
     Grace Multimodal Interface providing screen sharing, recording,
     voice I/O, and background processing capabilities.
     """
-    
+
     def __init__(self, orb_interface):
         self.orb_interface = orb_interface
         self.version = "1.0.0"
-        
+
         # Media sessions management
         self.active_media_sessions: Dict[str, MediaSession] = {}
-        
+
         # Voice settings per user
         self.voice_settings: Dict[str, VoiceSettings] = {}
-        
+
         # Background task management
         self.background_tasks: Dict[str, BackgroundTask] = {}
         self.task_queue = asyncio.Queue()
         self.worker_pool: List[asyncio.Task] = []
-        
+
         # WebRTC connections for screen sharing
         self.webrtc_connections: Dict[str, Dict[str, Any]] = {}
-        
+
         # Recording storage
         self.recording_storage_path = "/tmp/grace_recordings"
         os.makedirs(self.recording_storage_path, exist_ok=True)
-        
+
         # Worker initialization flag
         self._workers_initialized = False
-        
+
         logger.info("Grace Multimodal Interface initialized")
 
     async def _ensure_workers_initialized(self):
@@ -148,7 +153,7 @@ class MultimodalInterface:
             task.status = ProcessingState.PROCESSING
             task.started_time = datetime.utcnow().isoformat()
             logger.info(f"Worker {worker_name} processing task {task.task_id}")
-            
+
             # Process based on task type
             if task.task_type == "transcribe_audio":
                 result = await self._transcribe_audio_task(task)
@@ -160,14 +165,14 @@ class MultimodalInterface:
                 result = await self._ingest_recording_task(task)
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
-            
+
             task.result = result
             task.status = ProcessingState.COMPLETED
             task.completed_time = datetime.utcnow().isoformat()
             task.progress_percentage = 100.0
-            
+
             logger.info(f"Task {task.task_id} completed by {worker_name}")
-            
+
         except Exception as e:
             task.status = ProcessingState.FAILED
             task.error_message = str(e)
@@ -175,30 +180,29 @@ class MultimodalInterface:
             logger.error(f"Task {task.task_id} failed: {e}")
 
     # Screen Sharing Methods
-    
-    async def start_screen_share(self, user_id: str, quality_settings: Optional[Dict[str, Any]] = None) -> str:
+
+    async def start_screen_share(
+        self, user_id: str, quality_settings: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Start a screen sharing session."""
         await self._ensure_workers_initialized()
-        
+
         session_id = f"screen_share_{uuid.uuid4().hex[:8]}"
-        
+
         session = MediaSession(
             session_id=session_id,
             media_type=MediaType.LIVE_SCREEN_SHARE,
             user_id=user_id,
             start_time=datetime.utcnow().isoformat(),
-            quality_settings=quality_settings or {
-                "resolution": "1920x1080",
-                "framerate": 30,
-                "bitrate": 2000
-            }
+            quality_settings=quality_settings
+            or {"resolution": "1920x1080", "framerate": 30, "bitrate": 2000},
         )
-        
+
         self.active_media_sessions[session_id] = session
-        
+
         # Initialize WebRTC connection
         await self._setup_webrtc_connection(session_id, user_id)
-        
+
         logger.info(f"Started screen sharing session {session_id} for user {user_id}")
         return session_id
 
@@ -206,14 +210,14 @@ class MultimodalInterface:
         """Stop a screen sharing session."""
         if session_id not in self.active_media_sessions:
             return False
-        
+
         session = self.active_media_sessions[session_id]
         session.status = "ended"
-        
+
         # Cleanup WebRTC connection
         if session_id in self.webrtc_connections:
             await self._cleanup_webrtc_connection(session_id)
-        
+
         del self.active_media_sessions[session_id]
         logger.info(f"Stopped screen sharing session {session_id}")
         return True
@@ -226,7 +230,7 @@ class MultimodalInterface:
             "user_id": user_id,
             "peer_connection": None,  # Would be actual WebRTC peer connection
             "data_channel": None,
-            "created_time": datetime.utcnow().isoformat()
+            "created_time": datetime.utcnow().isoformat(),
         }
 
     async def _cleanup_webrtc_connection(self, session_id: str):
@@ -236,60 +240,67 @@ class MultimodalInterface:
             del self.webrtc_connections[session_id]
 
     # Recording Methods
-    
-    async def start_recording(self, user_id: str, media_type: MediaType, 
-                            metadata: Optional[Dict[str, Any]] = None) -> str:
+
+    async def start_recording(
+        self,
+        user_id: str,
+        media_type: MediaType,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Start recording (audio, video, or screen)."""
         await self._ensure_workers_initialized()
-        
+
         session_id = f"recording_{media_type.value}_{uuid.uuid4().hex[:8]}"
-        
+
         # Generate file path for recording
         file_extension = self._get_file_extension(media_type)
         file_path = os.path.join(
-            self.recording_storage_path,
-            f"{session_id}.{file_extension}"
+            self.recording_storage_path, f"{session_id}.{file_extension}"
         )
-        
+
         session = MediaSession(
             session_id=session_id,
             media_type=media_type,
             user_id=user_id,
             start_time=datetime.utcnow().isoformat(),
             file_path=file_path,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
-        
+
         self.active_media_sessions[session_id] = session
-        
+
         # Start actual recording (placeholder)
         await self._start_media_recording(session)
-        
-        logger.info(f"Started {media_type.value} recording {session_id} for user {user_id}")
+
+        logger.info(
+            f"Started {media_type.value} recording {session_id} for user {user_id}"
+        )
         return session_id
 
     async def stop_recording(self, session_id: str) -> Dict[str, Any]:
         """Stop recording and return session info."""
         if session_id not in self.active_media_sessions:
             raise ValueError(f"Recording session {session_id} not found")
-        
+
         session = self.active_media_sessions[session_id]
         session.status = "ended"
-        
+
         # Stop recording
         await self._stop_media_recording(session)
-        
+
         # Queue background processing task for recording
         await self._queue_recording_processing(session)
-        
+
         result = {
             "session_id": session_id,
             "file_path": session.file_path,
             "duration": session.duration_seconds,
             "media_type": session.media_type.value,
-            "size_bytes": self._get_file_size(session.file_path) if session.file_path else 0
+            "size_bytes": self._get_file_size(session.file_path)
+            if session.file_path
+            else 0,
         }
-        
+
         logger.info(f"Stopped recording {session_id}")
         return result
 
@@ -306,8 +317,10 @@ class MultimodalInterface:
         if session.file_path and os.path.exists(session.file_path):
             # Mock duration calculation
             session.duration_seconds = (
-                datetime.fromisoformat(datetime.utcnow().isoformat().replace('Z', '+00:00')) - 
-                datetime.fromisoformat(session.start_time.replace('Z', '+00:00'))
+                datetime.fromisoformat(
+                    datetime.utcnow().isoformat().replace("Z", "+00:00")
+                )
+                - datetime.fromisoformat(session.start_time.replace("Z", "+00:00"))
             ).total_seconds()
 
     def _get_file_extension(self, media_type: MediaType) -> str:
@@ -316,7 +329,7 @@ class MultimodalInterface:
             MediaType.SCREEN_RECORDING: "mp4",
             MediaType.AUDIO_RECORDING: "wav",
             MediaType.VIDEO_RECORDING: "mp4",
-            MediaType.VOICE_INPUT: "wav"
+            MediaType.VOICE_INPUT: "wav",
         }
         return extensions.get(media_type, "dat")
 
@@ -328,31 +341,31 @@ class MultimodalInterface:
             return 0
 
     # Voice Interface Methods
-    
+
     async def set_voice_settings(self, user_id: str, settings: Dict[str, Any]):
         """Set voice input/output settings for user."""
         current_settings = self.voice_settings.get(user_id, VoiceSettings())
-        
+
         # Update settings
         for key, value in settings.items():
             if hasattr(current_settings, key):
                 setattr(current_settings, key, value)
-        
+
         self.voice_settings[user_id] = current_settings
-        
+
         # If enabling voice, start voice processing
         if current_settings.enabled:
             await self._initialize_voice_processing(user_id)
-        
+
         logger.info(f"Updated voice settings for user {user_id}")
 
     async def toggle_voice(self, user_id: str, enable: bool) -> bool:
         """Toggle voice input/output for user."""
         settings = self.voice_settings.get(user_id, VoiceSettings())
         settings.enabled = enable
-        
+
         await self.set_voice_settings(user_id, {"enabled": enable})
-        
+
         return enable
 
     async def _initialize_voice_processing(self, user_id: str):
@@ -362,24 +375,26 @@ class MultimodalInterface:
         pass
 
     # Background Processing Methods
-    
-    async def queue_background_task(self, task_type: str, metadata: Dict[str, Any]) -> str:
+
+    async def queue_background_task(
+        self, task_type: str, metadata: Dict[str, Any]
+    ) -> str:
         """Queue a background processing task."""
         await self._ensure_workers_initialized()
-        
+
         task_id = f"task_{task_type}_{uuid.uuid4().hex[:8]}"
-        
+
         task = BackgroundTask(
             task_id=task_id,
             task_type=task_type,
             status=ProcessingState.PENDING,
             created_time=datetime.utcnow().isoformat(),
-            metadata=metadata
+            metadata=metadata,
         )
-        
+
         self.background_tasks[task_id] = task
         await self.task_queue.put(task_id)
-        
+
         logger.info(f"Queued background task {task_id} of type {task_type}")
         return task_id
 
@@ -387,72 +402,80 @@ class MultimodalInterface:
         """Queue recording for processing and ingestion."""
         if not session.file_path:
             return
-        
+
         # Queue transcription if audio
         if session.media_type in [MediaType.AUDIO_RECORDING, MediaType.VOICE_INPUT]:
-            await self.queue_background_task("transcribe_audio", {
+            await self.queue_background_task(
+                "transcribe_audio",
+                {
+                    "file_path": session.file_path,
+                    "session_id": session.session_id,
+                    "user_id": session.user_id,
+                },
+            )
+
+        # Queue recording ingestion
+        await self.queue_background_task(
+            "ingest_recording",
+            {
                 "file_path": session.file_path,
                 "session_id": session.session_id,
-                "user_id": session.user_id
-            })
-        
-        # Queue recording ingestion
-        await self.queue_background_task("ingest_recording", {
-            "file_path": session.file_path,
-            "session_id": session.session_id,
-            "media_type": session.media_type.value,
-            "user_id": session.user_id,
-            "metadata": session.metadata
-        })
+                "media_type": session.media_type.value,
+                "user_id": session.user_id,
+                "metadata": session.metadata,
+            },
+        )
 
     # Task Processing Methods
-    
+
     async def _transcribe_audio_task(self, task: BackgroundTask) -> Dict[str, Any]:
         """Transcribe audio file (mock implementation)."""
         file_path = task.metadata.get("file_path")
-        
+
         # Mock transcription process
         await asyncio.sleep(2)  # Simulate processing time
         task.progress_percentage = 50.0
-        
+
         await asyncio.sleep(2)  # Continue processing
-        
+
         # Mock transcription result
         return {
             "transcript": "This is a mock transcription of the audio content.",
             "confidence": 0.95,
             "language": "en-US",
             "duration": 4.5,
-            "word_count": 10
+            "word_count": 10,
         }
 
-    async def _process_screen_recording_task(self, task: BackgroundTask) -> Dict[str, Any]:
+    async def _process_screen_recording_task(
+        self, task: BackgroundTask
+    ) -> Dict[str, Any]:
         """Process screen recording (mock implementation)."""
         # Mock screen recording processing
         await asyncio.sleep(3)
         task.progress_percentage = 33.0
-        
+
         await asyncio.sleep(3)
         task.progress_percentage = 66.0
-        
+
         await asyncio.sleep(3)
-        
+
         return {
             "processed": True,
             "key_frames": 25,
             "detected_actions": ["click", "type", "scroll"],
-            "text_regions": ["Login", "Dashboard", "Settings"]
+            "text_regions": ["Login", "Dashboard", "Settings"],
         }
 
     async def _analyze_video_task(self, task: BackgroundTask) -> Dict[str, Any]:
         """Analyze video content (mock implementation)."""
         await asyncio.sleep(5)
-        
+
         return {
             "analyzed": True,
             "scenes": 3,
             "objects_detected": ["person", "screen", "desk"],
-            "duration": 30.5
+            "duration": 30.5,
         }
 
     async def _ingest_recording_task(self, task: BackgroundTask) -> Dict[str, Any]:
@@ -460,10 +483,10 @@ class MultimodalInterface:
         file_path = task.metadata.get("file_path")
         media_type = task.metadata.get("media_type")
         user_id = task.metadata.get("user_id")
-        
+
         if not file_path or not os.path.exists(file_path):
             raise ValueError("Recording file not found")
-        
+
         # Create memory fragment for recording
         fragment_id = await self.orb_interface.upload_document(
             user_id=user_id,
@@ -472,39 +495,43 @@ class MultimodalInterface:
             metadata={
                 **task.metadata,
                 "ingested_via": "recording_pipeline",
-                "processing_time": datetime.utcnow().isoformat()
-            }
+                "processing_time": datetime.utcnow().isoformat(),
+            },
         )
-        
+
         return {
             "ingested": True,
             "fragment_id": fragment_id,
             "file_path": file_path,
-            "media_type": media_type
+            "media_type": media_type,
         }
 
     # Status and Management Methods
-    
-    def get_active_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+
+    def get_active_sessions(
+        self, user_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Get active media sessions."""
         sessions = []
         for session in self.active_media_sessions.values():
             if user_id is None or session.user_id == user_id:
-                sessions.append({
-                    "session_id": session.session_id,
-                    "media_type": session.media_type.value,
-                    "user_id": session.user_id,
-                    "start_time": session.start_time,
-                    "status": session.status,
-                    "duration": session.duration_seconds
-                })
+                sessions.append(
+                    {
+                        "session_id": session.session_id,
+                        "media_type": session.media_type.value,
+                        "user_id": session.user_id,
+                        "start_time": session.start_time,
+                        "status": session.status,
+                        "duration": session.duration_seconds,
+                    }
+                )
         return sessions
 
     def get_background_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Get status of background task."""
         if task_id not in self.background_tasks:
             return None
-        
+
         task = self.background_tasks[task_id]
         return {
             "task_id": task.task_id,
@@ -515,7 +542,7 @@ class MultimodalInterface:
             "started_time": task.started_time,
             "completed_time": task.completed_time,
             "result": task.result,
-            "error": task.error_message
+            "error": task.error_message,
         }
 
     def get_voice_settings(self, user_id: str) -> Dict[str, Any]:
@@ -528,7 +555,7 @@ class MultimodalInterface:
             "language": settings.language,
             "voice_id": settings.voice_id,
             "continuous_listening": settings.continuous_listening,
-            "noise_suppression": settings.noise_suppression
+            "noise_suppression": settings.noise_suppression,
         }
 
     def get_stats(self) -> Dict[str, Any]:
@@ -538,12 +565,38 @@ class MultimodalInterface:
             "active_sessions": len(self.active_media_sessions),
             "background_tasks": {
                 "total": len(self.background_tasks),
-                "pending": len([t for t in self.background_tasks.values() if t.status == ProcessingState.PENDING]),
-                "processing": len([t for t in self.background_tasks.values() if t.status == ProcessingState.PROCESSING]),
-                "completed": len([t for t in self.background_tasks.values() if t.status == ProcessingState.COMPLETED]),
-                "failed": len([t for t in self.background_tasks.values() if t.status == ProcessingState.FAILED])
+                "pending": len(
+                    [
+                        t
+                        for t in self.background_tasks.values()
+                        if t.status == ProcessingState.PENDING
+                    ]
+                ),
+                "processing": len(
+                    [
+                        t
+                        for t in self.background_tasks.values()
+                        if t.status == ProcessingState.PROCESSING
+                    ]
+                ),
+                "completed": len(
+                    [
+                        t
+                        for t in self.background_tasks.values()
+                        if t.status == ProcessingState.COMPLETED
+                    ]
+                ),
+                "failed": len(
+                    [
+                        t
+                        for t in self.background_tasks.values()
+                        if t.status == ProcessingState.FAILED
+                    ]
+                ),
             },
             "webrtc_connections": len(self.webrtc_connections),
-            "voice_enabled_users": len([s for s in self.voice_settings.values() if s.enabled]),
-            "workers": len(self.worker_pool)
+            "voice_enabled_users": len(
+                [s for s in self.voice_settings.values() if s.enabled]
+            ),
+            "workers": len(self.worker_pool),
         }

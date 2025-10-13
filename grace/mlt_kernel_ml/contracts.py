@@ -1,6 +1,7 @@
 """
 Core data contracts for MLT Kernel ML components.
 """
+
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,6 +52,7 @@ class ActionType(Enum):
 @dataclass
 class Experience:
     """Input experience from various sources."""
+
     experience_id: str
     source: ExperienceSource
     task: TaskType
@@ -58,9 +60,9 @@ class Experience:
     signals: Dict[str, Any]
     ground_truth_lag_s: int
     timestamp: datetime
-    
+
     @classmethod
-    def from_dict(cls, data: Dict) -> 'Experience':
+    def from_dict(cls, data: Dict) -> "Experience":
         return cls(
             experience_id=data["experience_id"],
             source=ExperienceSource(data["source"]),
@@ -68,9 +70,9 @@ class Experience:
             context=data["context"],
             signals=data["signals"],
             ground_truth_lag_s=data["ground_truth_lag_s"],
-            timestamp=datetime.fromisoformat(data["timestamp"])
+            timestamp=datetime.fromisoformat(data["timestamp"]),
         )
-    
+
     def to_dict(self) -> Dict:
         return {
             "experience_id": self.experience_id,
@@ -79,13 +81,14 @@ class Experience:
             "context": self.context,
             "signals": self.signals,
             "ground_truth_lag_s": self.ground_truth_lag_s,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
 @dataclass
 class Insight:
     """Generated insight from experience analysis."""
+
     insight_id: str
     type: InsightType
     scope: str
@@ -93,9 +96,9 @@ class Insight:
     confidence: float
     recommendation: RecommendationType
     timestamp: datetime
-    
+
     @classmethod
-    def from_dict(cls, data: Dict) -> 'Insight':
+    def from_dict(cls, data: Dict) -> "Insight":
         return cls(
             insight_id=data["insight_id"],
             type=InsightType(data["type"]),
@@ -103,9 +106,9 @@ class Insight:
             evidence=data["evidence"],
             confidence=data["confidence"],
             recommendation=RecommendationType(data["recommendation"]),
-            timestamp=datetime.fromisoformat(data["timestamp"])
+            timestamp=datetime.fromisoformat(data["timestamp"]),
         )
-    
+
     def to_dict(self) -> Dict:
         return {
             "insight_id": self.insight_id,
@@ -114,13 +117,14 @@ class Insight:
             "evidence": self.evidence,
             "confidence": self.confidence,
             "recommendation": self.recommendation.value,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
 @dataclass
 class Action:
     """Single action in an adaptation plan."""
+
     type: ActionType
     target: Optional[str] = None
     budget: Optional[Dict[str, Any]] = None
@@ -131,7 +135,7 @@ class Action:
     to_value: Optional[Any] = None
     target_model: Optional[str] = None
     steps: Optional[List[int]] = None
-    
+
     def to_dict(self) -> Dict:
         result = {"type": self.type.value}
         if self.target:
@@ -158,36 +162,41 @@ class Action:
 @dataclass
 class AdaptationPlan:
     """Concrete adaptation plan for governance approval."""
+
     plan_id: str
     actions: List[Action]
     expected_effect: Dict[str, str]
     risk_controls: Dict[str, Union[int, float]]
     timestamp: datetime
-    
+
     @classmethod
-    def from_dict(cls, data: Dict) -> 'AdaptationPlan':
-        actions = [Action(**action) if isinstance(action, dict) else action for action in data["actions"]]
+    def from_dict(cls, data: Dict) -> "AdaptationPlan":
+        actions = [
+            Action(**action) if isinstance(action, dict) else action
+            for action in data["actions"]
+        ]
         return cls(
             plan_id=data["plan_id"],
             actions=actions,
             expected_effect=data["expected_effect"],
             risk_controls=data["risk_controls"],
-            timestamp=datetime.fromisoformat(data["timestamp"])
+            timestamp=datetime.fromisoformat(data["timestamp"]),
         )
-    
+
     def to_dict(self) -> Dict:
         return {
             "plan_id": self.plan_id,
             "actions": [action.to_dict() for action in self.actions],
             "expected_effect": self.expected_effect,
             "risk_controls": self.risk_controls,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
 @dataclass
 class MLTSnapshot:
     """Versioned snapshot of MLT state."""
+
     snapshot_id: str
     planner_version: str
     search_spaces: Dict[str, str]
@@ -196,7 +205,7 @@ class MLTSnapshot:
     active_jobs: List[Dict[str, Any]]
     hash: str
     timestamp: datetime
-    
+
     def to_dict(self) -> Dict:
         return {
             "snapshot_id": self.snapshot_id,
@@ -206,7 +215,7 @@ class MLTSnapshot:
             "policies": self.policies,
             "active_jobs": self.active_jobs,
             "hash": self.hash,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 

@@ -1,7 +1,7 @@
 """
 Intelligence Kernel Package
 
-The brain that routes tasks → specialists → models, fuses outputs, reasons about uncertainty, 
+The brain that routes tasks → specialists → models, fuses outputs, reasons about uncertainty,
 and collaborates with Governance, MLT, Memory, and Ingress.
 
 Purpose:
@@ -12,21 +12,21 @@ Purpose:
 
 # Import new Grace Intelligence components
 from .grace_intelligence import (
-    GraceIntelligence, 
-    ReasoningContext, 
-    ReasoningResult, 
+    GraceIntelligence,
+    ReasoningContext,
+    ReasoningResult,
     ReasoningStage,
     TaskSubtask,
     ActionPlan,
-    VerificationResult
+    VerificationResult,
 )
 
 __all__ = [
-    'GraceIntelligence',
-    'ReasoningContext', 
-    'ReasoningResult',
-    'ReasoningStage',
-    'TaskSubtask',
-    'ActionPlan', 
-    'VerificationResult'
+    "GraceIntelligence",
+    "ReasoningContext",
+    "ReasoningResult",
+    "ReasoningStage",
+    "TaskSubtask",
+    "ActionPlan",
+    "VerificationResult",
 ]

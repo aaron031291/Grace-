@@ -10,8 +10,4 @@ from ..layer_04_audit_logs.immutable_logs import ImmutableLogs
 from ..core.immutable_logs import ImmutableLogs as CoreImmutableLogs
 from ..mtl_kernel.immutable_log_service import ImmutableLogService
 
-__all__ = [
-    'ImmutableLogs',
-    'CoreImmutableLogs', 
-    'ImmutableLogService'
-]
+__all__ = ["ImmutableLogs", "CoreImmutableLogs", "ImmutableLogService"]

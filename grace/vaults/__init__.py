@@ -9,8 +9,4 @@ from .vault_engine import VaultEngine
 from .vault_specifications import VaultSpecifications
 from .vault_compliance import VaultComplianceChecker
 
-__all__ = [
-    'VaultEngine',
-    'VaultSpecifications', 
-    'VaultComplianceChecker'
-]
+__all__ = ["VaultEngine", "VaultSpecifications", "VaultComplianceChecker"]

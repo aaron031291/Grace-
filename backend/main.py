@@ -24,9 +24,8 @@ from collections import defaultdict, deque
 from .config import get_settings
 
 
-
 class RedactingFormatter(logging.Formatter):
-    def __init__(self, fmt=None, datefmt=None, style='%'):
+    def __init__(self, fmt=None, datefmt=None, style="%"):
         super().__init__(fmt, datefmt, style)
 
     def format(self, record):
@@ -34,7 +33,12 @@ class RedactingFormatter(logging.Formatter):
         # Redact secrets
         try:
             settings = get_settings()
-            secrets = [settings.jwt_secret_key, settings.secret_key, settings.storage_secret_key, settings.storage_access_key]
+            secrets = [
+                settings.jwt_secret_key,
+                settings.secret_key,
+                settings.storage_secret_key,
+                settings.storage_access_key,
+            ]
             for secret in secrets:
                 if secret:
                     msg = msg.replace(secret, "[REDACTED]")
@@ -42,12 +46,14 @@ class RedactingFormatter(logging.Formatter):
             pass
         return msg
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 for handler in logging.getLogger().handlers:
     handler.setFormatter(RedactingFormatter(handler.formatter._fmt))
 
 settings = get_settings()
+
 
 # --- Idempotency Key Middleware ---
 class IdempotencyMiddleware(BaseHTTPMiddleware):
@@ -64,9 +70,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     content={
                         "error": {
                             "code": "IDEMPOTENCY_KEY_REQUIRED",
-                            "message": "Idempotency-Key header is required for mutating requests."
+                            "message": "Idempotency-Key header is required for mutating requests.",
                         }
-                    }
+                    },
                 )
             hash_key = hashlib.sha256(key.encode()).hexdigest()
             if hash_key in self.cache:
@@ -77,6 +83,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 self.cache[hash_key] = response
             return response
         return await call_next(request)
+
 
 # --- Rate Limiting Middleware ---
 class TokenBucket:
@@ -96,6 +103,7 @@ class TokenBucket:
             return True
         return False
 
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, rate: int = 5, capacity: int = 10):
         super().__init__(app)
@@ -112,12 +120,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={
                     "error": {
                         "code": "RATE_LIMIT_EXCEEDED",
-                        "message": "Too many requests. Please try again later."
+                        "message": "Too many requests. Please try again later.",
                     }
-                }
+                },
             )
         response = await call_next(request)
         return response
+
 
 # --- Pydantic Schemas ---
 class HealthCheckResponse(BaseModel):
@@ -131,23 +140,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan management."""
     logger.info("🚀 Starting Grace Backend...")
     logger.info("✅ Grace Backend startup complete")
-    
+
     yield
-    
+
     logger.info("🔄 Shutting down Grace Backend...")
     logger.info("✅ Grace Backend shutdown complete")
 
 
 def create_app() -> FastAPI:
     from starlette.middleware.base import BaseHTTPMiddleware
+
     class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             response = await call_next(request)
-            response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; object-src 'none';"
-            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self'; object-src 'none';"
+            )
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains; preload"
+            )
             response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
             return response
-
 
     app = FastAPI(
         title="Grace Backend",
@@ -155,7 +168,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/api/docs" if settings.debug else None,
         redoc_url="/api/redoc" if settings.debug else None,
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     app.add_middleware(SecurityHeadersMiddleware)
@@ -172,6 +185,7 @@ def create_app() -> FastAPI:
     # Wire OpenTelemetry tracing
     try:
         from backend.observability.tracing import init_tracing
+
         init_tracing(app)
     except Exception as e:
         logger.warning(f"OpenTelemetry tracing not initialized: {e}")
@@ -195,10 +209,22 @@ def create_app() -> FastAPI:
     async def login(request: TokenRequest):
         # TODO: Replace with real user validation
         if request.username == "admin" and request.password == "admin":
-            access_token = create_access_token({"sub": request.username, "role": "admin"})
-            refresh_token = create_refresh_token({"sub": request.username, "role": "admin"})
+            access_token = create_access_token(
+                {"sub": request.username, "role": "admin"}
+            )
+            refresh_token = create_refresh_token(
+                {"sub": request.username, "role": "admin"}
+            )
             return TokenResponse(access_token=access_token, refresh_token=refresh_token)
-        return JSONResponse(status_code=401, content={"error": {"code": "INVALID_CREDENTIALS", "message": "Invalid username or password."}})
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "INVALID_CREDENTIALS",
+                    "message": "Invalid username or password.",
+                }
+            },
+        )
 
     @app.post("/api/auth/refresh", response_model=TokenResponse)
     async def refresh_token(request: RefreshRequest):
@@ -206,21 +232,32 @@ def create_app() -> FastAPI:
             payload = verify_token(request.refresh_token)
             if payload.get("type") != "refresh":
                 raise Exception("Not a refresh token")
-            access_token = create_access_token({"sub": payload["sub"], "role": payload["role"]})
-            refresh_token = create_refresh_token({"sub": payload["sub"], "role": payload["role"]})
+            access_token = create_access_token(
+                {"sub": payload["sub"], "role": payload["role"]}
+            )
+            refresh_token = create_refresh_token(
+                {"sub": payload["sub"], "role": payload["role"]}
+            )
             return TokenResponse(access_token=access_token, refresh_token=refresh_token)
         except Exception:
-            return JSONResponse(status_code=401, content={"error": {"code": "INVALID_REFRESH_TOKEN", "message": "Invalid or expired refresh token."}})
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": {
+                        "code": "INVALID_REFRESH_TOKEN",
+                        "message": "Invalid or expired refresh token.",
+                    }
+                },
+            )
 
     @app.get("/api/health", response_model=HealthCheckResponse)
     async def health_check() -> HealthCheckResponse:
         return HealthCheckResponse(
-            status="healthy",
-            version="1.0.0",
-            service="grace-backend"
+            status="healthy", version="1.0.0", service="grace-backend"
         )
 
     import uuid
+
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         logger.error(f"Unhandled exception: {exc}", exc_info=True)
@@ -232,9 +269,9 @@ def create_app() -> FastAPI:
                     "code": "INTERNAL_ERROR",
                     "message": "An internal error occurred",
                     "trace_id": trace_id,
-                    "detail": str(exc) if settings.debug else None
+                    "detail": str(exc) if settings.debug else None,
                 }
-            }
+            },
         )
 
     return app
@@ -249,5 +286,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=settings.debug,
-        log_level="info"
+        log_level="info",
     )

@@ -102,12 +102,20 @@ class TestContractCompliance:
 
         # Check that all phases were executed
         assert result.metrics is not None
-        expected_phases = ["perceive", "reason", "plan", "act", "reflect", "learn", "log"]
+        expected_phases = [
+            "perceive",
+            "reason",
+            "plan",
+            "act",
+            "reflect",
+            "learn",
+            "log",
+        ]
 
         for phase in expected_phases:
-            assert (
-                phase in result.metrics.phase_durations
-            ), f"Phase {phase} not executed"
+            assert phase in result.metrics.phase_durations, (
+                f"Phase {phase} not executed"
+            )
             assert result.metrics.phase_durations[phase] >= 0
 
     @pytest.mark.asyncio

@@ -46,7 +46,7 @@ async def get_db() -> AsyncSession:
 
 class DatabaseManager:
     """Database management utility."""
-    
+
     @staticmethod
     async def health_check() -> bool:
         """Check database connectivity."""
@@ -57,7 +57,7 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
             return False
-    
+
     @staticmethod
     async def close():
         """Close database connections."""

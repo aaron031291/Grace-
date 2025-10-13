@@ -292,7 +292,9 @@ class GraceLoopEngine:
         """Phase 5: Summarize outcome, detect errors, generate improvements."""
         success_rate = 0.0
         if act_result["total_actions"] > 0:
-            success_rate = act_result["successful_actions"] / act_result["total_actions"]
+            success_rate = (
+                act_result["successful_actions"] / act_result["total_actions"]
+            )
 
         return {
             "success_rate": success_rate,

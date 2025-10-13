@@ -9,16 +9,11 @@ from .tracer import GTracer, TraceContext, TraceSpan
 from .memory_tracer import MemoryTracer
 from .collector import GTraceCollector
 
-__all__ = [
-    'GTracer', 
-    'TraceContext', 
-    'TraceSpan', 
-    'MemoryTracer',
-    'GTraceCollector'
-]
+__all__ = ["GTracer", "TraceContext", "TraceSpan", "MemoryTracer", "GTraceCollector"]
 
 # Global tracer instance
 _global_tracer = None
+
 
 def get_tracer() -> GTracer:
     """Get the global Grace tracer instance."""
@@ -26,6 +21,7 @@ def get_tracer() -> GTracer:
     if _global_tracer is None:
         _global_tracer = GTracer()
     return _global_tracer
+
 
 def set_tracer(tracer: GTracer) -> None:
     """Set the global Grace tracer instance."""

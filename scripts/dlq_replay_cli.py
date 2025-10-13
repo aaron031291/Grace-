@@ -1,15 +1,23 @@
 """
 DLQ and Replay CLI for Grace Worker Queues
 """
+
 import argparse
 import asyncio
 import redis.asyncio as redis
 import json
 
 parser = argparse.ArgumentParser(description="Grace DLQ Replay CLI")
-parser.add_argument("--queue", required=True, help="Queue name (e.g. ingestion, embeddings, media)")
-parser.add_argument("--action", choices=["list", "replay"], required=True, help="Action: list or replay")
-parser.add_argument("--redis-url", default="redis://localhost:6379", help="Redis connection URL")
+parser.add_argument(
+    "--queue", required=True, help="Queue name (e.g. ingestion, embeddings, media)"
+)
+parser.add_argument(
+    "--action", choices=["list", "replay"], required=True, help="Action: list or replay"
+)
+parser.add_argument(
+    "--redis-url", default="redis://localhost:6379", help="Redis connection URL"
+)
+
 
 async def main():
     args = parser.parse_args()
@@ -33,6 +41,7 @@ async def main():
             await r.rpush(queue_key, item)
         await r.delete(dlq_key)
         print("Replay complete. DLQ cleared.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

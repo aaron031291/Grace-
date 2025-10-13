@@ -27,13 +27,13 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: Dict[str, Any]) -> str:
     """Create JWT access token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.jwt_access_token_expire_minutes
+    )
     to_encode.update({"exp": expire, "type": "access"})
-    
+
     encoded_jwt = jwt.encode(
-        to_encode, 
-        settings.jwt_secret_key, 
-        algorithm=settings.jwt_algorithm
+        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
     return encoded_jwt
 
@@ -41,13 +41,13 @@ def create_access_token(data: Dict[str, Any]) -> str:
 def create_refresh_token(data: Dict[str, Any]) -> str:
     """Create JWT refresh token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.jwt_refresh_token_expire_days
+    )
     to_encode.update({"exp": expire, "type": "refresh"})
-    
+
     encoded_jwt = jwt.encode(
-        to_encode,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm
+        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
     return encoded_jwt
 
@@ -56,18 +56,14 @@ def verify_token(token: str) -> Dict[str, Any]:
     """Verify and decode JWT token."""
     try:
         payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm]
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
         )
     except jwt.PyJWTError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )

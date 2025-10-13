@@ -12,8 +12,7 @@ router = APIRouter()
 
 @router.get("/")
 async def list_tasks(
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     """List user's tasks."""
     # TODO: Implement task listing

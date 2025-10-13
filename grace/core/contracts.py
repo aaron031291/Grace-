@@ -1,7 +1,8 @@
 """
 Core data structures and contracts for the Grace governance kernel.
 """
-from typing import Dict, List, Optional, Union, Any
+
+from typing import Dict, List, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum
@@ -28,7 +29,7 @@ class EventType(Enum):
 class Source:
     uri: str
     credibility: float  # 0.0 to 1.0
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -37,7 +38,7 @@ class Source:
 class Evidence:
     type: str  # "doc", "db", "api"
     pointer: str
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -45,7 +46,7 @@ class Evidence:
 @dataclass
 class LogicStep:
     step: str
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -58,7 +59,7 @@ class Claim:
     evidence: List[Evidence]
     confidence: float  # 0.0 to 1.0
     logical_chain: List[LogicStep]
-    
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -66,7 +67,7 @@ class Claim:
             "sources": [source.to_dict() for source in self.sources],
             "evidence": [evidence.to_dict() for evidence in self.evidence],
             "confidence": self.confidence,
-            "logical_chain": [step.to_dict() for step in self.logical_chain]
+            "logical_chain": [step.to_dict() for step in self.logical_chain],
         }
 
 
@@ -75,7 +76,7 @@ class ComponentSignal:
     component: str
     signal: str
     weight: float  # 0.0 to 1.0
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -90,7 +91,7 @@ class UnifiedDecision:
     confidence: float  # 0.0 to 1.0
     trust_score: float  # 0.0 to 1.0
     timestamp: datetime
-    
+
     def to_dict(self) -> dict:
         return {
             "decision_id": self.decision_id,
@@ -100,7 +101,7 @@ class UnifiedDecision:
             "rationale": self.rationale,
             "confidence": self.confidence,
             "trust_score": self.trust_score,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
@@ -110,13 +111,13 @@ class VerifiedClaims:
     overall_confidence: float
     verification_status: str  # "verified", "refuted", "inconclusive"
     contradictions: List[str]
-    
+
     def to_dict(self) -> dict:
         return {
             "claims": [claim.to_dict() for claim in self.claims],
             "overall_confidence": self.overall_confidence,
             "verification_status": self.verification_status,
-            "contradictions": self.contradictions
+            "contradictions": self.contradictions,
         }
 
 
@@ -126,7 +127,7 @@ class LogicReport:
     validity: bool
     confidence: float
     logical_errors: List[str]
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -141,7 +142,7 @@ class GovernanceSnapshot:
     model_weights: Dict[str, float]
     state_hash: str
     created_at: datetime
-    
+
     def to_dict(self) -> dict:
         return {
             "snapshot_id": self.snapshot_id,
@@ -151,7 +152,7 @@ class GovernanceSnapshot:
             "thresholds": self.thresholds,
             "model_weights": self.model_weights,
             "state_hash": self.state_hash,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
         }
 
 
@@ -163,7 +164,7 @@ class Experience:
     outcome: Dict[str, Any]
     success_score: float
     timestamp: datetime
-    
+
     def to_dict(self) -> dict:
         return {
             "type": self.type,
@@ -171,7 +172,7 @@ class Experience:
             "context": self.context,
             "outcome": self.outcome,
             "success_score": self.success_score,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 

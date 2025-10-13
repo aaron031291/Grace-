@@ -1,4 +1,5 @@
 """RAG query contracts."""
+
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from .dto_common import BaseDTO, MemoryEntry
@@ -6,6 +7,7 @@ from .dto_common import BaseDTO, MemoryEntry
 
 class RAGQuery(BaseModel):
     """Retrieval-Augmented Generation query."""
+
     query: str
     filters: Optional[Dict[str, Any]] = None
     limit: int = Field(default=10, ge=1, le=100)
@@ -16,6 +18,7 @@ class RAGQuery(BaseModel):
 
 class RAGResult(BaseDTO):
     """RAG query result."""
+
     query: str
     items: List[MemoryEntry] = Field(default_factory=list)
     total_found: int = 0

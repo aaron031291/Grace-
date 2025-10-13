@@ -7,7 +7,7 @@ Grace Governance Kernel — Main integration and initialization (production).
 Responsibilities
 - Wire core infra (EventBus, MemoryCore)
 - Bring up governance components (Verification, UnifiedLogic, GovernanceEngine, Parliament, Trust)
-- Register with Trigger Mesh, AVN health, Immutable Logs, MLDL quorum
+- Register with Trigger Mesh, AVN, health, Immutable Logs, MLDL quorum
 - Provide async start/shutdown lifecycle
 - Provide synchronous-API compatibility (evaluate)
 - Offer a robust process_governance_request with correlation-scoped wait

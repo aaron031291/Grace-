@@ -1,5 +1,6 @@
 """Interface data models based on JSON schemas."""
 from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Any, Dict, List, Optional, Literal
 from pydantic import BaseModel, Field
 import uuid
@@ -34,7 +35,7 @@ class UISession(BaseModel):
     session_id: str = Field(pattern=r"ses_[a-z0-9]{8,}")
     user: UserIdentity
     client: ClientInfo
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_utc)
     last_seen: Optional[datetime] = None
     permissions: Optional[List[str]] = None
 
@@ -67,7 +68,7 @@ class ThreadMessage(BaseModel):
     msg_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     role: Literal["user", "grace", "specialist", "governance"]
     author: str
-    at: datetime = Field(default_factory=datetime.utcnow)
+    at: datetime = Field(default_factory=now_utc)
     content: MessageContent
 
 
@@ -85,7 +86,7 @@ class TaskCard(BaseModel):
     owner: str  # user_id
     state: Literal["open", "running", "paused", "waiting_approval", "done", "failed"]
     context: Optional[Dict[str, Any]] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_utc)
     thread: Optional[List[ThreadMessage]] = None
     metrics: Optional[TaskMetrics] = None
     approvals: Optional[List[str]] = None
@@ -97,7 +98,7 @@ class ConsentRecord(BaseModel):
     user_id: str
     scope: Literal["autonomy", "pii_use", "external_share", "canary_participation"]
     status: Literal["granted", "denied", "revoked", "pending"]
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_utc)
     expires_at: Optional[datetime] = None
     evidence_uri: Optional[str] = None
 
@@ -113,7 +114,7 @@ class UIAction(BaseModel):
         "settings.update", "snapshot.export", "snapshot.rollback"
     ]
     payload: Dict[str, Any]
-    at: datetime = Field(default_factory=datetime.utcnow)
+    at: datetime = Field(default_factory=now_utc)
 
 
 class NotificationAction(BaseModel):
@@ -129,7 +130,7 @@ class Notification(BaseModel):
     message: str
     actions: Optional[List[NotificationAction]] = None
     read: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_utc)
 
 
 class UIExperienceMetrics(BaseModel):
@@ -150,7 +151,7 @@ class UIExperience(BaseModel):
     stage: Literal["latency", "interaction", "approval_flow", "error", "a11y", "i18n"]
     metrics: UIExperienceMetrics
     segment: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
 
 
 # Event payloads

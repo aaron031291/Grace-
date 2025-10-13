@@ -1,6 +1,6 @@
 """Bridge to Governance kernel for approvals and policy prompts."""
 import asyncio
-from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional, Any
 import logging
 import uuid
@@ -27,7 +27,7 @@ class GovernanceBridge:
             "resource": request_data.get("resource"),
             "context": request_data.get("context", {}),
             "priority": request_data.get("priority", 5),
-            "created_at": datetime.utcnow(),
+            "created_at": now_utc(),
             "status": "pending"
         }
         

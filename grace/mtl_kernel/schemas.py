@@ -1,5 +1,6 @@
 """MTL Kernel schemas and data models."""
 from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import hashlib
@@ -22,7 +23,7 @@ class AuditRecord(BaseModel):
     id: str
     memory_id: str
     action: str  # write, attest, recall, etc.
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=now_utc)
     actor: str = "system"
     payload_hash: str
     merkle_proof: Optional[MerkleProof] = None

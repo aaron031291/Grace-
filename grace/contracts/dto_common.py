@@ -1,5 +1,6 @@
 """Common DTOs and base types."""
 from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import uuid
@@ -8,15 +9,15 @@ import uuid
 class BaseDTO(BaseModel):
     """Base DTO with common fields."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now_utc)
     metadata: Optional[Dict[str, Any]] = None
 
 
 class W5HIndex(BaseModel):
-    """Who/What/When/Where/Why/How indexing with enhanced capabilities."""
+    """Who/What/When/Where/Why/How indexing."""
     who: List[str] = Field(default_factory=list)
     what: List[str] = Field(default_factory=list)
-    when: List[str] = Field(default_factory=list)  # Changed to List[str] for temporal references
+    when: Optional[datetime] = None
     where: List[str] = Field(default_factory=list)
     why: List[str] = Field(default_factory=list)
     how: List[str] = Field(default_factory=list)

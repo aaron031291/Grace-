@@ -3,6 +3,7 @@
 import os
 import asyncio
 from typing import Dict, List, Optional, Any
+from grace.utils.time import now_utc
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -242,7 +243,7 @@ class LearningKernel:
             result=result,
             success=success,
             confidence=confidence,
-            timestamp=datetime.utcnow()
+            timestamp=now_utc()
         )
         
         self.outcomes.append(outcome)

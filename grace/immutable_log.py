@@ -26,6 +26,7 @@ _use_orm = False
 try:
     from grace.db.session import get_session
     from grace.db.models_phase_a import ImmutableEntry
+    from grace.db.models_phase_a import UserAccount
     if DATABASE_URL:
         _use_orm = True
 except Exception:
@@ -219,6 +220,44 @@ def _orm_to_entry(obj) -> Dict[str, Any]:
         "signature": getattr(obj, "signature", None),
         "payload": getattr(obj, "payload_json", None) or getattr(obj, "payload", None),
     }
+
+
+def _check_read_access(request, allowed_roles: Optional[list] = None):
+    """Simple RBAC: consults `UserAccount` when ORM is enabled.
+
+    - If ORM is not enabled, allow reads (dev fallback).
+    - If ORM enabled, expect header 'X-Actor-Id' pointing to user_id.
+    - Allowed roles default to ['admin', 'auditor'].
+    """
+    if allowed_roles is None:
+        allowed_roles = ["admin", "auditor"]
+
+    if not _use_orm:
+        return True
+
+    actor_id = None
+    try:
+        actor_id = request.headers.get("X-Actor-Id") or request.headers.get("X-User-Id")
+    except Exception:
+        actor_id = None
+
+    if not actor_id:
+        raise HTTPException(status_code=403, detail="missing actor id")
+
+    try:
+        sess = get_session()
+        user = sess.query(UserAccount).filter(UserAccount.user_id == actor_id).first()
+        sess.close()
+    except Exception:
+        raise HTTPException(status_code=503, detail="user lookup failed")
+
+    if not user:
+        raise HTTPException(status_code=403, detail="unknown actor")
+
+    if getattr(user, "role", None) not in allowed_roles:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    return True
 
 
 @router.post("/api/v1/logs")

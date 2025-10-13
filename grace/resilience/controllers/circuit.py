@@ -191,3 +191,7 @@ class _NoOpLock:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+
+
+# Backwards-compatible alias expected by older tests
+CircuitBreakerController = CircuitBreaker

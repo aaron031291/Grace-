@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
+import os
 
 # Add the project root to path for imports
 sys.path.insert(

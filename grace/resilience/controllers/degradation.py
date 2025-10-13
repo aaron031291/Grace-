@@ -384,3 +384,7 @@ async def exit_mode(service_id: str, mode_id: str, reason: str = "api_request") 
 def get_degradation_manager() -> DegradationManager:
     """Get the global degradation manager instance."""
     return _degradation_manager
+
+
+# Backwards-compatible alias expected by older tests
+DegradationController = DegradationManager

@@ -4,7 +4,7 @@ Multi-OS Mesh Bridge - Integration with Event Mesh system.
 import logging
 import asyncio
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ class MeshBridge:
                 "payload": payload,
                 "host_id": host_id,
                 "metadata": metadata or {},
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "source": "multi_os_kernel"
             }
             

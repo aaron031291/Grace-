@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import json
 import hashlib
+import os
+import sys
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -25,16 +27,45 @@ try:
     from .memory_bridge import MemoryBridge
     from .snapshots.snapshot_manager import SnapshotManager
 except ImportError:
+    # Ensure local package directory is on sys.path so last-resort local imports work
+    _pkg_dir = os.path.dirname(__file__)
+    if _pkg_dir not in sys.path:
+        sys.path.insert(0, _pkg_dir)
     # Fall back to direct imports (when run as script)
-    from router.task_router import TaskRouter
-    from planner.plan_builder import PlanBuilder
-    from inference.engine import InferenceEngine
-    from ensembler.meta_learner import MetaEnsembler
-    from evaluation.metrics import MetricsCollector
-    from governance_bridge import GovernanceBridge
-    from mlt_bridge import MLTBridge
-    from memory_bridge import MemoryBridge
-    from snapshots.snapshot_manager import SnapshotManager
+    try:
+        # Try absolute package imports (when tests manipulate PYTHONPATH)
+        from intelligence.router.task_router import TaskRouter
+        from intelligence.planner.plan_builder import PlanBuilder
+        from intelligence.inference.engine import InferenceEngine
+        from intelligence.ensembler.meta_learner import MetaEnsembler
+        from intelligence.evaluation.metrics import MetricsCollector
+        from intelligence.governance_bridge import GovernanceBridge
+        from intelligence.mlt_bridge import MLTBridge
+        from intelligence.memory_bridge import MemoryBridge
+        from intelligence.snapshots.snapshot_manager import SnapshotManager
+    except ImportError:
+        # Last-resort local imports
+        from router.task_router import TaskRouter
+        from planner.plan_builder import PlanBuilder
+        from inference.engine import InferenceEngine
+        from ensembler.meta_learner import MetaEnsembler
+        from evaluation.metrics import MetricsCollector
+        from governance_bridge import GovernanceBridge
+        from mlt_bridge import MLTBridge
+        from memory_bridge import MemoryBridge
+        try:
+            from snapshots.snapshot_manager import SnapshotManager
+        except Exception:
+            # Last fallback: load snapshot_manager directly from file path
+            try:
+                import importlib.util
+                spec_path = os.path.join(os.path.dirname(__file__), 'snapshots', 'snapshot_manager.py')
+                spec = importlib.util.spec_from_file_location('intelligence_snapshots_snapshot_manager', spec_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                SnapshotManager = getattr(module, 'SnapshotManager')
+            except Exception:
+                raise
 
 logger = logging.getLogger(__name__)
 

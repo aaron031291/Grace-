@@ -3,7 +3,7 @@ Ingress-MLT Bridge - Connects Ingress Kernel to Meta Learning and Trust (MLT) Sy
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 import uuid
 
@@ -37,7 +37,7 @@ class IngressMLTBridge:
         # Metrics aggregation
         self.metrics_window = timedelta(minutes=15)  # 15-minute windows
         self.current_metrics = {}
-        self.last_metrics_reset = datetime.utcnow()
+        self.last_metrics_reset = datetime.now(timezone.utc)
         
         self.running = False
     
@@ -119,14 +119,14 @@ class IngressMLTBridge:
             self.adaptation_plans[plan_id] = {
                 "plan": plan,
                 "status": "received",
-                "received_at": datetime.utcnow()
+                "received_at": datetime.now(timezone.utc)
             }
             
             # Apply plan actions
             success = await self._apply_adaptation_plan(plan)
             
             self.adaptation_plans[plan_id]["status"] = "applied" if success else "failed"
-            self.adaptation_plans[plan_id]["applied_at"] = datetime.utcnow()
+            self.adaptation_plans[plan_id]["applied_at"] = datetime.now(timezone.utc)
             
             logger.info(f"Applied adaptation plan: {plan_id}, success: {success}")
             return success
@@ -179,14 +179,14 @@ class IngressMLTBridge:
     
     async def _collect_stage_metrics(self):
         """Collect metrics from each ingress stage."""
-        current_time = datetime.utcnow()
-        
+        current_time = datetime.now(timezone.utc)
+
         # Reset metrics window if needed
         if current_time - self.last_metrics_reset > self.metrics_window:
             await self._emit_window_metrics()
             self.current_metrics = {}
             self.last_metrics_reset = current_time
-        
+
         # Collect metrics from kernel
         for source_id in self.ingress_kernel.sources.keys():
             await self._collect_source_metrics(source_id)

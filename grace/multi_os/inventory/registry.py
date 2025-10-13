@@ -4,7 +4,7 @@ Multi-OS Host Inventory Registry - Manages host registration and capabilities.
 import logging
 import asyncio
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import uuid
 
@@ -56,8 +56,8 @@ class Registry:
             host_id = host_descriptor["host_id"]
             
             # Add timestamp and processing info
-            host_descriptor["registered_at"] = datetime.utcnow().isoformat()
-            host_descriptor["last_seen"] = datetime.utcnow().isoformat()
+            host_descriptor["registered_at"] = datetime.now(timezone.utc).isoformat()
+            host_descriptor["last_seen"] = datetime.now(timezone.utc).isoformat()
             host_descriptor["health_score"] = 1.0
             
             # If this is an update, preserve some historical data
@@ -152,7 +152,7 @@ class Registry:
         old_status = host.get("status")
         
         host["status"] = status
-        host["last_seen"] = datetime.utcnow().isoformat()
+        host["last_seen"] = datetime.now(timezone.utc).isoformat()
         
         if health_metrics:
             host["health_metrics"] = health_metrics
@@ -360,17 +360,17 @@ class Registry:
         Returns:
             Number of hosts removed
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         timeout_threshold = now - timedelta(seconds=self.host_timeout)
-        
+
         stale_hosts = []
         
         for host_id, host in self.hosts.items():
             last_seen_str = host.get("last_seen")
             if last_seen_str:
                 try:
-                    last_seen = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00"))
-                    if last_seen.replace(tzinfo=None) < timeout_threshold:
+                    last_seen = datetime.fromisoformat(last_seen_str.replace("Z", "+00:00")).astimezone(timezone.utc)
+                    if last_seen < timeout_threshold:
                         stale_hosts.append(host_id)
                 except ValueError:
                     # Invalid timestamp, consider stale
@@ -459,7 +459,7 @@ class Registry:
         try:
             data = {
                 "hosts": self.hosts,
-                "last_updated": datetime.utcnow().isoformat()
+                "last_updated": datetime.now(timezone.utc).isoformat()
             }
             with open(self.storage_path, 'w') as f:
                 json.dump(data, f, indent=2)

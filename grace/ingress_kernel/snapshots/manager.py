@@ -5,7 +5,7 @@ import json
 import logging
 import hashlib
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import uuid
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def generate_snapshot_id() -> str:
     """Generate a snapshot ID."""
-    timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     return f"ing_{timestamp}"
 
 
@@ -52,9 +52,9 @@ class SnapshotManager:
         
         # Auto-snapshot configuration
         self.auto_snapshot_interval = timedelta(hours=6)  # Every 6 hours
-        self.last_auto_snapshot = datetime.utcnow()
+        self.last_auto_snapshot = datetime.now(timezone.utc)
         self.max_snapshots = 100
-        
+
         # Performance metrics for rollback decisions
         self.performance_history: List[Dict[str, Any]] = []
         self.performance_window = timedelta(hours=1)
@@ -222,12 +222,12 @@ class SnapshotManager:
         try:
             # Add current metrics to history
             self.performance_history.append({
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.now(timezone.utc),
                 "metrics": current_metrics
             })
             
             # Clean old history
-            cutoff = datetime.utcnow() - self.performance_window
+            cutoff = datetime.now(timezone.utc) - self.performance_window
             self.performance_history = [
                 h for h in self.performance_history 
                 if h["timestamp"] > cutoff
@@ -284,9 +284,9 @@ class SnapshotManager:
     
     async def auto_snapshot_if_needed(self):
         """Create automatic snapshot if interval has passed."""
-        if datetime.utcnow() - self.last_auto_snapshot > self.auto_snapshot_interval:
+        if datetime.now(timezone.utc) - self.last_auto_snapshot > self.auto_snapshot_interval:
             await self.create_snapshot()
-            self.last_auto_snapshot = datetime.utcnow()
+            self.last_auto_snapshot = datetime.now(timezone.utc)
     
     def update_current_state(self, updates: Dict[str, Any]):
         """Update current state tracking."""
@@ -297,7 +297,7 @@ class SnapshotManager:
         # Mock implementation - would hash actual registry data
         registry_data = {
             "sources_count": len(self.current_state.get("active_sources", [])),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         registry_json = json.dumps(registry_data, sort_keys=True)
         return hashlib.sha256(registry_json.encode()).hexdigest()[:16]
@@ -420,7 +420,7 @@ class SnapshotManager:
             
             # Don't delete manual snapshots or very recent ones
             if ("manual" in snapshot_id or 
-                datetime.utcnow() - snapshot.created_at < timedelta(hours=24)):
+                datetime.now(timezone.utc) - snapshot.created_at < timedelta(hours=24)):
                 continue
             
             # Remove from memory and disk

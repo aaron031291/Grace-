@@ -6,7 +6,7 @@ import asyncio
 import json
 import hashlib
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -89,7 +89,7 @@ class SnapshotManager:
             Snapshot information
         """
         try:
-            snapshot_id = f"mos_{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            snapshot_id = f"mos_{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
             
             # Create snapshot payload based on scope
             if scope == "agent":
@@ -108,7 +108,7 @@ class SnapshotManager:
                 "snapshot_id": snapshot_id,
                 "scope": scope,
                 "host_id": host_id,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "metadata": metadata or {},
                 "version": "1.0.0"
             })
@@ -184,7 +184,7 @@ class SnapshotManager:
                 "steps_completed": results.get("steps_completed", []),
                 "errors": results.get("errors", []),
                 "duration_seconds": results.get("duration_seconds", 0),
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": datetime.now(timezone.utc).isoformat()
             }
             
         except Exception as e:

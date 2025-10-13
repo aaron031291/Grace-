@@ -6,6 +6,7 @@ import sys
 import os
 import json
 from datetime import datetime
+import pytest
 
 # Add current directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -98,13 +99,13 @@ def test_intelligence_service():
         print("🎉 ALL TESTS PASSED - Intelligence Kernel is working correctly!")
         print("=" * 60)
         
-        return True
+        assert True
         
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"Test failed with exception: {e}")
 
 def test_api_schemas():
     """Test API schema validation."""
@@ -139,7 +140,7 @@ def test_api_schemas():
     }
     print("✓ InferenceResult schema example created")
     
-    return True
+    assert True
 
 if __name__ == "__main__":
     success = test_intelligence_service()

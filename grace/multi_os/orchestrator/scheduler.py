@@ -4,7 +4,7 @@ Multi-OS Kernel Scheduler - Task placement and orchestration.
 import logging
 import asyncio
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -92,7 +92,7 @@ class Scheduler:
                 "task_id": exec_task.get("task_id"),
                 "constraints": self._extract_constraints(exec_task),
                 "alternatives": [(h["host_id"], s) for h, s in scored_hosts[1:3]],  # Top 2 alternatives
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "reasoning": self._explain_placement(selected_host, exec_task, best_score)
             }
             

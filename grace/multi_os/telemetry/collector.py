@@ -4,7 +4,7 @@ Multi-OS Telemetry Collector - Metrics, logs, and traces collection.
 import logging
 import asyncio
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import uuid
 from collections import defaultdict, deque
@@ -83,8 +83,8 @@ class TelemetryCollector:
             labels: Optional labels for the metric
             timestamp: Optional timestamp (defaults to now)
         """
-        timestamp = timestamp or datetime.utcnow()
-        
+        timestamp = timestamp or datetime.now(timezone.utc)
+
         metric_data = {
             "name": name,
             "value": value,
@@ -117,8 +117,8 @@ class TelemetryCollector:
             component: Optional component name
             timestamp: Optional timestamp (defaults to now)
         """
-        timestamp = timestamp or datetime.utcnow()
-        
+        timestamp = timestamp or datetime.now(timezone.utc)
+
         log_entry = {
             "id": str(uuid.uuid4()),
             "level": level,
@@ -155,7 +155,7 @@ class TelemetryCollector:
             "operation": operation,
             "host_id": host_id,
             "task_id": task_id,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "spans": [],
             "status": "active"
         }
@@ -183,7 +183,7 @@ class TelemetryCollector:
             "duration_ms": duration_ms,
             "status": status,
             "metadata": metadata or {},
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         self.traces[trace_id]["spans"].append(span)
@@ -201,13 +201,13 @@ class TelemetryCollector:
         
         trace = self.traces[trace_id]
         trace["status"] = status
-        trace["finished_at"] = datetime.utcnow().isoformat()
-        
+        trace["finished_at"] = datetime.now(timezone.utc).isoformat()
+
         # Calculate total duration
         try:
-            start_time = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00"))
-            end_time = datetime.utcnow()
-            duration_ms = (end_time - start_time.replace(tzinfo=None)).total_seconds() * 1000
+            start_time = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+            end_time = datetime.now(timezone.utc)
+            duration_ms = (end_time - start_time).total_seconds() * 1000
             trace["total_duration_ms"] = duration_ms
         except Exception:
             pass
@@ -226,9 +226,9 @@ class TelemetryCollector:
         Returns:
             Event ID
         """
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or datetime.now(timezone.utc)
         event_id = str(uuid.uuid4())
-        
+
         event = {
             "event_id": event_id,
             "name": event_name,
@@ -236,12 +236,12 @@ class TelemetryCollector:
             "host_id": host_id,
             "timestamp": timestamp.isoformat()
         }
-        
+
         self.events.append(event)
-        
+
         # Update metrics based on events
         self._process_event_metrics(event_name, payload, host_id)
-        
+
         return event_id
     
     def get_metrics_summary(self, metric_name: Optional[str] = None,
@@ -266,7 +266,7 @@ class TelemetryCollector:
             "kpis": self.kpis.copy(),
             "collection_period": {
                 "start": None,
-                "end": datetime.utcnow().isoformat()
+                "end": datetime.now(timezone.utc).isoformat()
             }
         }
         
@@ -406,7 +406,7 @@ class TelemetryCollector:
         """Get current KPI values."""
         return {
             "kpis": self.kpis.copy(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "collection_stats": {
                 "total_metrics": sum(len(m) for m in self.metrics.values()),
                 "total_logs": len(self.logs),
@@ -423,7 +423,7 @@ class TelemetryCollector:
             Dict with cleanup statistics
         """
         retention = self.config.get("retention", {})
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         stats = {
             "metrics_cleaned": 0,
@@ -437,10 +437,18 @@ class TelemetryCollector:
         for metric_name, measurements in self.metrics.items():
             original_len = len(measurements)
             # Remove measurements older than cutoff
-            while measurements and datetime.fromisoformat(
-                measurements[0]["timestamp"].replace("Z", "+00:00")
-            ).replace(tzinfo=None) < metrics_cutoff:
-                measurements.popleft()
+            while measurements:
+                try:
+                    mtime = datetime.fromisoformat(measurements[0]["timestamp"].replace("Z", "+00:00")).astimezone(timezone.utc)
+                except Exception:
+                    # If timestamp malformed, drop it
+                    measurements.popleft()
+                    continue
+
+                if mtime < metrics_cutoff:
+                    measurements.popleft()
+                else:
+                    break
             stats["metrics_cleaned"] += original_len - len(measurements)
         
         # Clean logs
@@ -448,7 +456,7 @@ class TelemetryCollector:
         original_logs = len(self.logs)
         self.logs = deque([
             log for log in self.logs
-            if datetime.fromisoformat(log["timestamp"].replace("Z", "+00:00")).replace(tzinfo=None) >= logs_cutoff
+            if datetime.fromisoformat(log["timestamp"].replace("Z", "+00:00")).astimezone(timezone.utc) >= logs_cutoff
         ], maxlen=10000)
         stats["logs_cleaned"] = original_logs - len(self.logs)
         
@@ -456,7 +464,11 @@ class TelemetryCollector:
         traces_cutoff = now - timedelta(days=retention.get("traces_days", 1))
         traces_to_remove = []
         for trace_id, trace in self.traces.items():
-            trace_time = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00")).replace(tzinfo=None)
+            try:
+                trace_time = datetime.fromisoformat(trace["started_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+            except Exception:
+                continue
+
             if trace_time < traces_cutoff:
                 traces_to_remove.append(trace_id)
         
@@ -469,7 +481,7 @@ class TelemetryCollector:
         original_events = len(self.events)
         self.events = deque([
             event for event in self.events
-            if datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).replace(tzinfo=None) >= events_cutoff
+            if datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone(timezone.utc) >= events_cutoff
         ], maxlen=5000)
         stats["events_cleaned"] = original_events - len(self.events)
         
@@ -497,7 +509,7 @@ class TelemetryCollector:
     
     def _process_event_metrics(self, event_name: str, payload: Dict[str, Any], host_id: Optional[str]) -> None:
         """Process events to extract metrics."""
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         
         # Task completion metrics
         if event_name == "MOS_TASK_COMPLETED":
@@ -573,15 +585,15 @@ class TelemetryCollector:
         if not time_window:
             return list(measurements)
         
-        cutoff = datetime.utcnow() - timedelta(seconds=time_window)
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=time_window)
         recent = []
         
         for measurement in reversed(measurements):
             try:
                 measurement_time = datetime.fromisoformat(
                     measurement["timestamp"].replace("Z", "+00:00")
-                ).replace(tzinfo=None)
-                
+                ).astimezone(timezone.utc)
+
                 if measurement_time >= cutoff:
                     recent.insert(0, measurement)  # Maintain chronological order
                 else:

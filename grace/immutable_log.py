@@ -441,7 +441,20 @@ async def get_entry(entry_cid: str, request=None):
     if _use_orm:
         sess = get_session()
         obj = sess.query(ImmutableEntry).filter(ImmutableEntry.entry_cid == entry_cid).first()
-        sess.close()
+        # record read event
+        try:
+            actor = None
+            try:
+                actor = request.headers.get("X-Actor-Id")
+            except Exception:
+                actor = None
+            evt = EventLog(event_type="immutable_read", payload_json={"entry_cid": entry_cid, "actor": actor}, severity="info")
+            sess.add(evt)
+            sess.commit()
+        except Exception:
+            sess.rollback()
+        finally:
+            sess.close()
         if not obj:
             raise HTTPException(status_code=404, detail="Entry not found")
         return _orm_to_entry(obj)
@@ -528,7 +541,21 @@ async def search_logs(body: Dict[str, Any], request=None):
             )
         q = q.order_by(ImmutableEntry.timestamp.desc()).limit(limit)
         objs = q.all()
-        sess.close()
+        # record search event
+        try:
+            actor = None
+            try:
+                actor = request.headers.get("X-Actor-Id")
+            except Exception:
+                actor = None
+            evt = EventLog(event_type="immutable_search", payload_json={"query": query, "actor": actor}, severity="info")
+            sess.add(evt)
+            sess.commit()
+        except Exception:
+            sess.rollback()
+        finally:
+            sess.close()
+
         results = [_orm_to_entry(o) for o in objs]
     else:
         db_type, conn = _get_conn()

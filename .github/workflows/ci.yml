@@ -67,3 +67,14 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
         run: |
           pytest -q
+      - name: Verify event logs
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
+        run: |
+          echo "Checking for immutable events in event_logs"
+          COUNT=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM event_logs WHERE event_type LIKE 'immutable_%';" | tr -d ' ')
+          echo "Found $COUNT immutable events"
+          if [ "$COUNT" -lt 1 ]; then
+            echo "No immutable events recorded - failing CI"
+            exit 1
+          fi

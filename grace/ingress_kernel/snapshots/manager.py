@@ -5,7 +5,7 @@ Snapshot Manager - Manages versioned snapshots for Ingress state and rollback ca
 import json
 import logging
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def generate_snapshot_id() -> str:
     """Generate a snapshot ID."""
-    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return f"ing_{timestamp}"
 
 
@@ -51,7 +51,7 @@ class SnapshotManager:
 
         # Auto-snapshot configuration
         self.auto_snapshot_interval = timedelta(hours=6)  # Every 6 hours
-        self.last_auto_snapshot = datetime.utcnow()
+        self.last_auto_snapshot = datetime.now(UTC)
         self.max_snapshots = 100
 
         # Performance metrics for rollback decisions
@@ -225,11 +225,11 @@ class SnapshotManager:
         try:
             # Add current metrics to history
             self.performance_history.append(
-                {"timestamp": datetime.utcnow(), "metrics": current_metrics}
+                {"timestamp": datetime.now(UTC), "metrics": current_metrics}
             )
 
             # Clean old history
-            cutoff = datetime.utcnow() - self.performance_window
+            cutoff = datetime.now(UTC) - self.performance_window
             self.performance_history = [
                 h for h in self.performance_history if h["timestamp"] > cutoff
             ]
@@ -296,9 +296,9 @@ class SnapshotManager:
 
     async def auto_snapshot_if_needed(self):
         """Create automatic snapshot if interval has passed."""
-        if datetime.utcnow() - self.last_auto_snapshot > self.auto_snapshot_interval:
+        if datetime.now(UTC) - self.last_auto_snapshot > self.auto_snapshot_interval:
             await self.create_snapshot()
-            self.last_auto_snapshot = datetime.utcnow()
+            self.last_auto_snapshot = datetime.now(UTC)
 
     def update_current_state(self, updates: Dict[str, Any]):
         """Update current state tracking."""

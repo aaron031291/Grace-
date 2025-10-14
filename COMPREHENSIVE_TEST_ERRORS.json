@@ -1,13 +1,6 @@
 [
   {
     "phase": "Phase1:Imports",
-    "component": "IntelligenceKernel",
-    "error_type": "ModuleNotFoundError",
-    "error_message": "No module named 'grace.intelligence_kernel.kernel'",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 185, in test_kernel_imports\n    module = __import__(module_path, fromlist=[class_name])\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nModuleNotFoundError: No module named 'grace.intelligence_kernel.kernel'\n"
-  },
-  {
-    "phase": "Phase1:Imports",
     "component": "VectorStoreClient",
     "error_type": "ImportError",
     "error_message": "cannot import name 'VectorStoreClient' from 'grace.memory_ingestion.vector_store' (/workspaces/Grace-/grace/memory_ingestion/vector_store.py)",
@@ -19,68 +12,5 @@
     "error_type": "ModuleNotFoundError",
     "error_message": "No module named 'sqlalchemy'",
     "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 277, in test_memory_ingestion_imports\n    from grace.memory_ingestion.pipeline import MemoryIngestionPipeline\n  File \"/workspaces/Grace-/grace/memory_ingestion/pipeline.py\", line 17, in <module>\n    from ..core.database.connection import get_database\n  File \"/workspaces/Grace-/grace/core/database/connection.py\", line 9, in <module>\n    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine\nModuleNotFoundError: No module named 'sqlalchemy'\n"
-  },
-  {
-    "phase": "Phase2:Instantiation",
-    "component": "IntelligenceKernel",
-    "error_type": "ModuleNotFoundError",
-    "error_message": "No module named 'grace.intelligence_kernel.kernel'",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 306, in test_intelligence_kernel_creation\n    from grace.intelligence_kernel.kernel import IntelligenceKernel\nModuleNotFoundError: No module named 'grace.intelligence_kernel.kernel'\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "ImmutableLogs (core)",
-    "error_type": "KeyError",
-    "error_message": "'log_count'",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 527, in test_immutable_logs_core\n    assert stats[\"log_count\"] > 0\nKeyError: 'log_count'\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "ImmutableLogs (audit)",
-    "error_type": "OperationalError",
-    "error_message": "no such table: audit_logs",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 542, in test_immutable_logs_audit\n    logs = ImmutableLogs(db_path=\":memory:\")  # Use in-memory DB for testing\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspaces/Grace-/grace/audit/immutable_logs.py\", line 84, in __init__\n    self._load_recent_chain()\n  File \"/workspaces/Grace-/grace/audit/immutable_logs.py\", line 165, in _load_recent_chain\n    cursor.execute(\nsqlite3.OperationalError: no such table: audit_logs\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "HashChaining",
-    "error_type": "OperationalError",
-    "error_message": "no such table: audit_logs",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 570, in test_immutable_log_hash_chaining\n    logs = ImmutableLogs(db_path=\":memory:\")\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspaces/Grace-/grace/audit/immutable_logs.py\", line 84, in __init__\n    self._load_recent_chain()\n  File \"/workspaces/Grace-/grace/audit/immutable_logs.py\", line 165, in _load_recent_chain\n    cursor.execute(\nsqlite3.OperationalError: no such table: audit_logs\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "TamperDetection",
-    "error_type": "OperationalError",
-    "error_message": "no such table: audit_logs",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 601, in test_immutable_log_tamper_detection\n    logs = ImmutableLogs(db_path=\":memory:\")\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspaces/Grace-/grace/audit/immutable_logs.py\", line 84, in __init__\n    self._load_recent_chain()\n  File \"/workspaces/Grace-/grace/audit/immutable_logs.py\", line 165, in _load_recent_chain\n    cursor.execute(\nsqlite3.OperationalError: no such table: audit_logs\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "GovernanceBridge",
-    "error_type": "TypeError",
-    "error_message": "GovernanceEngine.__init__() missing 4 required positional arguments: 'event_bus', 'memory_core', 'verifier', and 'unifier'",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 635, in test_governance_bridge_approval\n    gov = GovernanceEngine()\n          ^^^^^^^^^^^^^^^^^^\nTypeError: GovernanceEngine.__init__() missing 4 required positional arguments: 'event_bus', 'memory_core', 'verifier', and 'unifier'\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "ELoop",
-    "error_type": "OperationalError",
-    "error_message": "table evaluations has no column named payload",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 805, in test_evaluation_loop\n    eval_id = await db.insert(\"evaluations\", evaluation)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspaces/Grace-/grace/ingress_kernel/db/fusion_db.py\", line 134, in insert\n    return await asyncio.to_thread(self._insert_sync, table, payload)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/python/3.12.1/lib/python3.12/asyncio/threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/python/3.12.1/lib/python3.12/concurrent/futures/thread.py\", line 58, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspaces/Grace-/grace/ingress_kernel/db/fusion_db.py\", line 180, in _insert_sync\n    cur.execute(f\"INSERT INTO {table} (payload) VALUES (?)\", (payload_text,))\nsqlite3.OperationalError: table evaluations has no column named payload\n"
-  },
-  {
-    "phase": "Phase5:Integration",
-    "component": "VectorStore",
-    "error_type": "ImportError",
-    "error_message": "cannot import name 'VectorStoreClient' from 'grace.memory_ingestion.vector_store' (/workspaces/Grace-/grace/memory_ingestion/vector_store.py)",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 817, in test_vector_store_operations\n    from grace.memory_ingestion.vector_store import VectorStoreClient\nImportError: cannot import name 'VectorStoreClient' from 'grace.memory_ingestion.vector_store' (/workspaces/Grace-/grace/memory_ingestion/vector_store.py)\n"
-  },
-  {
-    "phase": "Phase6:E2E",
-    "component": "FullGraceLoop",
-    "error_type": "TypeError",
-    "error_message": "GovernanceEngine.__init__() missing 4 required positional arguments: 'event_bus', 'memory_core', 'verifier', and 'unifier'",
-    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 859, in test_full_grace_loop\n    gov = GovernanceEngine()\n          ^^^^^^^^^^^^^^^^^^\nTypeError: GovernanceEngine.__init__() missing 4 required positional arguments: 'event_bus', 'memory_core', 'verifier', and 'unifier'\n"
   }
 ]

@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from fastapi import HTTPException, Request, Response
 
 # Grace system imports
@@ -95,8 +95,8 @@ class MCPResponse(BaseModel):
     provenance: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": True,
                 "data": {"id": "obs_123", "created_at": "2025-10-14T08:00:00Z"},
@@ -105,6 +105,7 @@ class MCPResponse(BaseModel):
                 "metadata": {"latency_ms": 45}
             }
         }
+    )
 
 
 class MCPException(Exception):

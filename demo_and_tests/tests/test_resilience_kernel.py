@@ -83,14 +83,14 @@ async def test_resilience_service():
         print(f"   ✓ Snapshot created: {snapshot['snapshot_id']}")
 
         print("✅ Resilience service test completed successfully!")
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Resilience service test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Resilience service test failed: {e}"
 
 
 async def test_circuit_breaker():
@@ -140,14 +140,14 @@ async def test_circuit_breaker():
         )
 
         print("✅ Circuit breaker test completed successfully!")
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Circuit breaker test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Circuit breaker test failed: {e}"
 
 
 async def test_degradation_manager():
@@ -196,14 +196,14 @@ async def test_degradation_manager():
         )
 
         print("✅ Degradation manager test completed successfully!")
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Degradation manager test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Degradation manager test failed: {e}"
 
 
 async def test_sli_evaluation():
@@ -249,14 +249,14 @@ async def test_sli_evaluation():
         print(f"   ✓ SLI monitor status: {status['status']}")
 
         print("✅ SLI evaluation test completed successfully!")
-        return True
+        return
 
     except Exception as e:
         print(f"❌ SLI evaluation test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"SLI evaluation test failed: {e}"
 
 
 async def test_error_budget():
@@ -294,14 +294,14 @@ async def test_error_budget():
         print(f"   ✓ Burn rate: {burn_rate['burn_rate_per_hour']:.4f} days/hour")
 
         print("✅ Error budget tracking test completed successfully!")
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Error budget tracking test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Error budget tracking test failed: {e}"
 
 
 async def test_chaos_runner():

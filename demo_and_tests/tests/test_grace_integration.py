@@ -108,10 +108,10 @@ class GraceIntegrationTestSuite:
             logger.info(
                 "🎉 ALL TESTS PASSED - Grace infrastructure is production ready!"
             )
-            return True
+            return
         else:
             logger.warning(f"⚠️  {total - passed} tests failed - check logs for details")
-            return False
+            assert False, f"{total - passed} tests failed"
 
     async def test_event_mesh_transports(self) -> bool:
         """Test 1: Event mesh transport abstraction."""
@@ -140,11 +140,11 @@ class GraceIntegrationTestSuite:
             logger.info("✓ Unknown transport fallback works")
 
             await in_memory_transport.disconnect()
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Transport test failed: {e}")
-            return False
+            assert False, f"Transport test failed: {e}"
 
     async def test_event_bus_features(self) -> bool:
         """Test 2: Event bus production features."""
@@ -223,11 +223,11 @@ class GraceIntegrationTestSuite:
             logger.info("✓ Health check works")
 
             await event_bus.stop()
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Event bus test failed: {e}")
-            return False
+            assert False, f"Event bus test failed: {e}"
 
     async def test_governance_api(self) -> bool:
         """Test 3: Governance API functionality."""
@@ -253,11 +253,11 @@ class GraceIntegrationTestSuite:
                 logger.info("✓ FastAPI app available")
                 # Could add API endpoint testing here if needed
 
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Governance API test failed: {e}")
-            return False
+            assert False, f"Governance API test failed: {e}"
 
     async def test_persistent_storage(self) -> bool:
         """Test 4: Persistent storage integration."""
@@ -324,11 +324,11 @@ class GraceIntegrationTestSuite:
             assert entry_id, "Audit logging failed"
             logger.info("✓ Audit logging works")
 
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Persistent storage test failed: {e}")
-            return False
+            assert False, f"Persistent storage test failed: {e}"
 
     async def test_memory_system(self) -> bool:
         """Test 5: Memory system integration."""
@@ -367,11 +367,11 @@ class GraceIntegrationTestSuite:
             assert "fusion_storage" in stats, "Fusion stats missing"
             logger.info("✓ Memory statistics work")
 
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Memory system test failed: {e}")
-            return False
+            assert False, f"Memory system test failed: {e}"
 
     async def test_end_to_end_workflow(self) -> bool:
         """Test 6: End-to-end event workflow."""
@@ -469,11 +469,11 @@ class GraceIntegrationTestSuite:
             logger.info("✓ Auto-snapshot created during workflow")
 
             await event_bus.stop()
-            return True
+            return
 
         except Exception as e:
             logger.error(f"E2E workflow test failed: {e}")
-            return False
+            assert False, f"E2E workflow test failed: {e}"
 
     async def test_configuration_management(self) -> bool:
         """Test 7: Configuration management."""
@@ -509,11 +509,11 @@ class GraceIntegrationTestSuite:
             assert "transport_type" in config_dict, "Configuration serialization failed"
             logger.info("✓ Configuration serialization works")
 
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Configuration test failed: {e}")
-            return False
+            assert False, f"Configuration test failed: {e}"
 
     async def test_error_handling(self) -> bool:
         """Test 8: Error handling and resilience."""
@@ -550,11 +550,11 @@ class GraceIntegrationTestSuite:
             assert not health["running"], "Event bus didn't stop properly"
             logger.info("✓ Graceful shutdown works")
 
-            return True
+            return
 
         except Exception as e:
             logger.error(f"Error handling test failed: {e}")
-            return False
+            assert False, f"Error handling test failed: {e}"
 
 
 async def main():

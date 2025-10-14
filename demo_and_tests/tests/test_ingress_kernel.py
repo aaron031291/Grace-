@@ -203,14 +203,14 @@ async def test_ingress_kernel():
         print(f"Supported parsers: {len(supported_parsers)}")
         print("=" * 50)
 
-        return True
+        return
 
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Ingress kernel test failed: {e}"
 
 
 async def test_fastapi_service():
@@ -230,11 +230,11 @@ async def test_fastapi_service():
         print(f"   ✓ API routes configured: {len(api_routes)}")
 
         print("   ✓ FastAPI service integration working")
-        return True
+        return
 
     except Exception as e:
         print(f"   ❌ FastAPI service test failed: {e}")
-        return False
+        assert False, f"FastAPI service test failed: {e}"
 
 
 async def test_bridges():
@@ -270,11 +270,11 @@ async def test_bridges():
             f"   ✓ MLT bridge experience buffer: {mlt_stats['experience_buffer_size']}"
         )
 
-        return True
+        return
 
     except Exception as e:
         print(f"   ❌ Bridge integration test failed: {e}")
-        return False
+        assert False, f"Bridge integration test failed: {e}"
 
 
 async def main():

@@ -53,7 +53,7 @@ try:
         print(
             f"✅ Lightning Memory: {stats['entries']} entries, {stats['hit_rate']} hit rate"
         )
-        return True
+        return
 
     def test_fusion_memory():
         """Test Fusion long-term storage functionality."""
@@ -91,7 +91,7 @@ try:
             print(
                 f"✅ Fusion Memory: {stats['total_entries']} total, {stats['active_entries']} active"
             )
-            return True
+            return
 
     def test_constitutional_filter():
         """Test Constitutional content filtering."""
@@ -118,7 +118,7 @@ try:
         print(
             f"✅ Constitutional Filter: Good={good_result['constitutional_score']:.2f}, Bad={bad_result['constitutional_score']:.2f}"
         )
-        return True
+        return
 
     def test_enhanced_librarian():
         """Test Enhanced Librarian functionality."""
@@ -174,7 +174,7 @@ try:
             print(
                 f"✅ Enhanced Librarian: {result['chunks_processed']} chunks, {len(search_results)} search results"
             )
-            return True
+            return
 
     async def test_memory_api():
         """Test Grace Memory API."""
@@ -212,7 +212,7 @@ try:
             print(
                 f"✅ Memory API: Write successful, {len(search_results)} search results"
             )
-            return True
+            return
 
     def test_memory_integration():
         """Test integration between memory components."""
@@ -277,7 +277,7 @@ try:
             print(
                 f"✅ Memory Integration: {len(documents)} docs, {len(search_results)} results, cache/storage working"
             )
-            return True
+            return
 
     async def run_tests():
         """Run all memory component tests."""

@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from grace.utils.time import now_utc, iso_now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ class GraceLoopEngine:
             "context": context,
             "attachments": context.get("attachments", []),
             "memory_context": await self._recall_relevant_memories(user_input),
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": iso_now_utc(),
         }
 
     async def _phase_reason(
@@ -276,7 +277,7 @@ class GraceLoopEngine:
                         {
                             "type": "assistant",
                             "content": "Request processed successfully",
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "timestamp": iso_now_utc(),
                         }
                     )
 
@@ -325,7 +326,7 @@ class GraceLoopEngine:
     ) -> Dict[str, Any]:
         """Phase 7: Append immutable log entries."""
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": iso_now_utc(),
             "phases": {phase: result for phase, result in all_results.items()},
             "metrics": {
                 "turn_latency_ms": metrics.turn_latency_ms,

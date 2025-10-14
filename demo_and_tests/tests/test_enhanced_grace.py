@@ -115,10 +115,10 @@ async def test_vector_database_integration():
 
     except ImportError as e:
         print(f"⚠️  Vector database dependencies not available: {e}")
-        return True  # Consider this a success for CI environments
+        return  # Consider this a success for CI environments
     except Exception as e:
         print(f"❌ Vector database test failed: {e}")
-        return False
+        assert False, f"Vector database test failed: {e}"
 
 
 async def test_quantum_safe_storage():
@@ -209,14 +209,14 @@ async def test_quantum_safe_storage():
                 f"✅ Quantum-safe storage stats: {stats['write_count']} writes, {stats['read_count']} reads"
             )
 
-            return True
+            return
 
     except ImportError as e:
         print(f"⚠️  Quantum-safe storage dependencies not available: {e}")
-        return True  # Consider this a success for CI environments
+        return  # Consider this a success for CI environments
     except Exception as e:
         print(f"❌ Quantum-safe storage test failed: {e}")
-        return False
+        assert False, f"Quantum-safe storage test failed: {e}"
 
 
 async def test_enhanced_memory_bridge():
@@ -415,14 +415,14 @@ async def test_enhanced_ml_specialists():
         gnn_stats = gnn_specialist.get_stats()
         print(f"✅ Specialist stats - GNN trust score: {gnn_stats['trust_score']:.2f}")
 
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Enhanced ML specialists test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Enhanced ML specialists test failed: {e}"
 
 
 async def test_cross_domain_validators():
@@ -518,7 +518,7 @@ async def test_cross_domain_validators():
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Cross-domain validators test failed: {e}"
 
 
 async def test_enhanced_governance_liaison():
@@ -624,14 +624,14 @@ async def test_enhanced_governance_liaison():
         print(f"   - Active validators: {len(stats['validators'])}")
 
         await liaison.shutdown()
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Enhanced governance liaison test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Enhanced governance liaison test failed: {e}"
 
 
 async def test_integration():
@@ -730,14 +730,14 @@ async def test_integration():
         await memory_bridge.shutdown()
         await governance_liaison.shutdown()
 
-        return True
+        return
 
     except Exception as e:
         print(f"❌ Integration test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Integration test failed: {e}"
 
 
 async def main():
@@ -792,10 +792,10 @@ async def main():
 
     if passed == total:
         print("🎉 ALL ENHANCED TESTS PASSED!")
-        return True
+        return
     else:
         print("⚠️  Some tests failed or had issues")
-        return False
+        assert False, f"{total - passed} tests failed"
 
 
 if __name__ == "__main__":

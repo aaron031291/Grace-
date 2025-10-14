@@ -80,14 +80,14 @@ async def test_orchestration_service():
         await service.stop()
         print("   ✓ Service stopped successfully")
 
-        return True
+        return
 
     except Exception as e:
         print(f"   ❌ Test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Orchestration service test failed: {e}"
 
 
 async def test_component_integration():
@@ -166,14 +166,14 @@ async def test_component_integration():
         await scheduler.stop()
         print("   ✓ Components stopped")
 
-        return True
+        return
 
     except Exception as e:
         print(f"   ❌ Integration test failed: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Component integration test failed: {e}"
 
 
 async def test_contracts_and_schemas():
@@ -223,13 +223,13 @@ async def test_contracts_and_schemas():
             print(f"   ✓ Database DDL schema exists")
         else:
             print(f"   ❌ Missing database DDL schema")
-            return False
+            assert False, "Missing database DDL schema"
 
-        return True
+        return
 
     except Exception as e:
         print(f"   ❌ Schema validation failed: {e}")
-        return False
+        assert False, f"Schema validation failed: {e}"
 
 
 async def main():

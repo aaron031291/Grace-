@@ -137,7 +137,7 @@ async def test_orb_interface():
     print(f"✅ Ended session: {success}")
 
     print("🎉 All tests completed successfully!")
-    return True
+    return
 
 
 async def test_grace_intelligence():
@@ -192,7 +192,7 @@ async def test_grace_intelligence():
             print(f"❌ Error processing query: {e}")
 
     print("🎉 Grace Intelligence tests completed!")
-    return True
+    return
 
 
 async def main():

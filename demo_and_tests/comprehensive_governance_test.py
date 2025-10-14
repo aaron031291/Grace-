@@ -38,10 +38,10 @@ def test_path_drift_fix():
             )
 
             print("✅ Audit imports working correctly")
-            return True
+            return
         except ImportError as e:
             print(f"❌ Import failed: {e}")
-            return False
+            assert False, f"Import failed: {e}"
     else:
         print("❌ Symlink not found")
         return False
@@ -77,12 +77,11 @@ def test_enforcement_hooks():
         )
 
         print("✅ Quorum consensus schema available")
-
-        return True
+        return
 
     except ImportError as e:
         print(f"❌ Enforcement hooks missing: {e}")
-        return False
+        assert False, f"Enforcement hooks missing: {e}"
 
 
 def test_ci_integration():
@@ -100,10 +99,10 @@ def test_ci_integration():
 
         if "constitutional_validator" in ci_content:
             print("✅ Constitutional validation integrated in CI")
-            return True
+            return
         else:
             print("⚠️ Constitutional validation not found in CI")
-            return False
+            assert False, "Constitutional validation not found in CI"
 
     except ImportError as e:
         print(f"❌ CI integration failed: {e}")
@@ -136,10 +135,10 @@ async def test_golden_path_audit():
         verification = await verify_audit(audit_id)
         if verification["verified"]:
             print("✅ verify_audit() working")
-            return True
+            return
         else:
             print("❌ Audit verification failed")
-            return False
+            assert False, "Audit verification failed"
 
     except Exception as e:
         print(f"❌ Golden path audit failed: {e}")
@@ -160,10 +159,10 @@ def test_api_integration():
 
         if "append_audit" in api_content:
             print("✅ API endpoints call append_audit()")
-            return True
+            return
         else:
             print("❌ API endpoints lack audit integration")
-            return False
+            assert False, "API endpoints lack audit integration"
 
     except Exception as e:
         print(f"❌ API integration test failed: {e}")
@@ -200,7 +199,10 @@ def test_documentation_updates():
             else:
                 print(f"❌ {description}")
 
-        return passed == len(checks)
+        if passed == len(checks):
+            return
+        else:
+            assert False, f"{len(checks)-passed} documentation checks failed"
 
     except Exception as e:
         print(f"❌ Documentation test failed: {e}")

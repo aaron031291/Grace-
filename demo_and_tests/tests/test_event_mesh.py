@@ -80,7 +80,7 @@ try:
         await event_bus.stop()
 
         print("✅ Event mesh test passed!")
-        return True
+        return
 
     def test_message_envelope():
         """Test GME functionality."""
@@ -110,7 +110,7 @@ try:
         assert gme.retry_count == initial_count + 1
 
         print("✅ Message envelope test passed!")
-        return True
+        return
 
     def run_tests():
         """Run all tests."""
@@ -138,7 +138,10 @@ try:
             print(f"❌ Event mesh test failed: {e}")
 
         print(f"\n📊 Results: {tests_passed}/{tests_total} tests passed")
-        return tests_passed == tests_total
+        if tests_passed == tests_total:
+            return
+        else:
+            assert False, f"{tests_total - tests_passed} event mesh tests failed"
 
     if __name__ == "__main__":
         success = run_tests()

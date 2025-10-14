@@ -73,14 +73,14 @@ async def test_governance_kernel():
         print("\nAll tests passed! 🎉")
         print("Grace Governance Kernel is working correctly.")
 
-        return True
+        return
 
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Test failed with error: {e}"
 
 
 if __name__ == "__main__":

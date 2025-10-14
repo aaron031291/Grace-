@@ -15,9 +15,9 @@ from typing import Dict, Any, Optional, List
 from enum import Enum
 from dataclasses import dataclass, asdict
 
-from grace.core.event_bus import EventBusClient
+from grace.core.event_bus import EventBus
 from grace.governance.governance_engine import GovernanceEngine
-from grace.immune.avn_core import AVNClient
+from grace.ingress_kernel.db.fusion_db import FusionDB
 from grace.mlt_kernel_ml.memory_orchestrator import MemoryOrchestrator
 
 
@@ -82,11 +82,10 @@ class PushbackHandler:
     
     def __init__(self):
         # Lazy-loaded clients
-        self._events: Optional[EventBusClient] = None
+        self._events: Optional[EventBus] = None
         self._governance: Optional[GovernanceEngine] = None
-        self._avn: Optional[AVNClient] = None
         self._memory: Optional[MemoryOrchestrator] = None
-        self._db = None
+        self._db: Optional[FusionDB] = None
         
     @classmethod
     def get_instance(cls):
@@ -95,22 +94,22 @@ class PushbackHandler:
         return cls._instance
     
     @property
-    def events(self) -> EventBusClient:
+    def events(self) -> EventBus:
         if not self._events:
-            self._events = EventBusClient.get_instance()
+            self._events = EventBus()
         return self._events
     
     @property
     def governance(self) -> GovernanceEngine:
         if not self._governance:
-            self._governance = GovernanceEngine.get_instance()
+            self._governance = GovernanceEngine()
         return self._governance
     
     @property
-    def avn(self) -> AVNClient:
-        if not self._avn:
-            self._avn = AVNClient.get_instance()
-        return self._avn
+    def db(self) -> FusionDB:
+        if not self._db:
+            self._db = FusionDB.get_instance()
+        return self._db
     
     @property
     def memory(self) -> MemoryOrchestrator:
@@ -421,7 +420,7 @@ class PushbackHandler:
     async def _escalate_to_avn(self, 
                                payload: PushbackPayload,
                                context: Dict[str, Any]) -> str:
-        """Escalate to AVN (Auto-Verification Node) for healing"""
+        """Escalate to memory orchestrator for healing"""
         healing_request = {
             "service": payload.domain,
             "error_code": payload.error_code,
@@ -432,7 +431,8 @@ class PushbackHandler:
             "metadata": payload.metadata or {}
         }
         
-        ticket_id = await self.avn.request_healing(payload.domain, healing_request)
+        ticket = await self.memory.request_healing(healing_request)
+        ticket_id = ticket["ticket_id"]
         
         # Log escalation
         await self.db.insert('meta_loop_escalations', {

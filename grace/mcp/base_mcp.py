@@ -15,6 +15,7 @@ import asyncio
 import time
 import hashlib
 import json
+import logging
 from typing import Dict, Any, Optional, Callable, List, Type
 from functools import wraps
 from dataclasses import dataclass
@@ -25,12 +26,14 @@ from pydantic import BaseModel, Field
 from fastapi import HTTPException, Request, Response
 
 # Grace system imports
-from grace.core.event_bus import EventBusClient
-from grace.core.contracts import GovernedDecision, GovernedRequest
+from grace.core.event_bus import EventBus
+from grace.contracts.governed_decision import GovernedDecision
+from grace.contracts.governed_request import GovernedRequest
 from grace.governance.governance_engine import GovernanceEngine
-from grace.immune.avn_core import AVNClient
 from grace.core.memory_core import MemoryCore
-from grace.db.session import get_session
+from grace.ingress_kernel.db.fusion_db import FusionDB
+
+logger = logging.getLogger(__name__)
 
 
 class Severity(str, Enum):
@@ -173,11 +176,10 @@ class BaseMCP:
         self.manifest = self._load_manifest()
         
         # Initialize clients (lazy loading)
-        self._db_session = None  # SQLAlchemy session
+        self._db: Optional[FusionDB] = None
         self._memory: Optional[MemoryCore] = None
-        self._events: Optional[EventBusClient] = None
+        self._events: Optional[EventBus] = None
         self._governance: Optional[GovernanceEngine] = None
-        self._avn: Optional[AVNClient] = None
         
     def _load_manifest(self) -> Dict[str, Any]:
         """Load and validate YAML manifest"""
@@ -198,11 +200,11 @@ class BaseMCP:
     # --- Lazy client initialization ---
     
     @property
-    def db(self):
-        """Get database session"""
-        if not self._db_session:
-            self._db_session = get_session()
-        return self._db_session
+    def db(self) -> FusionDB:
+        """Get database instance"""
+        if not self._db:
+            self._db = FusionDB.get_instance()
+        return self._db
     
     @property
     def memory(self) -> MemoryCore:
@@ -211,22 +213,16 @@ class BaseMCP:
         return self._memory
     
     @property
-    def events(self) -> EventBusClient:
+    def events(self) -> EventBus:
         if not self._events:
-            self._events = EventBusClient.get_instance()
+            self._events = EventBus()
         return self._events
     
     @property
     def governance(self) -> GovernanceEngine:
         if not self._governance:
-            self._governance = GovernanceEngine.get_instance()
+            self._governance = GovernanceEngine()
         return self._governance
-    
-    @property
-    def avn(self) -> AVNClient:
-        if not self._avn:
-            self._avn = AVNClient.get_instance()
-        return self._avn
     
     # --- Meta-Loop integration ---
     
@@ -376,11 +372,8 @@ class BaseMCP:
             embedding = [random.random() for _ in range(384)]  # Mock 384-dim vector
             return embedding
         except Exception as e:
-            # Log failure and request AVN healing
-            await self.avn.request_healing(
-                service="embedding_model",
-                metadata={"error": str(e), "text_length": len(text)}
-            )
+            # Log failure - in production, escalate to healing system
+            logger.error(f"Embedding service failed: {e}")
             raise ServiceUnavailable("embedding_model")
     
     async def upsert_vector(self,
@@ -412,10 +405,7 @@ class BaseMCP:
                 return
             except Exception as e:
                 if attempt >= max_attempts:
-                    await self.avn.request_healing(
-                        service="vector_store",
-                        metadata={"collection": collection, "error": str(e)}
-                    )
+                    logger.error(f"Vector store upsert failed after {max_attempts} attempts: {e}")
                     raise ServiceUnavailable("vector_store")
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
     

@@ -179,9 +179,11 @@ class GraceIntegrationTestSuite:
             logger.info("✓ Event subscription works")
 
             # Publish test event
+            from grace.utils.time import iso_now_utc
+
             msg_id = await event_bus.publish(
                 event_type="TEST_EVENT",
-                payload={"test": "data", "timestamp": datetime.utcnow().isoformat()},
+                payload={"test": "data", "timestamp": iso_now_utc()},
                 source="test_suite",
             )
             assert msg_id, "Event publishing failed"

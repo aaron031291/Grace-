@@ -7,6 +7,7 @@ import uuid
 from typing import Dict, Any, Optional, Callable, List
 from enum import Enum
 from datetime import datetime
+from grace.utils.time import iso_now_utc
 from dataclasses import dataclass, field
 import logging
 import json
@@ -43,7 +44,7 @@ class Job:
     payload: Dict[str, Any]
     status: JobStatus = JobStatus.PENDING
     priority: JobPriority = JobPriority.MEDIUM
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: iso_now_utc())
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     error: Optional[str] = None

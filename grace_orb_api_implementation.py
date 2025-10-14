@@ -167,8 +167,8 @@ def setup_orb_api_routes(app, grace_kernel):
             return {
                 "task_id": task_id,
                 "status": "completed",
-                "created_at": datetime.utcnow().isoformat() + "Z",
-                "completed_at": datetime.utcnow().isoformat() + "Z",
+                "created_at": iso_now_utc(),
+                "completed_at": iso_now_utc(),
             }
         except Exception as e:
             logger.error(f"Multimodal task retrieval error: {e}")

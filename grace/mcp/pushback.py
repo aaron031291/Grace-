@@ -267,26 +267,28 @@ class PushbackHandler:
         if not payload.request_id:
             return None
         
+        import json
+        
         evaluation = {
             "action_id": payload.request_id,  # Link to original request
-            "intended_outcome": {"success": True},
-            "actual_outcome": {
+            "intended_outcome": json.dumps({"success": True}),
+            "actual_outcome": json.dumps({
                 "success": False,
                 "error_code": payload.error_code,
                 "error_message": payload.message
-            },
+            }),
             "success": False,
-            "performance_metrics": {
+            "performance_metrics": json.dumps({
                 "category": payload.category.value,
                 "severity": payload.severity.value
-            },
-            "side_effects_identified": payload.metadata or {},
-            "error_analysis": {
+            }),
+            "side_effects_identified": json.dumps(payload.metadata or {}),
+            "error_analysis": json.dumps({
                 "error_code": payload.error_code,
                 "category": payload.category.value,
                 "root_cause_hypothesis": self._hypothesize_root_cause(payload)
-            },
-            "lessons_learned": self._extract_lessons(payload),
+            }),
+            "lessons_learned": json.dumps(self._extract_lessons(payload)),
             "confidence_adjustment": -0.05,  # Reduce trust on failures
             "evaluated_at": time.time()
         }
@@ -344,15 +346,20 @@ class PushbackHandler:
     
     async def _adjust_trust(self, component: str, delta: float):
         """Adjust trust score for component"""
+        import uuid
+        
+        # Get current score or default to 0.5
+        current = await self.db.query_one(
+            "SELECT trust_score FROM trust_scores WHERE component = ? ORDER BY timestamp DESC LIMIT 1",
+            (component,)
+        )
+        previous_score = current['trust_score'] if current else 0.5
+        new_score = max(0.0, min(1.0, previous_score + delta))
+        
         await self.db.execute("""
-            INSERT INTO trust_scores (component, trust_score, previous_score, change_reason, updated_at)
-            VALUES (?, 0.5, 0.5, 'initial', ?)
-            ON CONFLICT(component) DO UPDATE SET
-                previous_score = trust_score,
-                trust_score = LEAST(1.0, GREATEST(0.0, trust_score + ?)),
-                change_reason = 'failure_adjustment',
-                updated_at = ?
-        """, (component, time.time(), delta, time.time()))
+            INSERT INTO trust_scores (score_id, component, trust_score, previous_score, change_reason, timestamp)
+            VALUES (?, ?, ?, ?, 'failure_adjustment', ?)
+        """, (f"score_{uuid.uuid4().hex[:12]}", component, new_score, previous_score, time.time()))
     
     async def _emit_events(self, payload: PushbackPayload, audit_id: str) -> List[str]:
         """Emit events based on category and severity"""

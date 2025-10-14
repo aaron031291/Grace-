@@ -7,6 +7,7 @@ Centralized registry for all ML/DL models with:
 - Performance metrics tracking
 - Automated rollback triggers
 - Model card generation
+- PyTorch/Deep Learning model support with GPU metrics
 """
 
 from typing import Dict, Any, Optional, List
@@ -20,6 +21,15 @@ from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# Check for PyTorch availability
+try:
+    import torch
+    PYTORCH_AVAILABLE = True
+except ImportError:
+    PYTORCH_AVAILABLE = False
+    logger.warning("PyTorch not available - some features limited")
 
 
 class DeploymentStage(Enum):
@@ -119,6 +129,11 @@ class ModelPerformanceSnapshot:
     
     # Sample size
     num_requests: int = 0
+    
+    # GPU metrics (for deep learning models)
+    gpu_memory_mb: Optional[float] = None
+    gpu_utilization_percent: Optional[float] = None
+    device: Optional[str] = None  # cuda, mps, cpu
 
 
 class ModelRegistry:
@@ -211,6 +226,116 @@ class ModelRegistry:
         self._save_registry()
         
         logger.info(f"Registered model: {entry.model_id} v{entry.version}")
+        return True
+    
+    async def register_pytorch_model(
+        self,
+        model_id: str,
+        model: Any,
+        metrics: Dict[str, float],
+        metadata: Dict[str, Any],
+        checkpoint_path: Optional[str] = None
+    ) -> bool:
+        """
+        Register a PyTorch deep learning model.
+        
+        Args:
+            model_id: Unique model identifier
+            model: PyTorch model instance or specialist
+            metrics: Training/evaluation metrics
+            metadata: Additional metadata (device, train_samples, etc.)
+            checkpoint_path: Path to saved checkpoint
+            
+        Returns:
+            True if successful
+        """
+        if not PYTORCH_AVAILABLE:
+            logger.warning("PyTorch not available - registering as generic model")
+        
+        # Extract model info
+        model_type = type(model).__name__
+        framework = "pytorch" if PYTORCH_AVAILABLE else "unknown"
+        
+        # GPU metrics if available
+        device = metadata.get('device', 'cpu')
+        gpu_memory_mb = None
+        gpu_util = None
+        
+        if PYTORCH_AVAILABLE and device in ['cuda', 'mps']:
+            try:
+                from grace.mldl_specialists.deep_learning import DeviceManager
+                mem_info = DeviceManager.get_memory_usage()
+                gpu_memory_mb = mem_info.get('allocated_mb', 0.0)
+                gpu_util = mem_info.get('utilization_percent')
+            except Exception as e:
+                logger.warning(f"Could not get GPU metrics: {e}")
+        
+        # Create registry entry
+        entry = ModelRegistryEntry(
+            model_id=model_id,
+            name=model_id,
+            version=metadata.get('version', '1.0'),
+            artifact_path=checkpoint_path or f"models/{model_id}.pt",
+            framework=framework,
+            model_type=model_type,
+            owner=metadata.get('owner', 'system'),
+            team=metadata.get('team', 'ml'),
+            training_data_hash=metadata.get('training_data_hash', ''),
+            training_dataset_size=metadata.get('train_samples', 0),
+            training_timestamp=datetime.fromisoformat(metadata['last_trained']) if 'last_trained' in metadata else datetime.now(),
+            training_duration_minutes=metadata.get('training_duration_minutes'),
+            evaluation_metrics=metrics,
+            deploy_status=DeploymentStage.DEVELOPMENT,
+            tags=metadata.get('tags', ['pytorch', 'deep_learning']),
+            description=metadata.get('description', f'{model_type} deep learning model'),
+            runtime_metrics={
+                'device': device,
+                'gpu_memory_mb': gpu_memory_mb,
+                'gpu_utilization_percent': gpu_util
+            }
+        )
+        
+        return self.register_model(entry)
+    
+    async def update_model(
+        self,
+        model_id: str,
+        metrics: Optional[Dict[str, float]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Update an existing model's metrics and metadata.
+        
+        Args:
+            model_id: Model identifier
+            metrics: New metrics to add/update
+            metadata: New metadata to add/update
+            
+        Returns:
+            True if successful
+        """
+        if model_id not in self.models:
+            logger.error(f"Model not found: {model_id}")
+            return False
+        
+        entry = self.models[model_id]
+        
+        if metrics:
+            entry.evaluation_metrics.update(metrics)
+        
+        if metadata:
+            entry.runtime_metrics.update(metadata)
+            
+            # Update specific fields if present
+            if 'last_trained' in metadata:
+                entry.training_timestamp = datetime.fromisoformat(metadata['last_trained'])
+            if 'device' in metadata:
+                entry.runtime_metrics['device'] = metadata['device']
+        
+        entry.updated_at = datetime.now()
+        self._save_registry()
+        
+        logger.info(f"Updated model: {model_id}")
         return True
     
     def get_model(self, model_id: str) -> Optional[ModelRegistryEntry]:

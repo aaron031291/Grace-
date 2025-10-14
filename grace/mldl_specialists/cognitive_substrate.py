@@ -31,6 +31,56 @@ from enum import Enum
 from datetime import datetime
 import asyncio
 import logging
+import numpy as np
+
+# Classical ML Specialists
+try:
+    from grace.mldl_specialists.supervised_specialists import (
+        DecisionTreeSpecialist,
+        RandomForestSpecialist,
+        GradientBoostingSpecialist,
+        SVMSpecialist
+    )
+    from grace.mldl_specialists.unsupervised_specialists import (
+        KMeansSpecialist,
+        DBSCANSpecialist,
+        PCASpecialist,
+        IsolationForestSpecialist
+    )
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("Classical ML specialists not found - some features may be limited")
+
+# Deep Learning Specialists
+try:
+    from grace.mldl_specialists.deep_learning import (
+        ANNSpecialist,
+        CNNSpecialist,
+        RNNSpecialist,
+        LSTMSpecialist,
+        TransformerSpecialist,
+        AutoencoderSpecialist,
+        GANSpecialist,
+        DeviceManager
+    )
+    DEEP_LEARNING_AVAILABLE = True
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("Deep Learning specialists not available - install PyTorch: pip install torch transformers")
+    DEEP_LEARNING_AVAILABLE = False
+
+# Operational Intelligence
+try:
+    from grace.mldl_specialists.uncertainty_ood import (
+        UncertaintyQuantifier,
+        OODDetector
+    )
+    from grace.mldl_specialists.model_registry import ModelRegistry
+    from grace.mldl_specialists.active_learning import ActiveLearningManager
+    from grace.mldl_specialists.monitoring import MLModelMonitor
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("Operational Intelligence modules not found - some features may be limited")
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +146,9 @@ class CognitiveSubstrate:
     
     Transforms raw signals into structured intelligence across all system layers.
     Integrates with kernels, governance, tables, APIs, and TriggerMesh.
+    
+    NEW: Integrates all classical ML and deep learning specialists with
+    operational intelligence (monitoring, active learning, uncertainty, registry).
     """
     
     def __init__(
@@ -103,7 +156,11 @@ class CognitiveSubstrate:
         kpi_monitor=None,
         governance_engine=None,
         event_publisher: Optional[Callable] = None,
-        immutable_logs=None
+        immutable_logs=None,
+        model_registry=None,
+        ml_monitor=None,
+        active_learning_manager=None,
+        enable_gpu: bool = True
     ):
         """Initialize cognitive substrate with Grace integration points."""
         self.kpi_monitor = kpi_monitor
@@ -111,10 +168,28 @@ class CognitiveSubstrate:
         self.event_publisher = event_publisher
         self.immutable_logs = immutable_logs
         
+        # Operational Intelligence Integration
+        self.model_registry = model_registry or (ModelRegistry() if 'ModelRegistry' in globals() else None)
+        self.ml_monitor = ml_monitor or (MLModelMonitor() if 'MLModelMonitor' in globals() else None)
+        self.active_learning = active_learning_manager or (ActiveLearningManager() if 'ActiveLearningManager' in globals() else None)
+        
+        # Uncertainty and OOD detection
+        self.uncertainty_quantifier = UncertaintyQuantifier() if 'UncertaintyQuantifier' in globals() else None
+        self.ood_detector = OODDetector() if 'OODDetector' in globals() else None
+        
+        # Device management for deep learning
+        self.device = "cpu"
+        if DEEP_LEARNING_AVAILABLE and enable_gpu:
+            self.device = DeviceManager.get_device()
+            logger.info(f"Deep Learning enabled with device: {self.device}")
+        
         # Specialist registry by cognitive function
         self.specialists: Dict[CognitiveFunction, List[Any]] = {
             func: [] for func in CognitiveFunction
         }
+        
+        # Specialist instances by ID
+        self.specialist_instances: Dict[str, Any] = {}
         
         # Performance metrics
         self.metrics = {
@@ -123,24 +198,267 @@ class CognitiveSubstrate:
             'by_source': {src: 0 for src in IntegrationPoint},
             'avg_processing_time_ms': 0.0,
             'avg_confidence': 0.0,
-            'governance_pass_rate': 1.0
+            'governance_pass_rate': 1.0,
+            'deep_learning_enabled': DEEP_LEARNING_AVAILABLE,
+            'gpu_available': self.device in ['cuda', 'mps']
         }
         
         # Learning loop state
         self.learning_enabled = True
         self.auto_optimization = True
         
-        logger.info("ML/DL Cognitive Substrate initialized as Grace's intelligence layer")
+        logger.info(f"ML/DL Cognitive Substrate initialized as Grace's intelligence layer (GPU: {self.device})")
     
     def register_specialist(
         self,
         specialist: Any,
-        cognitive_functions: List[CognitiveFunction]
+        cognitive_functions: List[CognitiveFunction],
+        specialist_id: Optional[str] = None
     ):
-        """Register a specialist for specific cognitive functions."""
+        """
+        Register a specialist for specific cognitive functions.
+        
+        Args:
+            specialist: ML/DL specialist instance
+            cognitive_functions: List of cognitive functions this specialist handles
+            specialist_id: Unique identifier (auto-generated if None)
+        """
+        if specialist_id is None:
+            specialist_id = f"{specialist.__class__.__name__}_{len(self.specialist_instances)}"
+        
+        # Register by cognitive function
         for func in cognitive_functions:
             self.specialists[func].append(specialist)
             logger.info(f"Registered {specialist.__class__.__name__} for {func.value}")
+        
+        # Store instance
+        self.specialist_instances[specialist_id] = specialist
+        
+        # Register with model registry
+        if self.model_registry:
+            try:
+                asyncio.create_task(self.model_registry.register_model(
+                    model_id=specialist_id,
+                    model_type=specialist.__class__.__name__,
+                    model=specialist,
+                    metrics={},
+                    metadata={'cognitive_functions': [f.value for f in cognitive_functions]}
+                ))
+            except Exception as e:
+                logger.warning(f"Could not register with model registry: {e}")
+    
+    async def create_specialist(
+        self,
+        specialist_type: str,
+        specialist_id: str,
+        cognitive_functions: List[CognitiveFunction],
+        **kwargs
+    ) -> Any:
+        """
+        Create and register a new specialist.
+        
+        Args:
+            specialist_type: Type of specialist (e.g., "LSTM", "RandomForest", "Transformer")
+            specialist_id: Unique identifier
+            cognitive_functions: List of cognitive functions
+            **kwargs: Specialist-specific parameters
+            
+        Returns:
+            Created specialist instance
+        """
+        specialist_map = {
+            # Classical ML
+            'DecisionTree': DecisionTreeSpecialist if 'DecisionTreeSpecialist' in globals() else None,
+            'RandomForest': RandomForestSpecialist if 'RandomForestSpecialist' in globals() else None,
+            'GradientBoosting': GradientBoostingSpecialist if 'GradientBoostingSpecialist' in globals() else None,
+            'SVM': SVMSpecialist if 'SVMSpecialist' in globals() else None,
+            'KMeans': KMeansSpecialist if 'KMeansSpecialist' in globals() else None,
+            'DBSCAN': DBSCANSpecialist if 'DBSCANSpecialist' in globals() else None,
+            'PCA': PCASpecialist if 'PCASpecialist' in globals() else None,
+            'IsolationForest': IsolationForestSpecialist if 'IsolationForestSpecialist' in globals() else None,
+        }
+        
+        # Add deep learning specialists if available
+        if DEEP_LEARNING_AVAILABLE:
+            specialist_map.update({
+                'ANN': ANNSpecialist,
+                'CNN': CNNSpecialist,
+                'RNN': RNNSpecialist,
+                'LSTM': LSTMSpecialist,
+                'Transformer': TransformerSpecialist,
+                'Autoencoder': AutoencoderSpecialist,
+                'GAN': GANSpecialist
+            })
+        
+        specialist_class = specialist_map.get(specialist_type)
+        if specialist_class is None:
+            raise ValueError(f"Unknown specialist type: {specialist_type}")
+        
+        # Create specialist
+        specialist = specialist_class(specialist_id=specialist_id, **kwargs)
+        
+        # Register specialist
+        self.register_specialist(specialist, cognitive_functions, specialist_id)
+        
+        logger.info(f"Created and registered specialist: {specialist_id} ({specialist_type})")
+        return specialist
+    
+    async def train_specialist(
+        self,
+        specialist_id: str,
+        X_train,
+        y_train=None,
+        X_val=None,
+        y_val=None,
+        **training_kwargs
+    ) -> Dict[str, Any]:
+        """
+        Train a specialist with monitoring and registry integration.
+        
+        Args:
+            specialist_id: Specialist to train
+            X_train: Training features
+            y_train: Training labels (None for unsupervised)
+            X_val: Validation features
+            y_val: Validation labels
+            **training_kwargs: Model-specific training parameters
+            
+        Returns:
+            Training metrics
+        """
+        if specialist_id not in self.specialist_instances:
+            raise ValueError(f"Specialist {specialist_id} not found")
+        
+        specialist = self.specialist_instances[specialist_id]
+        
+        # Start monitoring
+        if self.ml_monitor:
+            self.ml_monitor.log_training_start(specialist_id)
+        
+        try:
+            # Train model
+            if hasattr(specialist, 'fit'):
+                # Check if it's async
+                if asyncio.iscoroutinefunction(specialist.fit):
+                    result = await specialist.fit(
+                        X_train, y_train,
+                        X_val=X_val, y_val=y_val,
+                        **training_kwargs
+                    )
+                else:
+                    # Classical ML (synchronous)
+                    result = await asyncio.to_thread(
+                        specialist.fit,
+                        X_train, y_train
+                    )
+            else:
+                raise AttributeError(f"Specialist {specialist_id} has no fit method")
+            
+            # Update model registry
+            if self.model_registry:
+                await self.model_registry.update_model(
+                    model_id=specialist_id,
+                    metrics=result if isinstance(result, dict) else {},
+                    metadata={
+                        'device': self.device,
+                        'train_samples': len(X_train) if hasattr(X_train, '__len__') else 'unknown',
+                        'val_samples': len(X_val) if X_val is not None and hasattr(X_val, '__len__') else 0,
+                        'last_trained': datetime.utcnow().isoformat()
+                    }
+                )
+            
+            # Log success
+            if self.ml_monitor:
+                self.ml_monitor.log_training_complete(specialist_id, result)
+            
+            logger.info(f"Training complete for {specialist_id}")
+            return result
+            
+        except Exception as e:
+            if self.ml_monitor:
+                self.ml_monitor.log_training_error(specialist_id, str(e))
+            logger.error(f"Training failed for {specialist_id}: {e}")
+            raise
+    
+    async def predict_with_specialist(
+        self,
+        specialist_id: str,
+        X,
+        detect_ood: bool = True,
+        calculate_uncertainty: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Make prediction with a specific specialist, including uncertainty and OOD detection.
+        
+        Args:
+            specialist_id: Specialist to use
+            X: Input features
+            detect_ood: Whether to detect out-of-distribution samples
+            calculate_uncertainty: Whether to quantify uncertainty
+            
+        Returns:
+            Prediction with uncertainty and OOD information
+        """
+        if specialist_id not in self.specialist_instances:
+            raise ValueError(f"Specialist {specialist_id} not found")
+        
+        specialist = self.specialist_instances[specialist_id]
+        
+        # Make prediction
+        if hasattr(specialist, 'predict_async'):
+            prediction = await specialist.predict_async(X, context={})
+        elif hasattr(specialist, 'predict'):
+            prediction = await asyncio.to_thread(specialist.predict, X)
+        else:
+            raise AttributeError(f"Specialist {specialist_id} has no predict method")
+        
+        # Get confidence/probabilities
+        confidence = None
+        proba = None
+        if hasattr(specialist, 'predict_proba'):
+            proba = await asyncio.to_thread(specialist.predict_proba, X)
+            if proba is not None and len(proba.shape) > 1:
+                # Use numpy if available, otherwise Python max
+                try:
+                    import numpy as np
+                    confidence = float(np.max(proba, axis=1).mean())
+                except ImportError:
+                    confidence = max([max(row) for row in proba]) / len(proba)
+        
+        # Uncertainty quantification
+        uncertainty = None
+        if calculate_uncertainty and self.uncertainty_quantifier and proba is not None:
+            uncertainty = self.uncertainty_quantifier.calculate_entropy(proba)
+        
+        # OOD detection
+        is_ood = False
+        if detect_ood and self.ood_detector and proba is not None:
+            ood_scores = self.ood_detector.detect_ood(proba)
+            try:
+                import numpy as np
+                is_ood = float(ood_scores.mean()) > 0.5
+            except ImportError:
+                is_ood = sum(ood_scores) / len(ood_scores) > 0.5
+        
+        # Log prediction
+        if self.ml_monitor:
+            self.ml_monitor.log_prediction(
+                model_id=specialist_id,
+                prediction=prediction,
+                confidence=confidence,
+                uncertainty=uncertainty,
+                is_ood=is_ood
+            )
+        
+        return {
+            'prediction': prediction,
+            'confidence': confidence,
+            'uncertainty': uncertainty,
+            'is_ood': is_ood,
+            'specialist_id': specialist_id,
+            'specialist_type': specialist.__class__.__name__,
+            'timestamp': datetime.utcnow().isoformat()
+        }
     
     async def process_cognitive_event(
         self,
@@ -492,10 +810,156 @@ class CognitiveSubstrate:
         )
         return await self.process_cognitive_event(event)
     
+    async def active_learning_query(
+        self,
+        specialist_id: str,
+        X_pool,
+        n_samples: int = 10,
+        strategy: str = "uncertainty"
+    ):
+        """
+        Query samples for active learning.
+        
+        Args:
+            specialist_id: Specialist to use
+            X_pool: Pool of unlabeled samples
+            n_samples: Number of samples to query
+            strategy: Sampling strategy ("uncertainty", "diversity")
+            
+        Returns:
+            Indices and samples to label
+        """
+        if specialist_id not in self.specialist_instances:
+            raise ValueError(f"Specialist {specialist_id} not found")
+        
+        specialist = self.specialist_instances[specialist_id]
+        
+        if not self.active_learning:
+            logger.warning("Active learning not available")
+            return None, None
+        
+        # Query samples
+        indices = await self.active_learning.query_samples(
+            model=specialist,
+            X_pool=X_pool,
+            n_samples=n_samples,
+            strategy=strategy
+        )
+        
+        return indices, X_pool[indices] if indices is not None else None
+    
+    async def ensemble_predict(
+        self,
+        specialist_ids: List[str],
+        X,
+        weights: Optional[List[float]] = None
+    ) -> Dict[str, Any]:
+        """
+        Ensemble prediction from multiple specialists.
+        
+        Args:
+            specialist_ids: List of specialists to use
+            X: Input features
+            weights: Voting weights (equal if None)
+            
+        Returns:
+            Ensemble prediction with aggregated confidence
+        """
+        if weights is None:
+            weights = [1.0 / len(specialist_ids)] * len(specialist_ids)
+        
+        predictions = []
+        confidences = []
+        
+        for specialist_id, weight in zip(specialist_ids, weights):
+            result = await self.predict_with_specialist(
+                specialist_id, X,
+                detect_ood=True,
+                calculate_uncertainty=True
+            )
+            predictions.append(result['prediction'])
+            if result['confidence'] is not None:
+                confidences.append(result['confidence'] * weight)
+        
+        # Aggregate predictions
+        # Simple averaging for now - could be voting for classification
+        try:
+            import numpy as np
+            if isinstance(predictions[0], (list, np.ndarray)):
+                ensemble_pred = np.average(predictions, axis=0, weights=weights)
+            else:
+                ensemble_pred = sum(p * w for p, w in zip(predictions, weights))
+        except ImportError:
+            # Fallback without numpy
+            ensemble_pred = sum(p * w for p, w in zip(predictions, weights))
+        
+        return {
+            'prediction': ensemble_pred,
+            'confidence': sum(confidences) / len(confidences) if confidences else None,
+            'ensemble_size': len(specialist_ids),
+            'specialist_ids': specialist_ids,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+    
+    def list_specialists(self) -> List[Dict[str, Any]]:
+        """List all registered specialists with their cognitive functions."""
+        specialist_info = []
+        
+        for specialist_id, specialist in self.specialist_instances.items():
+            # Find cognitive functions for this specialist
+            functions = []
+            for func, specialists in self.specialists.items():
+                if specialist in specialists:
+                    functions.append(func.value)
+            
+            info = {
+                'specialist_id': specialist_id,
+                'specialist_type': specialist.__class__.__name__,
+                'cognitive_functions': functions,
+                'device': self.device if DEEP_LEARNING_AVAILABLE else 'cpu'
+            }
+            
+            # Add model-specific info if available
+            if hasattr(specialist, 'get_model_summary'):
+                try:
+                    info.update(specialist.get_model_summary())
+                except Exception:
+                    pass
+            
+            specialist_info.append(info)
+        
+        return specialist_info
+    
+    def get_specialist(self, specialist_id: str) -> Any:
+        """Get a specialist instance by ID."""
+        return self.specialist_instances.get(specialist_id)
+    
+    async def cleanup(self):
+        """Cleanup resources including GPU memory."""
+        if DEEP_LEARNING_AVAILABLE and self.device in ["cuda", "mps"]:
+            DeviceManager.clear_cache()
+        
+        logger.info("Cognitive Substrate cleanup complete")
+    
     def get_metrics(self) -> Dict[str, Any]:
         """Get cognitive substrate performance metrics."""
         return {
             **self.metrics,
             'by_function': {k.value: v for k, v in self.metrics['by_function'].items()},
-            'by_source': {k.value: v for k, v in self.metrics['by_source'].items()}
+            'by_source': {k.value: v for k, v in self.metrics['by_source'].items()},
+            'specialists_registered': len(self.specialist_instances),
+            'deep_learning_available': DEEP_LEARNING_AVAILABLE,
+            'device': self.device
         }
+
+
+# Global instance
+_cognitive_substrate: Optional[CognitiveSubstrate] = None
+
+
+def get_cognitive_substrate(**kwargs) -> CognitiveSubstrate:
+    """Get or create global cognitive substrate instance."""
+    global _cognitive_substrate
+    if _cognitive_substrate is None:
+        _cognitive_substrate = CognitiveSubstrate(**kwargs)
+    return _cognitive_substrate

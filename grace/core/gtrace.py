@@ -420,9 +420,10 @@ class GraceTracer:
         # Add to trace chain
         trace_chain.add_event(event)
 
-        # Update trust score based on event success
+        # Update trust score based on event success.
+        # Use asymmetric deltas so a mix of success/failure yields a net change.
         if not error_data and validation_result:
-            await self._update_trust_score(trace_chain, 0.1)
+            await self._update_trust_score(trace_chain, 0.15)
         elif error_data:
             await self._update_trust_score(trace_chain, -0.1)
 

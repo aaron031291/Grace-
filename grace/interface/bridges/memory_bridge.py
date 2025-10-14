@@ -1,6 +1,7 @@
 """Bridge to Memory/Intelligence kernels for search and queries."""
 
 from datetime import datetime
+from ..utils.time import now_utc
 from typing import Dict, List, Optional, Any
 import logging
 
@@ -19,14 +20,14 @@ class MemoryBridge:
         self, query: str, user_id: str, filters: Optional[Dict] = None
     ) -> Dict:
         """Search memory using librarian with governance-aware filtering."""
-        search_id = f"search_{int(datetime.utcnow().timestamp())}"
+    search_id = f"search_{int(now_utc().timestamp())}"
 
         search_request = {
             "search_id": search_id,
             "query": query,
             "user_id": user_id,
             "filters": filters or {},
-            "timestamp": datetime.utcnow(),
+            "timestamp": now_utc(),
             "results": [],
         }
 
@@ -166,13 +167,13 @@ class MemoryBridge:
 
     async def request_intel(self, request: Dict, user_id: str) -> Dict:
         """Request intelligence analysis."""
-        intel_id = f"intel_{int(datetime.utcnow().timestamp())}"
+    intel_id = f"intel_{int(now_utc().timestamp())}"
 
         intel_request = {
             "intel_id": intel_id,
             "request": request,
             "user_id": user_id,
-            "timestamp": datetime.utcnow(),
+            "timestamp": now_utc(),
             "status": "pending",
         }
 

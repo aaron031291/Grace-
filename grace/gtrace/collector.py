@@ -5,6 +5,7 @@ GTrace Collector - Collects, stores, and manages trace data.
 import json
 import logging
 from datetime import datetime
+from ..utils.time import now_utc
 from typing import Dict, List, Optional, Any
 from collections import defaultdict, deque
 
@@ -67,7 +68,7 @@ class GTraceCollector:
         self._stats["spans_collected"] += 1
         if len(self._traces[trace_id]) == 1:  # First span in trace
             self._stats["traces_collected"] += 1
-        self._stats["last_collection"] = datetime.utcnow().isoformat()
+        self._stats["last_collection"] = now_utc().isoformat()
 
         # Evict old spans if needed
         self._evict_if_needed()
@@ -259,7 +260,7 @@ class GTraceCollector:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get collector statistics."""
-        now = datetime.utcnow()
+        now = now_utc()
 
         # Calculate storage stats
         total_spans = len(self._spans)
@@ -311,7 +312,7 @@ class GTraceCollector:
 
     def cleanup_old_data(self) -> Dict[str, int]:
         """Clean up old data based on retention policy."""
-        cutoff_time = datetime.utcnow().timestamp() - (self.retention_hours * 3600)
+        cutoff_time = now_utc().timestamp() - (self.retention_hours * 3600)
 
         old_span_ids = [
             span_id

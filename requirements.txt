@@ -49,6 +49,10 @@ pyyaml>=6.0.0  # Policy / config files
 # --- AI/LLM Integrations (Optional) ---
 # openai>=1.0.0  # External LLM calls if used
 
+# --- Development / Testing (Optional) ---
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
 # --- MLDL Kernel ---
 # numpy>=1.21.0
 # scikit-learn>=1.0.0

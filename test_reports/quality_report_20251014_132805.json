@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-10-14T13:28:05.239554",
+  "summary": {
+    "total_components": 0,
+    "passing_components": 0,
+    "system_pass_rate": 0.0,
+    "overall_quality": 0.0,
+    "breakdown": {}
+  },
+  "components": {},
+  "needing_attention": [],
+  "raw_counts": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0
+  }
+}

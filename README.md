@@ -142,11 +142,12 @@ async def main():
 
 ### Governance Enforcement Hooks
 ```python
-from grace.governance.constitutional_decorator import trust_middleware
+from grace.governance.constitutional_decorator import trust_middleware, constitutional_check
 
+@constitutional_check
 @trust_middleware(min_trust_score=0.8)
 async def high_trust_operation(data):
-    # Operation requiring high trust score
+    # Operation requiring high trust score and constitutional compliance
     return data
 ```
 # In your API endpoints or operations:

@@ -59,6 +59,9 @@ class GraceTestQualityPlugin:
             "grace/resilience_kernel": "resilience_kernel",
             "grace/governance": "governance_engine",
             "grace/core": "core_systems",
+            "grace/gtrace": "tracing_system",
+            "test_contract_compliance": "contract_compliance",
+            "test_gtrace": "tracing_system",
             "grace/immune": "immune_system",
             "tests/": "general_tests"
         }
@@ -146,22 +149,24 @@ class GraceTestQualityPlugin:
             error_message = str(report.longrepr)[:500]  # Truncate
             error_severity = self._determine_error_severity(report)
         
-        test_result = TestResult(
-            test_name=item.nodeid,
-            component_id=component_id,
-            passed=report.passed,
-            execution_time_ms=report.duration * 1000 if hasattr(report, 'duration') else 0.0,
-            error_message=error_message,
-            error_severity=error_severity,
-            timestamp=datetime.now(),
-            tags={
-                'markers': [m.name for m in item.iter_markers()],
-                'outcome': report.outcome
-            }
-        )
-        
-        # Store for async processing
-        self.test_results[item.nodeid] = test_result
+        # Don't record skipped tests as failures - they shouldn't affect quality score
+        if not report.skipped:
+            test_result = TestResult(
+                test_name=item.nodeid,
+                component_id=component_id,
+                passed=report.passed,
+                execution_time_ms=report.duration * 1000 if hasattr(report, 'duration') else 0.0,
+                error_message=error_message,
+                error_severity=error_severity,
+                timestamp=datetime.now(),
+                tags={
+                    'markers': [m.name for m in item.iter_markers()],
+                    'outcome': report.outcome
+                }
+            )
+            
+            # Store for async processing
+            self.test_results[item.nodeid] = test_result
     
     @pytest.hookimpl(trylast=True)
     def pytest_sessionfinish(self, session, exitstatus):

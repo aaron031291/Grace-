@@ -1,0 +1,86 @@
+{
+  "timestamp": "2025-10-14T13:31:52.335818",
+  "summary": {
+    "total_components": 2,
+    "passing_components": 2,
+    "system_pass_rate": 1.0,
+    "overall_quality": 0.9556578893609148,
+    "breakdown": {
+      "critical": 0,
+      "degraded": 0,
+      "acceptable": 0,
+      "passing": 0,
+      "excellent": 2
+    },
+    "timestamp": "2025-10-14T13:31:52.335627"
+  },
+  "components": {
+    "contract_compliance": {
+      "component_id": "contract_compliance",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9538103014176196,
+      "quality_status": "excellent",
+      "is_passing": true,
+      "total_tests": 10,
+      "passed_tests": 10,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:31:52.334082",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.9238240000000001,
+        0.9299180800000001,
+        0.9355246336,
+        0.9406826629120001,
+        0.9454280498790402,
+        0.9497938058887169,
+        0.9538103014176196
+      ]
+    },
+    "tracing_system": {
+      "component_id": "tracing_system",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.95750547730421,
+      "quality_status": "excellent",
+      "is_passing": true,
+      "total_tests": 11,
+      "passed_tests": 11,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:31:52.335468",
+      "historical_trend": [
+        0.91,
+        0.9172,
+        0.9238240000000001,
+        0.9299180800000001,
+        0.9355246336,
+        0.9406826629120001,
+        0.9454280498790402,
+        0.9497938058887169,
+        0.9538103014176196,
+        0.95750547730421
+      ]
+    }
+  },
+  "needing_attention": [],
+  "raw_counts": {
+    "total": 21,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0
+  }
+}

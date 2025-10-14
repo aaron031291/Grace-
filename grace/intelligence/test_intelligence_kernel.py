@@ -17,7 +17,7 @@ def test_intelligence_service():
     print("=" * 60)
 
     try:
-        from intelligence_service import IntelligenceService
+        from grace.intelligence.intelligence_service import IntelligenceService
 
         # Initialize service
         print("\n1. Initializing Intelligence Service...")

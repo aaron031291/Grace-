@@ -225,6 +225,11 @@ class BaseMCP:
             self._governance = GovernanceEngine()
         return self._governance
     
+    @governance.setter
+    def governance(self, value):
+        """Allow setting governance for testing."""
+        self._governance = value
+    
     # --- Meta-Loop integration ---
     
     async def observe(self, 

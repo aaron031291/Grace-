@@ -8,8 +8,8 @@ import os
 import logging
 from typing import Optional
 from functools import lru_cache
-from pydantic import Field, ConfigDict
-from pydantic_settings import BaseSettings
+from pydantic import Field, ConfigDict, field_validator, AliasChoices
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class GraceSettings(BaseSettings):
@@ -61,7 +61,7 @@ class GraceSettings(BaseSettings):
         default="http://localhost:9090", env="PROMETHEUS_ENDPOINT"
     )
 
-    model_config = ConfigDict(
+    model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False

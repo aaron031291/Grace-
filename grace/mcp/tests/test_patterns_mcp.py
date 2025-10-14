@@ -9,8 +9,10 @@ These tests verify:
 """
 import asyncio
 import pytest
+import time
 from unittest.mock import AsyncMock, Mock, patch
 from datetime import datetime, timezone
+from dataclasses import dataclass
 
 from grace.mcp.handlers.patterns_mcp import (
     PatternsMCP,
@@ -19,6 +21,36 @@ from grace.mcp.handlers.patterns_mcp import (
 )
 from grace.mcp.base_mcp import MCPContext
 from grace.mcp.pushback import PushbackHandler
+
+
+def make_test_context(request_id: str = "test_req") -> MCPContext:
+    """Helper to create a test MCPContext with proper structure."""
+    @dataclass
+    class MockCaller:
+        user_id: str = "test_user"
+        session_id: str = "test_session"
+        roles: list = None
+        def __post_init__(self):
+            if self.roles is None:
+                self.roles = []
+    
+    @dataclass 
+    class MockRequest:
+        method: str = "POST"
+        path: str = "/patterns"
+        body: dict = None
+        def __post_init__(self):
+            if self.body is None:
+                self.body = {}
+    
+    return MCPContext(
+        caller=MockCaller(),
+        request=MockRequest(),
+        manifest={},
+        endpoint_config={},
+        start_time=time.time(),
+        request_id=request_id
+    )
 
 
 @pytest.fixture
@@ -36,13 +68,7 @@ def mcp_handler():
 @pytest.fixture
 def mcp_context():
     """Create a minimal MCPContext for testing."""
-    return MCPContext(
-        domain="patterns",
-        user_id="test_user",
-        session_id="test_session",
-        request_id="test_req_001",
-        timestamp=datetime.now(timezone.utc),
-    )
+    return make_test_context("test_req_001")
 
 
 @pytest.mark.asyncio
@@ -123,13 +149,7 @@ async def test_pushback_governance_rejection():
     """Test pushback flow when governance rejects a request."""
     pushback = PushbackHandler()
     
-    context = MCPContext(
-        domain="patterns",
-        user_id="test_user",
-        session_id="test_session",
-        request_id="test_req_gov_reject",
-        timestamp=datetime.now(timezone.utc),
-    )
+    context = make_test_context("test_req_gov_reject")
     
     gov_result = {
         "allowed": False,
@@ -154,13 +174,7 @@ async def test_pushback_retry_logic():
     """Test that pushback correctly schedules retries."""
     pushback = PushbackHandler()
     
-    context = MCPContext(
-        domain="patterns",
-        user_id="test_user",
-        session_id="test_session",
-        request_id="test_req_retry",
-        timestamp=datetime.now(timezone.utc),
-    )
+    context = make_test_context("test_req_retry")
     
     # Simulate transient error
     with patch.object(pushback, '_emit_events', new_callable=AsyncMock):

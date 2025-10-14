@@ -406,4 +406,4 @@ SELECT
 FROM crypto_keys
 GROUP BY purpose;
 
-COMMIT;
+

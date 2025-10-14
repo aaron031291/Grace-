@@ -27,6 +27,7 @@ def make_test_context(request_id: str = "test_req") -> MCPContext:
     """Helper to create a test MCPContext with proper structure."""
     @dataclass
     class MockCaller:
+        id: str = "test_user"
         user_id: str = "test_user"
         session_id: str = "test_session"
         roles: list = None
@@ -74,18 +75,23 @@ def mcp_context():
 @pytest.mark.asyncio
 async def test_create_pattern_basic(mcp_handler, mcp_context):
     """Test creating a pattern with basic metadata."""
+    import time
     request = PatternCreateRequest(
-        pattern_name="test_pattern",
-        pattern_type="workflow",
-        description="A test workflow pattern",
+        who="test_user",
+        what="Test workflow pattern",
+        where="test_environment",
+        when=time.time(),
+        why="Testing pattern creation",
+        how="Manual test execution",
+        raw_text="Test user created a workflow pattern in test environment for testing pattern creation via manual test execution",
         metadata={"version": "1.0", "author": "test"},
+        tags=["test", "workflow"]
     )
     
     result = await mcp_handler.create_pattern(request, mcp_context)
     
     assert result["status"] == "success"
     assert "pattern_id" in result
-    assert result["pattern_name"] == "test_pattern"
     # Verify event emission
     assert mcp_handler.event_bus.emit.called
 
@@ -93,12 +99,18 @@ async def test_create_pattern_basic(mcp_handler, mcp_context):
 @pytest.mark.asyncio
 async def test_semantic_search(mcp_handler, mcp_context):
     """Test semantic search across patterns."""
+    import time
     # First create a pattern to search for
     create_req = PatternCreateRequest(
-        pattern_name="error_handling_pattern",
-        pattern_type="resilience",
-        description="Pattern for graceful error handling with retries",
+        who="resilience_kernel",
+        what="Error handling pattern with retries",
+        where="resilience_domain",
+        when=time.time(),
+        why="Improve system resilience",
+        how="Automatic pattern detection",
+        raw_text="Resilience kernel detected error handling pattern with retry logic in resilience domain to improve system resilience through automatic pattern detection",
         metadata={"domain": "resilience"},
+        tags=["resilience", "error_handling", "retry"]
     )
     await mcp_handler.create_pattern(create_req, mcp_context)
     
@@ -106,7 +118,7 @@ async def test_semantic_search(mcp_handler, mcp_context):
     search_req = SemanticSearchRequest(
         query="error handling retry logic",
         top_k=5,
-        filters={"pattern_type": "resilience"},
+        filters={"tags": "resilience"},
     )
     
     results = await mcp_handler.semantic_search(search_req, mcp_context)
@@ -147,45 +159,60 @@ async def test_audit_trail():
 @pytest.mark.asyncio
 async def test_pushback_governance_rejection():
     """Test pushback flow when governance rejects a request."""
+    import time
+    from grace.mcp.pushback import PushbackPayload, PushbackCategory, PushbackSeverity
+    
     pushback = PushbackHandler()
     
-    context = make_test_context("test_req_gov_reject")
-    
-    gov_result = {
-        "allowed": False,
-        "reason": "quota_exceeded",
-        "retry_after": 60,
-    }
+    payload = PushbackPayload(
+        error_code="GOV_QUOTA_EXCEEDED",
+        category=PushbackCategory.GOVERNANCE_REJECTION,
+        severity=PushbackSeverity.MEDIUM,
+        message="Quota exceeded for pattern creation",
+        domain="patterns",
+        timestamp=time.time(),
+        caller_id="test_user",
+        request_id="test_req_gov_reject",
+        retry_after_seconds=60,
+        remediation_steps=["Wait 60 seconds", "Retry request"],
+        metadata={"reason": "quota_exceeded", "retry_after": 60}
+    )
     
     with patch.object(pushback, '_emit_events', new_callable=AsyncMock):
-        result = await pushback.handle_pushback(
-            context=context,
-            error_type="governance_rejection",
-            details=gov_result,
-            request_data={"pattern_name": "test"},
-        )
+        result = await pushback.handle_pushback(payload)
     
-    assert result["handled"] is True
-    assert result["action"] in ["retry_scheduled", "user_notified"]
+    assert result["audit_id"] is not None
+    assert result["observation_id"] is not None
 
 
 @pytest.mark.asyncio
 async def test_pushback_retry_logic():
     """Test that pushback correctly schedules retries."""
+    import time
+    from grace.mcp.pushback import PushbackPayload, PushbackCategory, PushbackSeverity
+    
     pushback = PushbackHandler()
     
-    context = make_test_context("test_req_retry")
+    payload = PushbackPayload(
+        error_code="TRANSIENT_TIMEOUT",
+        category=PushbackCategory.TRANSIENT_FAILURE,
+        severity=PushbackSeverity.LOW,
+        message="Vector search operation timed out",
+        domain="patterns",
+        timestamp=time.time(),
+        caller_id="test_user",
+        request_id="test_req_retry",
+        retry_after_seconds=5,
+        remediation_steps=["Retry with exponential backoff"],
+        metadata={"error": "timeout", "retryable": True, "operation": "vector_search"}
+    )
     
     # Simulate transient error
     with patch.object(pushback, '_emit_events', new_callable=AsyncMock):
-        result = await pushback.handle_pushback(
-            context=context,
-            error_type="transient_failure",
-            details={"error": "timeout", "retryable": True},
-            request_data={"operation": "vector_search"},
-        )
+        result = await pushback.handle_pushback(payload)
     
-    assert "retry_count" in result or "action" in result
+    assert result["audit_id"] is not None
+    assert result["observation_id"] is not None
 
 
 @pytest.mark.asyncio
@@ -239,16 +266,22 @@ async def test_observation_recording():
 @pytest.mark.asyncio
 async def test_full_mcp_lifecycle(mcp_handler, mcp_context):
     """End-to-end test: create pattern, search, verify audit, check observation."""
+    import time
     from grace.ingress_kernel.db.fusion_db import FusionDB
     
     db = FusionDB.get_instance()
     
     # 1. Create a pattern
     create_req = PatternCreateRequest(
-        pattern_name="lifecycle_test_pattern",
-        pattern_type="integration",
-        description="Full lifecycle test pattern",
+        who="test_system",
+        what="Full lifecycle test pattern",
+        where="integration_tests",
+        when=time.time(),
+        why="Testing complete MCP lifecycle",
+        how="Automated integration test",
+        raw_text="Test system created full lifecycle test pattern in integration tests for testing complete MCP lifecycle via automated integration test",
         metadata={"test": True},
+        tags=["test", "integration", "lifecycle"]
     )
     
     create_result = await mcp_handler.create_pattern(create_req, mcp_context)

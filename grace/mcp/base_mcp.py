@@ -587,7 +587,7 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 # 1. Record observation (O-Loop)
                 obs_id = await self.observe(
                     operation=func.__name__,
-                    data=request.dict(),
+                    data=request.model_dump() if hasattr(request, 'model_dump') else request.dict(),
                     context=context
                 )
                 
@@ -595,7 +595,7 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 endpoint_config = self._get_endpoint_config(endpoint)
                 await self.validate_governance(
                     operation=func.__name__,
-                    payload=request.dict(),
+                    payload=request.model_dump() if hasattr(request, 'model_dump') else request.dict(),
                     context=context,
                     endpoint_config=endpoint_config
                 )
@@ -616,7 +616,7 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 if endpoint_config.get('side_effects', {}).get('log_immutable'):
                     audit_id = await self.audit_log(
                         action=func.__name__,
-                        payload={"request": request.dict(), "result": result},
+                        payload={"request": request.model_dump() if hasattr(request, 'model_dump') else request.dict(), "result": result},
                         context=context,
                         severity=Severity.LOW
                     )
@@ -655,7 +655,7 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 elapsed_ms = (time.time() - start_time) * 1000
                 audit_id = await self.audit_log(
                     action=f"{func.__name__}_error",
-                    payload={"error": str(e), "request": request.dict()},
+                    payload={"error": str(e), "request": request.model_dump() if hasattr(request, 'model_dump') else request.dict()},
                     context=context,
                     severity=Severity.HIGH
                 )

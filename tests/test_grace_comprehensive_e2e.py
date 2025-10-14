@@ -167,7 +167,7 @@ class TestPhase1Imports:
         """Test all kernel modules"""
         kernels = [
             ("IngressKernel", "grace.ingress_kernel.kernel", "IngressKernel"),
-            ("IntelligenceKernel", "grace.intelligence_kernel.kernel", "IntelligenceKernel"),
+            ("IntelligenceKernel", "grace.intelligence.kernel.kernel", "IntelligenceKernel"),
             ("LearningKernel", "grace.learning_kernel.kernel", "LearningKernel"),
             ("InterfaceKernel", "grace.interface_kernel.kernel", "InterfaceKernel"),
             ("MLTKernelML", "grace.mlt_kernel_ml.kernel", "MLTKernelML"),
@@ -524,7 +524,7 @@ class TestPhase5Integrations:
             
             # Verify hash chain
             stats = logs.get_system_stats()
-            assert stats["log_count"] > 0
+            assert stats["total_logged"] > 0, "Should have logged at least one event"
             
             await logs.stop()
             

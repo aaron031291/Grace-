@@ -173,6 +173,31 @@ class FusionDB:
             )
             self.conn.commit()
             return obs_id
+        elif table == 'evaluations':
+            # Handle evaluations table schema
+            cur.execute(
+                """INSERT INTO evaluations 
+                   (evaluation_id, action_id, intended_outcome, actual_outcome, success, 
+                    performance_metrics, side_effects_identified, error_analysis, 
+                    lessons_learned, confidence_adjustment, evaluated_at, sent_to_reflection)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    payload.get('evaluation_id', f"eval_{int(time.time()*1000)}"),
+                    payload.get('action_id', ''),
+                    payload.get('intended_outcome', ''),
+                    payload.get('actual_outcome', ''),
+                    payload.get('success', 0),
+                    payload.get('performance_metrics', '{}'),
+                    payload.get('side_effects_identified', ''),
+                    payload.get('error_analysis', ''),
+                    payload.get('lessons_learned', ''),
+                    payload.get('confidence_adjustment', 0.0),
+                    payload.get('evaluated_at', time.time()),
+                    payload.get('sent_to_reflection', False)
+                )
+            )
+            self.conn.commit()
+            return cur.lastrowid
         else:
             # Generic insert: store payload as JSON into a text column 'payload' if table has it
             try:

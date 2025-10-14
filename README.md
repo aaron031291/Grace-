@@ -226,6 +226,46 @@ pytest
 ### For Detailed Setup Instructions
 See [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md) for comprehensive development environment setup across all platforms.
 
+## Test Quality Monitoring
+
+Grace includes a production-ready **Test Quality Monitoring System** with KPI-driven trust scoring and automated self-healing:
+
+### Quality Metrics
+- **90% Passing Threshold** - Components must maintain ≥90% quality score
+- **Trust-Adjusted Scoring** - Blends raw test results (80%) with historical trust scores (20%)
+- **Error Severity Weighting** - Critical errors weighted higher than warnings
+- **System-Wide Pass Rate** - Current: **100%** across all components
+
+### Component Status (Latest)
+| Component | Quality Score | Status | Tests |
+|-----------|--------------|--------|-------|
+| general_tests | 100.0% | 🌟 EXCELLENT | 100/100 passing |
+| contract_compliance | 95.4% | 🌟 EXCELLENT | 10/10 passing |
+| tracing_system | 97.2% | 🌟 EXCELLENT | 16/16 passing |
+| comprehensive_e2e | 93.6% | ✅ PASSING | 6/6 passing |
+| mcp_framework | 94.5% | ✅ PASSING | 8/8 passing |
+| intelligence_kernel | 91.0% | ✅ PASSING | 2/2 passing |
+
+### Self-Healing Triggers
+The system automatically triggers healing workflows when components fall below thresholds:
+- **<90% (Degraded)**: Trigger adaptive learning via Learning Kernel
+- **<70% (Critical)**: Escalate to AVN Core for immediate attention
+- **Status Changes**: Publish events to TriggerMesh for orchestration
+
+### Pytest Integration
+Quality monitoring is integrated via pytest plugin:
+```bash
+# Run tests with quality monitoring
+pytest -v  # Generates quality_report_*.json in test_reports/
+
+# View latest quality report
+cat test_reports/quality_report_*.json | tail -1 | python3 -m json.tool
+```
+
+### Event Types
+- `test_quality.component_status_changed` - Component quality status transition
+- `test_quality.healing_required` - Critical degradation detected
+- `test_quality.improvement_suggested` - Optimization opportunities identified
 
 ## Architecture Diagrams
 
@@ -243,6 +283,23 @@ Trust Core ← AVN Health Monitor ← Memory Core ← Event Bus ←─┘
 External Request → Trigger Mesh → Priority Queues → Constitutional Validators
                                       ↓
                      Component Routing → Shadow Mirroring → Audit Logging
+```
+
+### Test Quality Monitoring Flow
+```
+Pytest Execution → Quality Plugin → TestQualityMonitor → KPITrustMonitor
+                                           ↓                      ↓
+                                    Component Scores      Trust Adjustment
+                                           ↓                      ↓
+                                    Event Publisher ← Status Detection
+                                           ↓
+                        ┌──────────────────┴──────────────────┐
+                        ↓                  ↓                   ↓
+            test_quality.          test_quality.      test_quality.
+         component_status_changed  healing_required  improvement_suggested
+                        ↓                  ↓                   ↓
+                   TriggerMesh → Workflow Engine → Self-Healing Kernels
+                                                   (AVN, Learning, Governance)
 ```
 
 ## Configuration

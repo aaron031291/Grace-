@@ -6,7 +6,7 @@ Patterns are observations of system behaviors, user intents, or recurring events
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from grace.mcp.base_mcp import BaseMCP, mcp_endpoint, MCPContext
 from grace.mcp.pushback import handle_index_failure, retry_with_backoff
@@ -26,8 +26,8 @@ class PatternCreateRequest(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "who": "intelligence_kernel",
                 "what": "Model latency increased",
@@ -40,6 +40,7 @@ class PatternCreateRequest(BaseModel):
                 "tags": ["performance", "data_drift", "ml"]
             }
         }
+    )
 
 
 class PatternResponse(BaseModel):
@@ -59,8 +60,8 @@ class SemanticSearchRequest(BaseModel):
     trust_threshold: float = Field(0.0, ge=0.0, le=1.0, description="Minimum trust score")
     include_metadata: bool = Field(True, description="Include full metadata in results")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "query": "model performance degradation patterns",
                 "top_k": 5,
@@ -68,6 +69,7 @@ class SemanticSearchRequest(BaseModel):
                 "trust_threshold": 0.7
             }
         }
+    )
 
 
 class PatternSearchResult(BaseModel):

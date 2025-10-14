@@ -309,7 +309,7 @@ class SnapshotManager:
         # Mock implementation - would hash actual registry data
         registry_data = {
             "sources_count": len(self.current_state.get("active_sources", [])),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         registry_json = json.dumps(registry_data, sort_keys=True)
         return hashlib.sha256(registry_json.encode()).hexdigest()[:16]
@@ -439,7 +439,7 @@ class SnapshotManager:
             # Don't delete manual snapshots or very recent ones
             if (
                 "manual" in snapshot_id
-                or datetime.utcnow() - snapshot.created_at < timedelta(hours=24)
+                or datetime.now(UTC) - snapshot.created_at < timedelta(hours=24)
             ):
                 continue
 

@@ -620,7 +620,8 @@ class TestPhase5Integrations:
             log_error("Phase5:Integration", "TamperDetection", e)
             pytest.skip(f"Tamper detection test failed: {e}")
     
-    def test_governance_bridge_approval(self):
+    @pytest.mark.asyncio
+    async def test_governance_bridge_approval(self):
         """Test that governance bridge can approve requests"""
         try:
             from grace.governance.governance_engine import GovernanceEngine
@@ -631,6 +632,7 @@ class TestPhase5Integrations:
             
             # Create all required dependencies
             event_bus = EventBus()
+            await event_bus.start()
             memory_core = MemoryCore()
             
             # Create verifier and unifier - these might need their own dependencies
@@ -663,6 +665,8 @@ class TestPhase5Integrations:
             
             assert gov is not None
             logger.info("✓ GovernanceEngine instantiated with dependencies")
+            
+            await event_bus.stop()
             
         except Exception as e:
             log_error("Phase5:Integration", "GovernanceBridge", e)

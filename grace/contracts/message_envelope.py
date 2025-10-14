@@ -67,7 +67,7 @@ class GraceMessageEnvelope(BaseModel):
     def compute_hash(self) -> str:
         """Compute SHA256 hash of message content for integrity checking."""
         content = {
-            "headers": self.headers.dict(),
+            "headers": self.headers.model_dump(),
             "payload": self.payload,
             "timestamp": self.timestamp.isoformat(),
         }
@@ -87,7 +87,7 @@ class GraceMessageEnvelope(BaseModel):
         """Convert to dictionary for serialization."""
         return {
             "msg_id": self.msg_id,
-            "headers": self.headers.dict(),
+            "headers": self.headers.model_dump(),
             "payload": self.payload,
             "idempotency_key": self.idempotency_key,
             "timestamp": self.timestamp.isoformat(),

@@ -166,7 +166,7 @@ async def test_pushback_governance_rejection():
     
     payload = PushbackPayload(
         error_code="GOV_QUOTA_EXCEEDED",
-        category=PushbackCategory.GOVERNANCE_REJECTION,
+        category=PushbackCategory.GOVERNANCE,
         severity=PushbackSeverity.MEDIUM,
         message="Quota exceeded for pattern creation",
         domain="patterns",
@@ -195,7 +195,7 @@ async def test_pushback_retry_logic():
     
     payload = PushbackPayload(
         error_code="TRANSIENT_TIMEOUT",
-        category=PushbackCategory.TRANSIENT_FAILURE,
+        category=PushbackCategory.SERVICE_DEGRADATION,
         severity=PushbackSeverity.LOW,
         message="Vector search operation timed out",
         domain="patterns",

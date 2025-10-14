@@ -5,7 +5,7 @@ Immutable Logs - Tamper-proof audit trail system for Grace governance kernel.
 import hashlib
 import json
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import logging
 
@@ -80,6 +80,12 @@ class ImmutableLogs:
         self.db_path = db_path
         self.log_chain = []  # In-memory chain for recent entries
         self.transparency_levels = self._define_transparency_levels()
+        
+        # For :memory: databases, keep connection open
+        self._conn = None
+        if db_path == ":memory:":
+            self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        
         self._init_database()
         self._load_recent_chain()
 
@@ -115,7 +121,8 @@ class ImmutableLogs:
 
     def _init_database(self):
         """Initialize the audit database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
 
             # Main audit log table
@@ -157,10 +164,14 @@ class ImmutableLogs:
             """)
 
             conn.commit()
+        finally:
+            if not self._conn:  # Only close if we opened it here
+                conn.close()
 
     def _load_recent_chain(self, limit: int = 1000):
         """Load recent entries into memory for chain verification."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -184,6 +195,9 @@ class ImmutableLogs:
                 entry.previous_hash = row[6]
                 entry.chain_hash = row[7]
                 self.log_chain.append(entry)
+        finally:
+            if not self._conn:  # Only close if we opened it here
+                conn.close()
 
     async def log_governance_action(
         self,

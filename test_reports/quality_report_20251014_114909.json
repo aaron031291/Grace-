@@ -1,0 +1,184 @@
+{
+  "timestamp": "2025-10-14T11:49:09.255298",
+  "summary": {
+    "total_components": 5,
+    "passing_components": 2,
+    "system_pass_rate": 0.4,
+    "overall_quality": 0.826523496777857,
+    "breakdown": {
+      "critical": 0,
+      "degraded": 0,
+      "acceptable": 3,
+      "passing": 2,
+      "excellent": 0
+    },
+    "timestamp": "2025-10-14T11:49:09.255156"
+  },
+  "components": {
+    "unknown_component": {
+      "component_id": "unknown_component",
+      "raw_score": 0.8016666666666667,
+      "trust_adjusted_score": 0.8263304068308753,
+      "quality_status": "acceptable",
+      "is_passing": false,
+      "total_tests": 30,
+      "passed_tests": 26,
+      "failed_tests": 4,
+      "pass_rate": 0.8666666666666667,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 4,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T11:49:09.244953",
+      "historical_trend": [
+        0.9815408699732048,
+        0.9830176003753484,
+        0.9843761923453206,
+        0.9856260969576949,
+        0.9867760092010793,
+        0.987833928464993,
+        0.9013998067803862,
+        0.8750973460474791,
+        0.8501092627971782,
+        0.8263304068308753
+      ]
+    },
+    "comprehensive_e2e": {
+      "component_id": "comprehensive_e2e",
+      "raw_score": 0.7708333333333334,
+      "trust_adjusted_score": 0.7435233002666668,
+      "quality_status": "acceptable",
+      "is_passing": false,
+      "total_tests": 6,
+      "passed_tests": 5,
+      "failed_tests": 1,
+      "pass_rate": 0.8333333333333334,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 1,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T11:49:09.222923",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.6788240000000001,
+        0.7170180800000001,
+        0.7435233002666668
+      ]
+    },
+    "general_tests": {
+      "component_id": "general_tests",
+      "raw_score": 0.71225,
+      "trust_adjusted_score": 0.7073357269127024,
+      "quality_status": "acceptable",
+      "is_passing": false,
+      "total_tests": 100,
+      "passed_tests": 77,
+      "failed_tests": 23,
+      "pass_rate": 0.77,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 23,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T11:49:09.254871",
+      "historical_trend": [
+        0.6826033658750901,
+        0.690155096605083,
+        0.6904426888766764,
+        0.6907072737665423,
+        0.6983506918652189,
+        0.6987226365160015,
+        0.6990648255947214,
+        0.6993796395471437,
+        0.6996692683833723,
+        0.7073357269127024
+      ]
+    },
+    "intelligence_kernel": {
+      "component_id": "intelligence_kernel",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.91,
+      "quality_status": "passing",
+      "is_passing": true,
+      "total_tests": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T11:49:09.245349",
+      "historical_trend": [
+        1.0,
+        0.91
+      ]
+    },
+    "mcp_framework": {
+      "component_id": "mcp_framework",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9454280498790402,
+      "quality_status": "passing",
+      "is_passing": true,
+      "total_tests": 8,
+      "passed_tests": 8,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T11:49:09.246823",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.9238240000000001,
+        0.9299180800000001,
+        0.9355246336,
+        0.9406826629120001,
+        0.9454280498790402
+      ]
+    }
+  },
+  "needing_attention": [
+    {
+      "component_id": "unknown_component",
+      "score": 0.8263304068308753,
+      "status": "acceptable",
+      "gap_to_passing": 0.07366959316912469,
+      "priority": 21.946783726764988
+    },
+    {
+      "component_id": "general_tests",
+      "score": 0.7073357269127024,
+      "status": "acceptable",
+      "gap_to_passing": 0.1926642730872976,
+      "priority": 11.706570923491903
+    },
+    {
+      "component_id": "comprehensive_e2e",
+      "score": 0.7435233002666668,
+      "status": "acceptable",
+      "gap_to_passing": 0.15647669973333322,
+      "priority": 10.259067989333328
+    }
+  ],
+  "raw_counts": {
+    "total": 193,
+    "passed": 159,
+    "failed": 0,
+    "skipped": 34
+  }
+}

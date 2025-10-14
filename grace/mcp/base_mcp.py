@@ -240,6 +240,16 @@ class BaseMCP:
         Record observation in O-Loop.
         Returns observation_id for lineage tracking.
         """
+        # Convert Pydantic models in data to dicts
+        serializable_data = {}
+        for key, value in data.items():
+            if hasattr(value, 'model_dump'):
+                serializable_data[key] = value.model_dump()
+            elif hasattr(value, 'dict'):
+                serializable_data[key] = value.dict()
+            else:
+                serializable_data[key] = value
+        
         observation = {
             "observation_type": "mcp_operation",
             "source_module": f"mcp.{self.domain}",
@@ -248,7 +258,7 @@ class BaseMCP:
                 "domain": self.domain,
                 "caller": context.caller.id,
                 "request_id": context.request_id,
-                **data
+                **serializable_data
             }),
             "context": json.dumps({
                 "session_id": context.caller.session_id,
@@ -264,12 +274,15 @@ class BaseMCP:
         obs_id = f"obs_{hashlib.md5(f'{operation}{time.time()}'.encode()).hexdigest()}"
         observation['observation_id'] = obs_id
         
-        # Store in memory core for now
-        await self.memory.store_snapshot(
-            snapshot_id=obs_id,
-            snapshot_type="observation",
-            data=observation
-        )
+        # Store observation snapshot in memory
+        snapshot = type('GovernanceSnapshot', (), {
+            'to_dict': lambda self: {
+                'snapshot_id': obs_id,
+                'snapshot_type': 'observation',
+                'data': observation
+            }
+        })()
+        await self.memory.store_snapshot(snapshot)
         
         return obs_id
     
@@ -284,6 +297,12 @@ class BaseMCP:
         Record decision in D-Loop.
         Returns decision_id for lineage tracking.
         """
+        # Convert Pydantic model to dict if needed
+        if hasattr(selected_option, 'model_dump'):
+            selected_option = selected_option.model_dump()
+        elif hasattr(selected_option, 'dict'):
+            selected_option = selected_option.dict()
+        
         decision = {
             "orientation_id": orientation_id,
             "decision_type": decision_type,
@@ -297,12 +316,15 @@ class BaseMCP:
         dec_id = f"dec_{hashlib.md5(f'{decision_type}{time.time()}'.encode()).hexdigest()}"
         decision['decision_id'] = dec_id
         
-        # Store in memory core
-        await self.memory.store_snapshot(
-            snapshot_id=dec_id,
-            snapshot_type="decision",
-            data=decision
-        )
+        # Store in memory core - create a snapshot-like dict
+        snapshot = type('GovernanceSnapshot', (), {
+            'to_dict': lambda self: {
+                'snapshot_id': dec_id,
+                'snapshot_type': 'decision',
+                'data': decision
+            }
+        })()
+        await self.memory.store_snapshot(snapshot)
         
         return dec_id
     
@@ -317,6 +339,22 @@ class BaseMCP:
         Record evaluation in E-Loop.
         Returns evaluation_id.
         """
+        # Convert Pydantic models to dicts if needed
+        if hasattr(intended, 'model_dump'):
+            intended = intended.model_dump()
+        elif hasattr(intended, 'dict'):
+            intended = intended.dict()
+        
+        if hasattr(actual, 'model_dump'):
+            actual = actual.model_dump()
+        elif hasattr(actual, 'dict'):
+            actual = actual.dict()
+        
+        if hasattr(metrics, 'model_dump'):
+            metrics = metrics.model_dump()
+        elif hasattr(metrics, 'dict'):
+            metrics = metrics.dict()
+        
         evaluation = {
             "action_id": action_id,
             "intended_outcome": json.dumps(intended),
@@ -330,12 +368,15 @@ class BaseMCP:
         eval_id = f"eval_{hashlib.md5(f'{action_id}{time.time()}'.encode()).hexdigest()}"
         evaluation['evaluation_id'] = eval_id
         
-        # Store in memory core
-        await self.memory.store_snapshot(
-            snapshot_id=eval_id,
-            snapshot_type="evaluation",
-            data=evaluation
-        )
+        # Store in memory core - create a snapshot-like dict
+        snapshot = type('GovernanceSnapshot', (), {
+            'to_dict': lambda self: {
+                'snapshot_id': eval_id,
+                'snapshot_type': 'evaluation',
+                'data': evaluation
+            }
+        })()
+        await self.memory.store_snapshot(snapshot)
         
         # Update caller's trust score
         if success:
@@ -353,11 +394,14 @@ class BaseMCP:
             "delta": delta,
             "timestamp": time.time()
         }
-        await self.memory.store_snapshot(
-            snapshot_id=f"trust_{component}_{time.time()}",
-            snapshot_type="trust_adjustment",
-            data=trust_update
-        )
+        snapshot = type('GovernanceSnapshot', (), {
+            'to_dict': lambda self: {
+                'snapshot_id': f"trust_{component}_{time.time()}",
+                'snapshot_type': 'trust_adjustment',
+                'data': trust_update
+            }
+        })()
+        await self.memory.store_snapshot(snapshot)
     
     # --- Vectorization helpers ---
     
@@ -403,11 +447,14 @@ class BaseMCP:
                     "embedding_dim": len(embedding),
                     "metadata": metadata or {}
                 }
-                await self.memory.store_snapshot(
-                    snapshot_id=f"vec_{collection}_{id}",
-                    snapshot_type="vector",
-                    data=vector_record
-                )
+                snapshot = type('GovernanceSnapshot', (), {
+                    'to_dict': lambda self: {
+                        'snapshot_id': f"vec_{collection}_{id}",
+                        'snapshot_type': 'vector',
+                        'data': vector_record
+                    }
+                })()
+                await self.memory.store_snapshot(snapshot)
                 return
             except Exception as e:
                 if attempt >= max_attempts:
@@ -475,6 +522,12 @@ class BaseMCP:
         Append to immutable audit log.
         Returns audit_id.
         """
+        # Convert Pydantic models to dict if needed
+        if hasattr(payload, 'model_dump'):
+            payload = payload.model_dump()
+        elif hasattr(payload, 'dict'):
+            payload = payload.dict()
+        
         record = {
             "action": action,
             "domain": self.domain,
@@ -497,7 +550,7 @@ class BaseMCP:
     async def _get_last_audit_hash(self) -> str:
         """Get hash of last audit log entry for chaining"""
         result = await self.db.query_one(
-            "SELECT hash FROM audit_logs ORDER BY created_at DESC LIMIT 1"
+            "SELECT hash FROM audit_logs ORDER BY timestamp DESC LIMIT 1"
         )
         return result['hash'] if result else "genesis"
     

@@ -210,7 +210,7 @@ class PushbackHandler:
     async def _get_last_audit_hash(self) -> str:
         """Get hash of last audit log for chaining"""
         result = await self.db.query_one(
-            "SELECT hash FROM audit_logs ORDER BY created_at DESC LIMIT 1"
+            "SELECT hash FROM audit_logs ORDER BY timestamp DESC LIMIT 1"
         )
         return result['hash'] if result else "genesis"
     

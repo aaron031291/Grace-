@@ -1,6 +1,7 @@
 """TaskCard model and lifecycle management."""
 
 from datetime import datetime
+from grace.utils.time import now_utc
 from typing import Dict, List, Optional
 import uuid
 import logging
@@ -36,7 +37,7 @@ class TaskCardManager:
                 owner=owner,
                 state="open",
                 context=ctx or {},
-                created_at=datetime.utcnow(),
+                created_at=now_utc(),
                 thread=[],
                 metrics=TaskMetrics(),
                 approvals=[],
@@ -67,7 +68,7 @@ class TaskCardManager:
             msg_id=message.get("msg_id", str(uuid.uuid4())),
             role=message["role"],
             author=message["author"],
-            at=datetime.utcnow(),
+            at=now_utc(),
             content=MessageContent(**message.get("content", {})),
         )
 

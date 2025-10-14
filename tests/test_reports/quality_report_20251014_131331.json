@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-10-14T13:13:31.931786",
+  "summary": {
+    "total_components": 1,
+    "passing_components": 0,
+    "system_pass_rate": 0.0,
+    "overall_quality": 0.0,
+    "breakdown": {
+      "critical": 1,
+      "degraded": 0,
+      "acceptable": 0,
+      "passing": 0,
+      "excellent": 0
+    },
+    "timestamp": "2025-10-14T13:13:31.931487"
+  },
+  "components": {
+    "comprehensive_e2e": {
+      "component_id": "comprehensive_e2e",
+      "raw_score": 0.0,
+      "trust_adjusted_score": 0.0,
+      "quality_status": "critical",
+      "is_passing": false,
+      "total_tests": 1,
+      "passed_tests": 0,
+      "failed_tests": 1,
+      "pass_rate": 0.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 1,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:13:31.931101",
+      "historical_trend": [
+        0.0
+      ]
+    }
+  },
+  "needing_attention": [
+    {
+      "component_id": "comprehensive_e2e",
+      "score": 0.0,
+      "status": "critical",
+      "gap_to_passing": 0.9,
+      "priority": 40.0
+    }
+  ],
+  "raw_counts": {
+    "total": 1,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 1
+  }
+}

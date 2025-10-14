@@ -4,6 +4,11 @@ Grace Orchestration Kernel - Central conductor and scheduler for all Grace kerne
 This kernel manages the lifecycle of all kernels (governance, memory, mldl, learning,
 ingress, intelligence, interface, multi-OS, immune/event mesh), schedules loops,
 routes events, handles errors, snapshots/rollback, and enforces governance order.
+
+TriggerMesh Integration:
+- EventRouter: Routes events to workflows based on trigger patterns
+- WorkflowEngine: Executes workflow actions by calling kernel handlers
+- WorkflowRegistry: Loads and manages workflow definitions from YAML files
 """
 
 from .orchestration_service import OrchestrationService
@@ -15,6 +20,11 @@ from .scaling.manager import ScalingManager
 from .lifecycle.manager import LifecycleManager
 from .snapshots.manager import SnapshotManager
 
+# TriggerMesh components
+from .event_router import EventRouter, EventFilter
+from .workflow_engine import WorkflowEngine, ParameterSubstitutor
+from .workflow_registry import WorkflowRegistry, Workflow, WorkflowAction, WorkflowTrigger
+
 __all__ = [
     "OrchestrationService",
     "Scheduler",
@@ -24,4 +34,13 @@ __all__ = [
     "ScalingManager",
     "LifecycleManager",
     "SnapshotManager",
+    # TriggerMesh
+    "EventRouter",
+    "EventFilter",
+    "WorkflowEngine",
+    "ParameterSubstitutor",
+    "WorkflowRegistry",
+    "Workflow",
+    "WorkflowAction",
+    "WorkflowTrigger",
 ]

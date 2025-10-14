@@ -1,0 +1,60 @@
+{
+  "timestamp": "2025-10-14T13:16:29.803886",
+  "summary": {
+    "total_components": 1,
+    "passing_components": 0,
+    "system_pass_rate": 0.0,
+    "overall_quality": 0.7435233002666668,
+    "breakdown": {
+      "critical": 0,
+      "degraded": 0,
+      "acceptable": 1,
+      "passing": 0,
+      "excellent": 0
+    },
+    "timestamp": "2025-10-14T13:16:29.803616"
+  },
+  "components": {
+    "comprehensive_e2e": {
+      "component_id": "comprehensive_e2e",
+      "raw_score": 0.7708333333333334,
+      "trust_adjusted_score": 0.7435233002666668,
+      "quality_status": "acceptable",
+      "is_passing": false,
+      "total_tests": 6,
+      "passed_tests": 5,
+      "failed_tests": 1,
+      "pass_rate": 0.8333333333333334,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 1,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:16:29.803381",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.6788240000000001,
+        0.7170180800000001,
+        0.7435233002666668
+      ]
+    }
+  },
+  "needing_attention": [
+    {
+      "component_id": "comprehensive_e2e",
+      "score": 0.7435233002666668,
+      "status": "acceptable",
+      "gap_to_passing": 0.15647669973333322,
+      "priority": 10.259067989333328
+    }
+  ],
+  "raw_counts": {
+    "total": 6,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 1
+  }
+}

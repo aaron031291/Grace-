@@ -17,7 +17,7 @@ def test_intelligence_service():
     print("=" * 60)
 
     try:
-        from intelligence_service import IntelligenceService
+        from grace.intelligence.intelligence_service import IntelligenceService
 
         # Initialize service
         print("\n1. Initializing Intelligence Service...")
@@ -98,14 +98,14 @@ def test_intelligence_service():
         print("🎉 ALL TESTS PASSED - Intelligence Kernel is working correctly!")
         print("=" * 60)
 
-        return True
+        return
 
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         import traceback
 
         traceback.print_exc()
-        return False
+        assert False, f"Intelligence service test failed: {e}"
 
 
 def test_api_schemas():
@@ -132,7 +132,7 @@ def test_api_schemas():
     }
     print("✓ InferenceResult schema example created")
 
-    return True
+    return
 
 
 if __name__ == "__main__":

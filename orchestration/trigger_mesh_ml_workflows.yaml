@@ -1,0 +1,446 @@
+# TriggerMesh Workflow Definitions for ML/DL Cognitive Substrate
+
+# ============================================================================
+# Model Inference Workflows
+# ============================================================================
+
+# Workflow 1: Standard Model Inference with Governance
+- name: model_inference_workflow
+  description: Standard ML/DL inference with uncertainty, OOD detection, and governance validation
+  event: tables.kpi_metrics.update
+  filters:
+    - field: metric_name
+      op: in
+      values: [trust_score, system_health, data_quality]
+    - field: delta
+      op: greater_than
+      value: 0.05
+  
+  steps:
+    # Step 1: Prepare input
+    - id: prepare_input
+      call: ml.cognitive_substrate.prepare_inference_input
+      args:
+        event_data: ${event.payload}
+        source: ${event.source}
+        trace_id: ${event.trace_id}
+    
+    # Step 2: Run model prediction
+    - id: model_predict
+      call: ml.model_wrapper.predict
+      args:
+        input_data: ${steps.prepare_input.result}
+        return_explanation: true
+        detect_ood: true
+    
+    # Step 3: OOD and uncertainty check
+    - id: uncertainty_check
+      call: ml.uncertainty_ood.check_uncertainty
+      args:
+        prediction: ${steps.model_predict.result}
+        confidence_threshold: 0.75
+        ood_threshold: 0.3
+    
+    # Step 4: Governance validation
+    - id: governance_validate
+      call: governance.validate_prediction
+      args:
+        prediction: ${steps.model_predict.result}
+        model_metadata: ${steps.model_predict.result.model_metadata}
+        trace_id: ${event.trace_id}
+    
+    # Step 5: Routing decision
+    - id: route_decision
+      choice:
+        # Case 1: High confidence + approved → Execute
+        - condition: >
+            ${steps.model_predict.result.confidence} >= 0.85 &&
+            ${steps.governance_validate.result.approved} == true &&
+            ${steps.uncertainty_check.result.ood_flag} == "in_distribution"
+          steps:
+            - call: tables.ml_predictions.insert
+              args:
+                prediction: ${steps.model_predict.result}
+                governance_approved: true
+                auto_executed: true
+            - call: kernels.execute_action
+              args:
+                action: ${steps.model_predict.result.recommended_action}
+                confidence: ${steps.model_predict.result.confidence}
+        
+        # Case 2: Medium confidence or OOD → Human review
+        - condition: >
+            ${steps.model_predict.result.confidence} < 0.85 ||
+            ${steps.uncertainty_check.result.ood_flag} != "in_distribution"
+          steps:
+            - call: ml.review_queue.enqueue
+              args:
+                prediction: ${steps.model_predict.result}
+                uncertainty_check: ${steps.uncertainty_check.result}
+                priority: ${steps.uncertainty_check.result.priority_score}
+            - call: notifications.send_review_alert
+              args:
+                item_id: ${steps.ml.review_queue.enqueue.result.item_id}
+                priority: high
+        
+        # Case 3: Governance rejected → Block
+        - condition: ${steps.governance_validate.result.approved} == false
+          steps:
+            - call: tables.blocked_predictions.insert
+              args:
+                prediction: ${steps.model_predict.result}
+                rejection_reason: ${steps.governance_validate.result.reason}
+            - call: notifications.send_ops_alert
+              args:
+                severity: critical
+                message: "Governance rejected model prediction"
+    
+    # Step 6: Record to immutable logs
+    - id: audit_log
+      call: immutable_logs.log_event
+      args:
+        event_type: ml_dl_inference
+        trace_id: ${event.trace_id}
+        prediction: ${steps.model_predict.result}
+        governance_result: ${steps.governance_validate.result}
+        timestamp: ${now()}
+    
+    # Step 7: Update monitoring
+    - id: update_monitoring
+      call: ml.monitoring.record_inference
+      args:
+        model_id: ${steps.model_predict.result.model_id}
+        latency_ms: ${steps.model_predict.result.latency_ms}
+        confidence: ${steps.model_predict.result.confidence}
+        ood_flag: ${steps.uncertainty_check.result.ood_flag}
+
+---
+
+# Workflow 2: Anomaly Detection Pipeline
+- name: anomaly_detection_pipeline
+  description: Multi-stage anomaly detection with classical + deep models
+  event: tables.verification_requests.insert
+  filters:
+    - field: request_type
+      op: equals
+      value: anomaly_check
+  
+  steps:
+    # Parallel execution of multiple detectors
+    - id: classical_anomaly_detection
+      parallel:
+        - call: ml.isolation_forest.detect
+          args:
+            input_data: ${event.payload.data}
+        - call: ml.dbscan.detect
+          args:
+            input_data: ${event.payload.data}
+        - call: ml.statistical_detector.detect
+          args:
+            input_data: ${event.payload.data}
+    
+    # Deep learning anomaly detection (if classical detects anomaly)
+    - id: deep_anomaly_detection
+      condition: ${steps.classical_anomaly_detection.any_anomaly_detected}
+      call: ml.autoencoder.detect_anomaly
+      args:
+        input_data: ${event.payload.data}
+        threshold: 0.8
+    
+    # Aggregate results
+    - id: aggregate_anomaly_scores
+      call: kernels.anomaly_aggregator.aggregate
+      args:
+        classical_results: ${steps.classical_anomaly_detection.results}
+        deep_results: ${steps.deep_anomaly_detection.result}
+    
+    # Generate verification result
+    - id: write_verification_result
+      call: tables.verification_results.insert
+      args:
+        request_id: ${event.payload.request_id}
+        is_anomaly: ${steps.aggregate_anomaly_scores.result.is_anomaly}
+        anomaly_score: ${steps.aggregate_anomaly_scores.result.score}
+        evidence: ${steps.aggregate_anomaly_scores.result.evidence}
+        model_metadata:
+          classical_models: [isolation_forest, dbscan, statistical]
+          deep_models: [autoencoder]
+
+---
+
+# Workflow 3: Continuous Model Validation (Shadow Testing)
+- name: shadow_model_validation
+  description: Run candidate model alongside production model for comparison
+  event: tables.inference_requests.insert
+  filters:
+    - field: shadow_test_enabled
+      op: equals
+      value: true
+  
+  steps:
+    # Run production model
+    - id: production_prediction
+      call: ml.model_registry.get_production_model.predict
+      args:
+        input_data: ${event.payload}
+    
+    # Run shadow model (canary)
+    - id: shadow_prediction
+      call: ml.model_registry.get_shadow_model.predict
+      args:
+        input_data: ${event.payload}
+    
+    # Compare predictions
+    - id: compare_predictions
+      call: ml.model_comparator.compare
+      args:
+        production_result: ${steps.production_prediction.result}
+        shadow_result: ${steps.shadow_prediction.result}
+    
+    # Record comparison metrics
+    - id: record_shadow_metrics
+      call: tables.shadow_test_results.insert
+      args:
+        production_model_id: ${steps.production_prediction.result.model_id}
+        shadow_model_id: ${steps.shadow_prediction.result.model_id}
+        agreement: ${steps.compare_predictions.result.agreement}
+        confidence_delta: ${steps.compare_predictions.result.confidence_delta}
+    
+    # Use production result for actual execution
+    - id: execute_action
+      call: kernels.execute_action
+      args:
+        prediction: ${steps.production_prediction.result}
+
+---
+
+# Workflow 4: Model Retraining Trigger
+- name: model_retraining_workflow
+  description: Triggered when active learning accumulates enough labeled samples
+  event: ml.active_learning.retrain_threshold_reached
+  
+  steps:
+    # Get retrain batch
+    - id: get_labeled_samples
+      call: ml.active_learning.get_retrain_batch
+      args:
+        clear_queue: true
+    
+    # Validate dataset quality
+    - id: validate_dataset
+      call: ml.dataset_validator.validate
+      args:
+        samples: ${steps.get_labeled_samples.result}
+        min_samples: 100
+        check_balance: true
+    
+    # Launch training job
+    - id: start_training
+      condition: ${steps.validate_dataset.result.is_valid}
+      call: ml.trainer.start_job
+      args:
+        model_type: ${event.payload.model_type}
+        training_data: ${steps.get_labeled_samples.result}
+        hyperparameters: ${event.payload.hyperparameters}
+        artifact_path: ml/artifacts/${event.payload.model_id}/${timestamp()}
+    
+    # Monitor training progress
+    - id: monitor_training
+      call: ml.trainer.wait_for_completion
+      args:
+        job_id: ${steps.start_training.result.job_id}
+        timeout_minutes: 120
+    
+    # Validate trained model
+    - id: validate_model
+      call: ml.model_validator.validate
+      args:
+        model_artifact: ${steps.monitor_training.result.artifact_path}
+        validation_dataset: ${event.payload.validation_data}
+        min_accuracy: 0.75
+        max_calibration_error: 0.15
+    
+    # Register model if validation passes
+    - id: register_model
+      condition: ${steps.validate_model.result.passed}
+      call: ml.model_registry.register_model
+      args:
+        model_entry: ${steps.validate_model.result.model_metadata}
+        deploy_status: sandbox
+    
+    # Notify ops team
+    - id: notify_ops
+      call: notifications.send_notification
+      args:
+        recipients: [ml-ops-team]
+        subject: "New model trained and registered"
+        body:
+          model_id: ${steps.register_model.result.model_id}
+          validation_metrics: ${steps.validate_model.result.metrics}
+          artifact_path: ${steps.monitor_training.result.artifact_path}
+
+---
+
+# Workflow 5: Model Rollback on Performance Degradation
+- name: model_rollback_workflow
+  description: Automatically rollback model on performance degradation
+  event: ml.monitoring.alert_triggered
+  filters:
+    - field: severity
+      op: equals
+      value: critical
+    - field: alert_type
+      op: in
+      values: [high_error_rate, latency_degradation, input_drift]
+  
+  steps:
+    # Check rollback criteria
+    - id: check_rollback_criteria
+      call: ml.model_registry.check_rollback_triggers
+      args:
+        model_id: ${event.payload.model_id}
+        window_minutes: 10
+    
+    # Execute rollback if triggered
+    - id: execute_rollback
+      condition: ${steps.check_rollback_criteria.result.should_rollback}
+      call: ml.model_registry.rollback_to_previous
+      args:
+        model_id: ${event.payload.model_id}
+    
+    # Update deployment status
+    - id: update_deployment
+      call: ml.model_registry.update_deployment_status
+      args:
+        model_id: ${event.payload.model_id}
+        new_status: rollback
+    
+    # Create incident ticket
+    - id: create_incident
+      call: incident_management.create_ticket
+      args:
+        severity: critical
+        title: "Model rollback triggered"
+        description:
+          model_id: ${event.payload.model_id}
+          alert_type: ${event.payload.alert_type}
+          rollback_reasons: ${steps.check_rollback_criteria.result.reasons}
+    
+    # Notify stakeholders
+    - id: notify_stakeholders
+      call: notifications.send_alert
+      args:
+        recipients: [ml-ops-team, on-call-engineer]
+        severity: critical
+        message: "Model ${event.payload.model_id} automatically rolled back due to ${event.payload.alert_type}"
+
+---
+
+# Workflow 6: Forecasting Kernel Integration
+- name: forecasting_kernel_workflow
+  description: KPI trajectory forecasting triggered by threshold events
+  event: tables.kpi_metrics.threshold_crossed
+  
+  steps:
+    # Get historical KPI data
+    - id: get_kpi_history
+      call: tables.kpi_metrics.query
+      args:
+        kpi_name: ${event.payload.kpi_name}
+        window_days: 30
+        component: ${event.payload.component}
+    
+    # Run forecasting models
+    - id: forecast_trajectory
+      call: ml.forecasting_kernel.forecast_kpi_trajectory
+      args:
+        kpi_name: ${event.payload.kpi_name}
+        historical_values: ${steps.get_kpi_history.result}
+        forecast_steps: 5
+    
+    # Detect concerning trends
+    - id: analyze_forecast
+      call: ml.forecasting_kernel.analyze_forecast
+      args:
+        forecast: ${steps.forecast_trajectory.result}
+        threshold: ${event.payload.threshold}
+    
+    # Generate insight
+    - id: create_insight
+      call: tables.kernel_insights.insert
+      args:
+        kernel_id: forecasting_kernel
+        insight_type: kpi_forecast
+        title: "Forecast for ${event.payload.kpi_name}"
+        description: ${steps.analyze_forecast.result.interpretation}
+        severity: ${steps.analyze_forecast.result.severity}
+        recommended_actions: ${steps.analyze_forecast.result.actions}
+        confidence: ${steps.forecast_trajectory.result.confidence}
+    
+    # Trigger preventive actions if forecast is concerning
+    - id: trigger_preventive_actions
+      condition: ${steps.analyze_forecast.result.requires_action}
+      call: kernels.optimization_kernel.optimize_routing
+      args:
+        current_state: ${event.payload}
+        forecast: ${steps.forecast_trajectory.result}
+
+---
+
+# Workflow 7: Trust Scoring for External Data
+- name: trust_scoring_workflow
+  description: Score trustworthiness of external data sources
+  event: tables.external_data_ingestion.new_source
+  
+  steps:
+    # Get data sample
+    - id: get_data_sample
+      call: tables.external_data.sample
+      args:
+        source_id: ${event.payload.source_id}
+        sample_size: 100
+    
+    # Run trust scoring models
+    - id: trust_score
+      call: ml.trust_scoring_kernel.score_data_source
+      args:
+        source_id: ${event.payload.source_id}
+        data_sample: ${steps.get_data_sample.result}
+        historical_performance: ${event.payload.history}
+    
+    # Validate against external sources (optional)
+    - id: external_verification
+      call: ml.cognitive_substrate.external_verification
+      args:
+        external_data: ${steps.get_data_sample.result}
+        verification_type: api_validation
+    
+    # Aggregate trust scores
+    - id: aggregate_trust
+      call: kernels.trust_aggregator.aggregate
+      args:
+        internal_score: ${steps.trust_score.result.trust_score}
+        external_score: ${steps.external_verification.result.trust_score}
+    
+    # Update trust ledger
+    - id: update_trust_ledger
+      call: tables.trust_ledger.upsert
+      args:
+        source_id: ${event.payload.source_id}
+        trust_score: ${steps.aggregate_trust.result.final_score}
+        last_updated: ${now()}
+    
+    # Route based on trust score
+    - id: route_decision
+      choice:
+        - condition: ${steps.aggregate_trust.result.final_score} >= 0.9
+          steps:
+            - call: tables.trusted_sources.add
+              args:
+                source_id: ${event.payload.source_id}
+        - condition: ${steps.aggregate_trust.result.final_score} < 0.5
+          steps:
+            - call: tables.blocked_sources.add
+              args:
+                source_id: ${event.payload.source_id}
+                reason: low_trust_score

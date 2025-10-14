@@ -1,0 +1,192 @@
+{
+  "timestamp": "2025-10-14T13:34:04.200477",
+  "summary": {
+    "total_components": 6,
+    "passing_components": 6,
+    "system_pass_rate": 1.0,
+    "overall_quality": 0.9527916599219157,
+    "breakdown": {
+      "critical": 0,
+      "degraded": 0,
+      "acceptable": 0,
+      "passing": 3,
+      "excellent": 3
+    },
+    "timestamp": "2025-10-14T13:34:04.200390"
+  },
+  "components": {
+    "contract_compliance": {
+      "component_id": "contract_compliance",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9538103014176196,
+      "quality_status": "excellent",
+      "is_passing": true,
+      "total_tests": 10,
+      "passed_tests": 10,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:34:04.178542",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.9238240000000001,
+        0.9299180800000001,
+        0.9355246336,
+        0.9406826629120001,
+        0.9454280498790402,
+        0.9497938058887169,
+        0.9538103014176196
+      ]
+    },
+    "tracing_system": {
+      "component_id": "tracing_system",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9719926452540018,
+      "quality_status": "excellent",
+      "is_passing": true,
+      "total_tests": 16,
+      "passed_tests": 16,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:34:04.194660",
+      "historical_trend": [
+        0.9406826629120001,
+        0.9454280498790402,
+        0.9497938058887169,
+        0.9538103014176196,
+        0.95750547730421,
+        0.9609050391198732,
+        0.9640326359902833,
+        0.9669100251110607,
+        0.9695572231021758,
+        0.9719926452540018
+      ]
+    },
+    "comprehensive_e2e": {
+      "component_id": "comprehensive_e2e",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9355246336,
+      "quality_status": "passing",
+      "is_passing": true,
+      "total_tests": 6,
+      "passed_tests": 6,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:34:04.181296",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.9238240000000001,
+        0.9299180800000001,
+        0.9355246336
+      ]
+    },
+    "general_tests": {
+      "component_id": "general_tests",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9999943293808327,
+      "quality_status": "excellent",
+      "is_passing": true,
+      "total_tests": 100,
+      "passed_tests": 100,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:34:04.200191",
+      "historical_trend": [
+        0.9999879900821874,
+        0.9999889508756123,
+        0.9999898348055634,
+        0.9999906480211184,
+        0.9999913961794289,
+        0.9999920844850746,
+        0.9999927177262686,
+        0.9999933003081671,
+        0.9999938362835138,
+        0.9999943293808327
+      ]
+    },
+    "intelligence_kernel": {
+      "component_id": "intelligence_kernel",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.91,
+      "quality_status": "passing",
+      "is_passing": true,
+      "total_tests": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:34:04.194933",
+      "historical_trend": [
+        1.0,
+        0.91
+      ]
+    },
+    "mcp_framework": {
+      "component_id": "mcp_framework",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9454280498790402,
+      "quality_status": "passing",
+      "is_passing": true,
+      "total_tests": 8,
+      "passed_tests": 8,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T13:34:04.195896",
+      "historical_trend": [
+        1.0,
+        0.91,
+        0.9172,
+        0.9238240000000001,
+        0.9299180800000001,
+        0.9355246336,
+        0.9406826629120001,
+        0.9454280498790402
+      ]
+    }
+  },
+  "needing_attention": [],
+  "raw_counts": {
+    "total": 193,
+    "passed": 160,
+    "failed": 0,
+    "skipped": 33
+  }
+}

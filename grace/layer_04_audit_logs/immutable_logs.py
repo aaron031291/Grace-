@@ -5,7 +5,7 @@ Immutable Logs - Tamper-proof audit trail system for Grace governance kernel.
 import hashlib
 import json
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import logging
 
@@ -80,6 +80,12 @@ class ImmutableLogs:
         self.db_path = db_path
         self.log_chain = []  # In-memory chain for recent entries
         self.transparency_levels = self._define_transparency_levels()
+        
+        # For :memory: databases, keep connection open
+        self._conn = None
+        if db_path == ":memory:":
+            self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        
         self._init_database()
         self._load_recent_chain()
 
@@ -115,7 +121,8 @@ class ImmutableLogs:
 
     def _init_database(self):
         """Initialize the audit database schema."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
 
             # Main audit log table
@@ -157,10 +164,14 @@ class ImmutableLogs:
             """)
 
             conn.commit()
+        finally:
+            if not self._conn:  # Only close if we opened it here
+                conn.close()
 
     def _load_recent_chain(self, limit: int = 1000):
         """Load recent entries into memory for chain verification."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -184,6 +195,9 @@ class ImmutableLogs:
                 entry.previous_hash = row[6]
                 entry.chain_hash = row[7]
                 self.log_chain.append(entry)
+        finally:
+            if not self._conn:  # Only close if we opened it here
+                conn.close()
 
     async def log_governance_action(
         self,
@@ -294,7 +308,7 @@ class ImmutableLogs:
         entry = LogEntry(entry_id, category, data, transparency_level)
 
         # Set chain information
-        previous_hash = self.log_chain[-1].chain_hash if self.log_chain else "genesis"
+        previous_hash = self.log_chain[-1].hash if self.log_chain else "genesis"
         chain_position = len(self.log_chain)
         entry.set_chain_info(previous_hash, chain_position)
 
@@ -315,7 +329,8 @@ class ImmutableLogs:
 
     async def _persist_entry(self, entry: LogEntry, chain_position: int):
         """Persist log entry to database."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -338,10 +353,14 @@ class ImmutableLogs:
                 ),
             )
             conn.commit()
+        finally:
+            if not self._conn:  # Only close if we opened it here
+                conn.close()
 
     async def _update_category_stats(self, category: str, transparency_level: str):
         """Update category statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -357,6 +376,9 @@ class ImmutableLogs:
                 (category, category, datetime.now().isoformat(), transparency_level),
             )
             conn.commit()
+        finally:
+            if not self._conn:  # Only close if we opened it here
+                conn.close()
 
     async def verify_chain_integrity(
         self, start_position: int = 0, end_position: Optional[int] = None
@@ -401,13 +423,13 @@ class ImmutableLogs:
             # Verify chain linkage
             if i > 0:
                 previous_entry = self.log_chain[i - 1]
-                if entry.previous_hash != previous_entry.chain_hash:
+                if entry.previous_hash != previous_entry.hash:
                     verification_results["verified"] = False
                     verification_results["chain_breaks"].append(
                         {
                             "position": i,
                             "entry_id": entry.entry_id,
-                            "expected_previous": previous_entry.chain_hash,
+                            "expected_previous": previous_entry.hash,
                             "actual_previous": entry.previous_hash,
                         }
                     )
@@ -419,7 +441,8 @@ class ImmutableLogs:
 
     async def _record_verification(self, results: Dict[str, Any]):
         """Record chain verification results."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -436,6 +459,9 @@ class ImmutableLogs:
                 ),
             )
             conn.commit()
+        finally:
+            if not self._conn:
+                conn.close()
 
     def query_logs(
         self,
@@ -460,7 +486,8 @@ class ImmutableLogs:
         Returns:
             List of log entries matching criteria
         """
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
 
             # Build query with access control
@@ -516,10 +543,14 @@ class ImmutableLogs:
                 results.append(entry_dict)
 
             return results
+        finally:
+            if not self._conn:
+                conn.close()
 
     def get_audit_statistics(self) -> Dict[str, Any]:
         """Get audit log statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
 
             # Overall statistics
@@ -568,6 +599,9 @@ class ImmutableLogs:
                 if self.log_chain
                 else None,
             }
+        finally:
+            if not self._conn:
+                conn.close()
 
     async def cleanup_old_entries(self):
         """Clean up old entries based on retention policies."""
@@ -578,7 +612,8 @@ class ImmutableLogs:
             retention_days = config["retention_days"]
             cutoff_date = current_time - timedelta(days=retention_days)
 
-            with sqlite3.connect(self.db_path) as conn:
+            conn = self._conn if self._conn else sqlite3.connect(self.db_path)
+            try:
                 cursor = conn.cursor()
 
                 # Count entries to be removed
@@ -607,6 +642,9 @@ class ImmutableLogs:
                     logger.info(f"Cleaned up {count} old {level} entries")
 
                 conn.commit()
+            finally:
+                if not self._conn:
+                    conn.close()
 
         # Rebuild in-memory chain after cleanup
         self._load_recent_chain()

@@ -1,0 +1,16 @@
+[
+  {
+    "phase": "Phase1:Imports",
+    "component": "VectorStoreClient",
+    "error_type": "ImportError",
+    "error_message": "cannot import name 'VectorStoreClient' from 'grace.memory_ingestion.vector_store' (/workspaces/Grace-/grace/memory_ingestion/vector_store.py)",
+    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 270, in test_memory_ingestion_imports\n    from grace.memory_ingestion.vector_store import VectorStoreClient\nImportError: cannot import name 'VectorStoreClient' from 'grace.memory_ingestion.vector_store' (/workspaces/Grace-/grace/memory_ingestion/vector_store.py)\n"
+  },
+  {
+    "phase": "Phase1:Imports",
+    "component": "MemoryIngestionPipeline",
+    "error_type": "ModuleNotFoundError",
+    "error_message": "No module named 'sqlalchemy'",
+    "traceback": "Traceback (most recent call last):\n  File \"/workspaces/Grace-/tests/test_grace_comprehensive_e2e.py\", line 277, in test_memory_ingestion_imports\n    from grace.memory_ingestion.pipeline import MemoryIngestionPipeline\n  File \"/workspaces/Grace-/grace/memory_ingestion/pipeline.py\", line 17, in <module>\n    from ..core.database.connection import get_database\n  File \"/workspaces/Grace-/grace/core/database/connection.py\", line 9, in <module>\n    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, AsyncEngine\nModuleNotFoundError: No module named 'sqlalchemy'\n"
+  }
+]

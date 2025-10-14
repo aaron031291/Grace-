@@ -60,8 +60,8 @@ def mcp_handler():
     """Create a PatternsMCP instance with mocked dependencies."""
     handler = PatternsMCP()
     # Mock external services
-    handler.event_bus = Mock()
-    handler.event_bus.emit = AsyncMock()
+    handler.events = Mock()
+    handler.events.publish = AsyncMock()
     handler.governance = Mock()
     handler.governance.check_policy = AsyncMock(return_value={"allowed": True})
     return handler
@@ -95,7 +95,7 @@ async def test_create_pattern_basic(mcp_handler, mcp_context):
     assert result.data.id is not None
     assert result.data.observation_id is not None
     # Verify event emission
-    assert mcp_handler.event_bus.emit.called
+    assert mcp_handler.events.publish.called
 
 
 @pytest.mark.asyncio

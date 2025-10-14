@@ -258,7 +258,8 @@ class PatternsMCP(BaseMCP):
         start_time = time.time()
         
         # Perform semantic search (handles caching internally)
-        results = await self.semantic_search(
+        # Call the parent class semantic_search method with base parameters
+        results = await super().semantic_search(
             collection=self.collection_name,
             query=request.query,
             top_k=request.top_k,

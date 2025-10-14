@@ -219,6 +219,11 @@ class BaseMCP:
             self._events = EventBus()
         return self._events
     
+    @events.setter
+    def events(self, value):
+        """Allow setting events for testing."""
+        self._events = value
+    
     @property
     def governance(self) -> GovernanceEngine:
         if not self._governance:
@@ -656,12 +661,15 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 # 3. Execute handler
                 result = await func(self, request, context)
                 
+                # Convert result to dict if it's a Pydantic model
+                result_dict = result.model_dump() if hasattr(result, 'model_dump') else (result.dict() if hasattr(result, 'dict') else result)
+                
                 # 4. Emit success event
                 event_type = endpoint_config.get('side_effects', {}).get('emit_event')
                 if event_type:
                     await self.emit_event(
                         event_type=f"{self.domain.upper()}.{event_type}",
-                        payload={"result": result, "observation_id": obs_id},
+                        payload={"result": result_dict, "observation_id": obs_id},
                         context=context
                     )
                 
@@ -669,7 +677,7 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 if endpoint_config.get('side_effects', {}).get('log_immutable'):
                     audit_id = await self.audit_log(
                         action=func.__name__,
-                        payload={"request": request.model_dump() if hasattr(request, 'model_dump') else request.dict(), "result": result},
+                        payload={"request": request.model_dump() if hasattr(request, 'model_dump') else request.dict(), "result": result_dict},
                         context=context,
                         severity=Severity.LOW
                     )
@@ -679,7 +687,7 @@ def mcp_endpoint(manifest: str, endpoint: str):
                 await self.evaluate_outcome(
                     action_id=obs_id,
                     intended={"success": True},
-                    actual={"success": True, "result": result},
+                    actual={"success": True, "result": result_dict},
                     success=True,
                     metrics={"latency_ms": elapsed_ms},
                     context=context

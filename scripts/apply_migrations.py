@@ -12,20 +12,44 @@ import os
 import glob
 import argparse
 import sqlite3
-import psycopg2
+import re
 
 MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "migrations")
 
 
 def _apply_sql_sqlite(db_path: str, sql_text: str):
+    # SQLite can't execute many Postgres-specific statements. Extract and run
+    # only CREATE TABLE statements so the schema tables are created for dev.
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    cur.executescript(sql_text)
+
+    # Find CREATE TABLE ... ) blocks (non-greedy)
+    pattern = re.compile(r"(?is)(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[\w\.\"]+\s*\(.*?\))\s*;?")
+    matches = pattern.findall(sql_text)
+    if matches:
+        for stmt in matches:
+            try:
+                cur.executescript(stmt + ";")
+            except sqlite3.OperationalError:
+                # If there's some syntax we can't handle, skip that statement
+                # to allow other tables to be created.
+                continue
+    else:
+        # Fallback: try to run the whole script and let SQLite report errors
+        cur.executescript(sql_text)
+
     conn.commit()
     conn.close()
 
 
 def _apply_sql_postgres(database_url: str, sql_text: str):
+    try:
+        import psycopg2
+    except Exception as e:
+        raise RuntimeError(
+            "psycopg2 is required to apply migrations to Postgres but it's not installed"
+        ) from e
+
     conn = psycopg2.connect(database_url)
     cur = conn.cursor()
     cur.execute(sql_text)

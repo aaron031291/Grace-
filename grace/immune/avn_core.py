@@ -209,7 +209,7 @@ class ComponentHealth:
     def __init__(self, component_id: str):
         self.component_id = component_id
         self.metrics: Dict[str, List[HealthMetric]] = {}
-    self.last_heartbeat = now_utc()
+        self.last_heartbeat = now_utc()
         self.status = "healthy"
         self.alert_count = 0
         self.performance_baseline = {}
@@ -225,8 +225,6 @@ class ComponentHealth:
         # Keep only recent metrics (last 1000)
         if len(self.metrics[metric.metric_name]) > 1000:
             self.metrics[metric.metric_name] = self.metrics[metric.metric_name][-1000:]
-
-    self.last_heartbeat = now_utc()
 
     def get_latest_metric(self, metric_name: str) -> Optional[HealthMetric]:
         """Get the latest metric value."""
@@ -299,7 +297,7 @@ class ComponentHealth:
                     health_factors.append(0.5)  # Unhealthy but unknown deviation
 
         # Check heartbeat freshness
-    time_since_heartbeat = (now_utc() - self.last_heartbeat).total_seconds()
+        time_since_heartbeat = (now_utc() - self.last_heartbeat).total_seconds()
         if time_since_heartbeat > 300:  # 5 minutes
             health_factors.append(0.0)
         elif time_since_heartbeat > 60:  # 1 minute

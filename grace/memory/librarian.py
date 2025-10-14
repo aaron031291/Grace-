@@ -447,16 +447,27 @@ class EnhancedLibrarian:
                     if constitutional_score >= min_constitutional_score:
                         # Calculate trust score
                         trust_score = self._calculate_trust_score(chunk_data, score)
+                        # Compute chunks_processed for the source as a best-effort
+                        src = chunk_data.get("source_id") or chunk_data.get("metadata", {}).get("source_id")
+                        if src:
+                            chunks_processed = sum(
+                                1
+                                for v in self.chunk_registry.values()
+                                if getattr(v.get("chunk"), "source_id", None) == src
+                            )
+                        else:
+                            chunks_processed = 0
 
                         results.append(
                             {
                                 "chunk_id": chunk_id,
                                 "content": chunk_data["content"],
-                                "source_id": chunk_data.get("source_id"),
+                                "source_id": src,
                                 "relevance_score": score,
                                 "constitutional_score": constitutional_score,
                                 "trust_score": trust_score,
                                 "metadata": chunk_data.get("metadata", {}),
+                                "chunks_processed": chunks_processed,
                             }
                         )
 
@@ -565,6 +576,19 @@ class EnhancedLibrarian:
         entries = self.fusion.search(key_pattern=doc_key, limit=1)
         if entries:
             doc_info = entries[0].value
+            # Ensure total_chunks is present (fallbacks)
+            if "total_chunks" not in doc_info:
+                # try to infer from chunk_ids
+                chunk_ids = doc_info.get("chunk_ids") or []
+                if chunk_ids:
+                    doc_info["total_chunks"] = len(chunk_ids)
+                else:
+                    # last resort: count entries in fusion matching chunk keys
+                    try:
+                        chunk_entries = self.fusion.search(key_pattern=f"chunk:", limit=1000)
+                        doc_info["total_chunks"] = sum(1 for c in chunk_entries if c.value.get("metadata", {}).get("source_id") == source_id)
+                    except Exception:
+                        doc_info["total_chunks"] = 0
             # Cache for future use
             self.lightning.put(doc_key, doc_info, ttl_seconds=3600)
             return doc_info

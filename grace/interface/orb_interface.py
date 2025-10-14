@@ -276,7 +276,7 @@ class GraceUnifiedOrbInterface:
             "wav",
             "screen_recording",
             "audio_recording",
-
+        ]
         # Panel templates
         self.panel_templates = self._initialize_panel_templates()
 
@@ -474,14 +474,14 @@ class GraceUnifiedOrbInterface:
         session = self.active_sessions[session_id]
         message_id = f"msg_{uuid.uuid4().hex[:8]}"
 
-            user_message = ChatMessage(
-                message_id=message_id,
-                user_id=session.user_id,
-                content=content,
-                timestamp=iso_now_utc(),
-                message_type="user",
-                attachments=attachments or [],
-            )
+        user_message = ChatMessage(
+            message_id=message_id,
+            user_id=session.user_id,
+            content=content,
+            timestamp=iso_now_utc(),
+            message_type="user",
+            attachments=attachments or [],
+        )
         session.chat_messages.append(user_message)
         await self.update_session_activity(session_id)
 

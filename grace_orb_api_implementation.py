@@ -12,23 +12,6 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from fastapi import HTTPException, Request, UploadFile, File
 from pydantic import BaseModel
-
-logger = logging.getLogger(__name__)
-
-
-class SessionCreateRequest(BaseModel):
-#!/usr/bin/env python3
-"""
-Minimal Grace Orb API Implementation (cleaned)
-
-This file provides lightweight API route stubs used by demos/tests. It intentionally
-keeps behavior minimal and uses timezone-aware helpers to avoid deprecation warnings.
-"""
-
-import logging
-from typing import Dict, List, Optional, Any
-from fastapi import HTTPException
-from pydantic import BaseModel
 from grace.utils.time import iso_now_utc
 
 logger = logging.getLogger(__name__)
@@ -37,7 +20,6 @@ logger = logging.getLogger(__name__)
 class SessionCreateRequest(BaseModel):
     user_id: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
-
 
 class SessionResponse(BaseModel):
     session_id: str
@@ -128,6 +110,56 @@ def setup_orb_api_routes(app, grace_kernel):
 
     logger.info("Orb API routes configured (minimal stub)")
 
+    # Panels endpoints (stubs)
+    @app.post("/api/orb/v1/panels/create")
+    async def create_panel(payload: dict):
+        return {"panel_id": generate_id("pan_")}
+
+    @app.post("/api/orb/v1/panels/update")
+    async def update_panel(payload: dict):
+        return {"updated": True}
+
+    # Memory endpoints (stubs)
+    @app.post("/api/orb/v1/memory/upload")
+    async def upload_memory(file: UploadFile = File(...)):
+        return {"fragment_id": generate_id("frag_")}
+
+    @app.post("/api/orb/v1/memory/search")
+    async def memory_search(query: dict):
+        return {"results": [], "total": 0}
+
+    @app.get("/api/orb/v1/memory/stats")
+    async def memory_stats():
+        return {"total_fragments": 0}
+
+    # Governance tasks
+    @app.post("/api/orb/v1/governance/tasks")
+    async def create_governance_task(payload: dict):
+        return {"task_id": generate_id("task_")}
+
+    # Notifications
+    @app.post("/api/orb/v1/notifications")
+    async def create_notification(payload: dict):
+        return {"notification_id": generate_id("notif_")}
+
+    # IDE flows
+    @app.post("/api/orb/v1/ide/flows")
+    async def create_flow(payload: dict):
+        return {"flow_id": generate_id("flow_")}
+
+    # Multimodal stubs
+    @app.post("/api/orb/v1/multimodal/screen-share/start")
+    async def start_screen_share(payload: dict):
+        return {"session": generate_id("ms_")}
+
+    @app.post("/api/orb/v1/multimodal/recording/start")
+    async def start_recording(payload: dict):
+        return {"recording_id": generate_id("rec_")}
+
+    @app.get("/api/orb/v1/multimodal/voice/settings")
+    async def voice_settings():
+        return {"settings": {}}
+
     @app.get("/api/orb/v1/multimodal/tasks/{task_id}")
     async def get_multimodal_task(task_id: str):
         """Get multimodal task status."""
@@ -152,3 +184,59 @@ def setup_orb_api_routes(app, grace_kernel):
         logger.info("ConversationalOps routes mounted at /api/orb/v1/converse")
     except Exception as e:
         logger.error(f"Failed to mount ConversationalOps routes: {e}")
+
+    # --- Missing contract endpoints (minimal stubs) ---
+    @app.post("/api/orb/v1/panels/create")
+    async def panels_create(payload: dict):
+        return {"panel_id": generate_id("panel_")}
+
+    @app.post("/api/orb/v1/panels/update")
+    async def panels_update(payload: dict):
+        return {"updated": True}
+
+    @app.post("/api/orb/v1/memory/upload")
+    async def memory_upload(file: UploadFile = File(...)):
+        # Minimal in-memory acceptor
+        content = await file.read()
+        return {"fragment_id": generate_id("frag_")}
+
+    @app.post("/api/orb/v1/memory/search")
+    async def memory_search(body: dict):
+        return {"results": [], "total": 0}
+
+    @app.get("/api/orb/v1/memory/stats")
+    async def memory_stats():
+        return {"total_fragments": 0, "search_count": 0}
+
+    @app.post("/api/orb/v1/governance/tasks")
+    async def governance_tasks(payload: dict):
+        return {"task_id": generate_id("task_")}
+
+    @app.post("/api/orb/v1/notifications")
+    async def create_notification(payload: dict):
+        return {"notification_id": generate_id("notif_")}
+
+    @app.post("/api/orb/v1/ide/flows")
+    async def ide_create_flow(payload: dict):
+        return {"flow_id": generate_id("flow_")}
+
+    @app.post("/api/orb/v1/multimodal/screen-share/start")
+    async def multimodal_screen_share_start(payload: dict):
+        return {"session_id": generate_id("mm_")}
+
+    @app.post("/api/orb/v1/multimodal/recording/start")
+    async def multimodal_recording_start(payload: dict):
+        return {"recording_id": generate_id("rec_")}
+
+    @app.get("/api/orb/v1/multimodal/voice/settings")
+    async def multimodal_voice_settings():
+        return {"voice_enabled": False}
+
+    @app.get("/api/orb/v1/stats")
+    async def orb_stats():
+        return {"sessions": {"active": 0, "total_messages": 0}, "memory": {"total_fragments": 0}}
+
+    @app.get("/api/orb/v1/stats/ide")
+    async def orb_stats_ide():
+        return {"flows": {"total": 0}}
+

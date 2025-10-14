@@ -469,14 +469,17 @@ class FusionMemory:
 
                 db_stats = cursor.fetchone()
 
-                # Add runtime stats
-                uptime = (datetime.utcnow() - self._stats["start_time"]).total_seconds()
+                # Add runtime stats (use timezone-aware now)
+                try:
+                    uptime = (now_utc() - self._stats["start_time"]).total_seconds()
+                except Exception:
+                    uptime = 0.0
 
                 return {
-                    "total_entries": db_stats[0] or 0,
-                    "total_size_bytes": db_stats[1] or 0,
-                    "active_entries": db_stats[3] or 0,
-                    "archived_entries": db_stats[2] or 0,
+                    "total_entries": int(db_stats[0] or 0),
+                    "total_size_bytes": int(db_stats[1] or 0),
+                    "active_entries": int(db_stats[3] or 0),
+                    "archived_entries": int(db_stats[2] or 0),
                     "uptime_seconds": round(uptime, 1),
                     "compression_enabled": self.enable_compression,
                     "archive_threshold_days": self.archive_threshold_days,

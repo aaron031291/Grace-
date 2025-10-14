@@ -17,6 +17,10 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
 import os
+import pytest
+
+
+pytestmark = pytest.mark.e2e
 
 # Add the project root to path for imports
 sys.path.insert(

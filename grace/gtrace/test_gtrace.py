@@ -15,7 +15,7 @@ from grace.gtrace import get_tracer, MemoryTracer, GTraceCollector
 from grace.gtrace.tracer import SpanKind, SpanStatus
 
 
-async def test_basic_tracing():
+async def test_basic_tracing_async():
     """Test basic tracing functionality."""
     print("🔍 Testing basic Grace tracing...")
 
@@ -47,7 +47,7 @@ async def test_basic_tracing():
     return True
 
 
-async def test_memory_tracing():
+async def test_memory_tracing_async():
     """Test memory-specific tracing."""
     print("🧠 Testing memory tracing...")
 
@@ -102,7 +102,7 @@ async def test_memory_tracing():
     return True
 
 
-async def test_trace_collector():
+async def test_trace_collector_async():
     """Test trace collection and querying."""
     print("📊 Testing trace collector...")
 
@@ -152,7 +152,7 @@ async def test_trace_collector():
     return True
 
 
-async def test_error_tracing():
+async def test_error_tracing_async():
     """Test error handling in traces."""
     print("❌ Testing error tracing...")
 
@@ -184,7 +184,7 @@ async def test_error_tracing():
     return True
 
 
-async def test_trace_correlation():
+async def test_trace_correlation_async():
     """Test trace correlation across operations."""
     print("🔗 Testing trace correlation...")
 
@@ -236,6 +236,27 @@ async def test_trace_correlation():
     return (
         len(correlated_spans) >= 6
     )  # Should have at least 6 spans (parent + 5 children)
+
+
+# Synchronous wrappers so pytest can run these without pytest-asyncio installed
+def test_basic_tracing():
+    assert asyncio.run(test_basic_tracing_async())
+
+
+def test_memory_tracing():
+    assert asyncio.run(test_memory_tracing_async())
+
+
+def test_trace_collector():
+    assert asyncio.run(test_trace_collector_async())
+
+
+def test_error_tracing():
+    assert asyncio.run(test_error_tracing_async())
+
+
+def test_trace_correlation():
+    assert asyncio.run(test_trace_correlation_async())
 
 
 async def run_all_tests():

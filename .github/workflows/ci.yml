@@ -59,9 +59,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
         run: |
-          psql "$DATABASE_URL" -f migrations/002_phase_a_core_tables.sql
-          psql "$DATABASE_URL" -f migrations/003_phase_b_forensics_tables.sql
-          psql "$DATABASE_URL" -f migrations/004_phase_c_learning_tables.sql
+          python3 scripts/apply_migrations.py
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test

@@ -12,6 +12,7 @@ Tests:
 """
 
 import asyncio
+import pytest
 import sys
 import os
 import tempfile
@@ -29,6 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import pytest
+
+
+pytestmark = pytest.mark.e2e
 
 async def test_vector_database_integration():
     """Test vector database functionality."""

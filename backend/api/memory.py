@@ -30,21 +30,16 @@ class SearchResponse(BaseModel):
 async def search_memory(
     search_request: SearchRequest,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Search memory fragments with vector similarity and filtering."""
     # TODO: Implement vector search
-    return SearchResponse(
-        results=[],
-        total=0,
-        query=search_request.query
-    )
+    return SearchResponse(results=[], total=0, query=search_request.query)
 
 
 @router.get("/documents")
 async def list_documents(
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     """List user's uploaded documents."""
     # TODO: Implement document listing

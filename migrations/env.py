@@ -75,8 +75,8 @@ def run_migrations_online() -> None:
     """
     # Override the database URL with Grace configuration
     config_dict = config.get_section(config.config_ini_section)
-    config_dict['sqlalchemy.url'] = get_database_url()
-    
+    config_dict["sqlalchemy.url"] = get_database_url()
+
     connectable = engine_from_config(
         config_dict,
         prefix="sqlalchemy.",
@@ -84,9 +84,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

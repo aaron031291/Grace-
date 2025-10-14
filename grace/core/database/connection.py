@@ -1,6 +1,7 @@
 """
 Database connection and session management
 """
+
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -22,12 +23,12 @@ _session_factory: Optional[sessionmaker] = None
 async def init_database() -> AsyncEngine:
     """Initialize the database engine and create tables."""
     global _engine, _session_factory
-    
+
     settings = get_settings()
-    
+
     if not settings.database_url:
         raise ValueError("DATABASE_URL not configured")
-    
+
     # Create async engine
     _engine = create_async_engine(
         settings.database_url,
@@ -35,20 +36,20 @@ async def init_database() -> AsyncEngine:
         pool_pre_ping=True,
         # For SQLite in memory/testing
         poolclass=StaticPool if "sqlite" in settings.database_url else None,
-        connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+        connect_args={"check_same_thread": False}
+        if "sqlite" in settings.database_url
+        else {},
     )
-    
+
     # Create session factory
     _session_factory = sessionmaker(
-        bind=_engine,
-        class_=AsyncSession,
-        expire_on_commit=False
+        bind=_engine, class_=AsyncSession, expire_on_commit=False
     )
-    
+
     # Create tables
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     logger.info("Database initialized successfully")
     return _engine
 
@@ -56,7 +57,7 @@ async def init_database() -> AsyncEngine:
 async def close_database():
     """Close database connections."""
     global _engine, _session_factory
-    
+
     if _engine:
         await _engine.dispose()
         _engine = None
@@ -82,7 +83,7 @@ def get_session_factory() -> sessionmaker:
 async def get_database() -> AsyncGenerator[AsyncSession, None]:
     """Get an async database session."""
     session_factory = get_session_factory()
-    
+
     async with session_factory() as session:
         try:
             yield session

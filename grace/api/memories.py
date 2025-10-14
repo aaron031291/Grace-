@@ -2,6 +2,7 @@
 Memory API endpoints for Grace system.
 Replaces dict-based memory storage with repository pattern.
 """
+
 from typing import Annotated, Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +11,15 @@ from datetime import datetime
 
 from grace.core.database import get_async_session
 from grace.core.container import get_repository_container, RepositoryContainer
-from grace.core.models import Memory, MemoryEmbedding, generate_uuid
+from grace.core.models import Memory
 from grace.core.dependencies import CurrentUser, require_permissions
 
 router = APIRouter(prefix="/api/v1/memories", tags=["Memory"])
 
+
 class MemoryRequest(BaseModel):
     """Memory creation/update request schema."""
+
     key: str
     content: Optional[str] = None
     content_type: str = "application/json"
@@ -28,8 +31,10 @@ class MemoryRequest(BaseModel):
     priority: int = 1
     ttl_seconds: Optional[int] = None
 
+
 class MemoryResponse(BaseModel):
     """Memory response schema."""
+
     id: str
     key: str
     content: Optional[str] = None
@@ -47,12 +52,15 @@ class MemoryResponse(BaseModel):
     last_accessed: datetime
     expires_at: Optional[datetime] = None
 
+
 class MemoryListResponse(BaseModel):
     """Memory list response with pagination."""
+
     memories: List[MemoryResponse]
     total: int
     offset: int
     limit: int
+
 
 @router.post("/", response_model=MemoryResponse)
 async def create_memory(
@@ -60,31 +68,35 @@ async def create_memory(
     current_user: CurrentUser,
     repos: Annotated[RepositoryContainer, Depends(get_repository_container)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    _: Annotated[None, Depends(require_permissions("memories:create"))]
+    _: Annotated[None, Depends(require_permissions("memories:create"))],
 ):
     """Create a new memory entry."""
-    
+
     # Check if memory with this key already exists for user
-    existing = await repos.memories.get_by_user_and_key(current_user.id, memory_data.key)
+    existing = await repos.memories.get_by_user_and_key(
+        current_user.id, memory_data.key
+    )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Memory with key '{memory_data.key}' already exists"
+            detail=f"Memory with key '{memory_data.key}' already exists",
         )
-    
+
     # Calculate content size and hash
     content_size = 0
     content_hash = None
-    
+
     if memory_data.content:
-        content_size = len(memory_data.content.encode('utf-8'))
+        content_size = len(memory_data.content.encode("utf-8"))
         import hashlib
-        content_hash = hashlib.sha256(memory_data.content.encode('utf-8')).hexdigest()
+
+        content_hash = hashlib.sha256(memory_data.content.encode("utf-8")).hexdigest()
     elif memory_data.binary_content:
         content_size = len(memory_data.binary_content)
         import hashlib
+
         content_hash = hashlib.sha256(memory_data.binary_content).hexdigest()
-    
+
     # Create memory
     memory = Memory(
         user_id=current_user.id,
@@ -99,17 +111,20 @@ async def create_memory(
         priority=memory_data.priority,
         size_bytes=content_size,
         content_hash=content_hash,
-        ttl_seconds=memory_data.ttl_seconds
+        ttl_seconds=memory_data.ttl_seconds,
     )
-    
+
     # Set expiration if TTL is provided
     if memory_data.ttl_seconds:
         from datetime import timedelta
-        memory.expires_at = datetime.utcnow() + timedelta(seconds=memory_data.ttl_seconds)
-    
+
+        memory.expires_at = datetime.utcnow() + timedelta(
+            seconds=memory_data.ttl_seconds
+        )
+
     created_memory = await repos.memories.create(memory)
     await session.commit()
-    
+
     return MemoryResponse(
         id=created_memory.id,
         key=created_memory.key,
@@ -126,8 +141,9 @@ async def create_memory(
         created_at=created_memory.created_at,
         updated_at=created_memory.updated_at,
         last_accessed=created_memory.last_accessed,
-        expires_at=created_memory.expires_at
+        expires_at=created_memory.expires_at,
     )
+
 
 @router.get("/{memory_id}", response_model=MemoryResponse)
 async def get_memory(
@@ -135,21 +151,20 @@ async def get_memory(
     current_user: CurrentUser,
     repos: Annotated[RepositoryContainer, Depends(get_repository_container)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    _: Annotated[None, Depends(require_permissions("memories:read"))]
+    _: Annotated[None, Depends(require_permissions("memories:read"))],
 ):
     """Get a memory by ID."""
-    
+
     memory = await repos.memories.get_by_id(memory_id)
     if not memory or memory.user_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Memory not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found"
         )
-    
+
     # Update access count
     await repos.memories.update_access(memory_id)
     await session.commit()
-    
+
     return MemoryResponse(
         id=memory.id,
         key=memory.key,
@@ -166,30 +181,31 @@ async def get_memory(
         created_at=memory.created_at,
         updated_at=memory.updated_at,
         last_accessed=datetime.utcnow(),
-        expires_at=memory.expires_at
+        expires_at=memory.expires_at,
     )
 
-@router.get("/key/{key}", response_model=MemoryResponse)  
+
+@router.get("/key/{key}", response_model=MemoryResponse)
 async def get_memory_by_key(
     key: str,
     current_user: CurrentUser,
     repos: Annotated[RepositoryContainer, Depends(get_repository_container)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    _: Annotated[None, Depends(require_permissions("memories:read"))]
+    _: Annotated[None, Depends(require_permissions("memories:read"))],
 ):
     """Get a memory by key (legacy support)."""
-    
+
     memory = await repos.memories.get_by_user_and_key(current_user.id, key)
     if not memory:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Memory with key '{key}' not found"
+            detail=f"Memory with key '{key}' not found",
         )
-    
+
     # Update access count
     await repos.memories.update_access(memory.id)
     await session.commit()
-    
+
     return MemoryResponse(
         id=memory.id,
         key=memory.key,
@@ -206,8 +222,9 @@ async def get_memory_by_key(
         created_at=memory.created_at,
         updated_at=memory.updated_at,
         last_accessed=datetime.utcnow(),
-        expires_at=memory.expires_at
+        expires_at=memory.expires_at,
     )
+
 
 @router.put("/{memory_id}", response_model=MemoryResponse)
 async def update_memory(
@@ -216,30 +233,31 @@ async def update_memory(
     current_user: CurrentUser,
     repos: Annotated[RepositoryContainer, Depends(get_repository_container)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    _: Annotated[None, Depends(require_permissions("memories:update"))]
+    _: Annotated[None, Depends(require_permissions("memories:update"))],
 ):
     """Update a memory entry."""
-    
+
     memory = await repos.memories.get_by_id(memory_id)
     if not memory or memory.user_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Memory not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found"
         )
-    
+
     # Calculate new content size and hash
     content_size = 0
     content_hash = None
-    
+
     if memory_data.content:
-        content_size = len(memory_data.content.encode('utf-8'))
+        content_size = len(memory_data.content.encode("utf-8"))
         import hashlib
-        content_hash = hashlib.sha256(memory_data.content.encode('utf-8')).hexdigest()
+
+        content_hash = hashlib.sha256(memory_data.content.encode("utf-8")).hexdigest()
     elif memory_data.binary_content:
         content_size = len(memory_data.binary_content)
         import hashlib
+
         content_hash = hashlib.sha256(memory_data.binary_content).hexdigest()
-    
+
     # Prepare update data
     update_data = {
         "key": memory_data.key,
@@ -253,17 +271,20 @@ async def update_memory(
         "priority": memory_data.priority,
         "size_bytes": content_size,
         "content_hash": content_hash,
-        "ttl_seconds": memory_data.ttl_seconds
+        "ttl_seconds": memory_data.ttl_seconds,
     }
-    
+
     # Set expiration if TTL is provided
     if memory_data.ttl_seconds:
         from datetime import timedelta
-        update_data["expires_at"] = datetime.utcnow() + timedelta(seconds=memory_data.ttl_seconds)
-    
+
+        update_data["expires_at"] = datetime.utcnow() + timedelta(
+            seconds=memory_data.ttl_seconds
+        )
+
     updated_memory = await repos.memories.update(memory_id, update_data)
     await session.commit()
-    
+
     return MemoryResponse(
         id=updated_memory.id,
         key=updated_memory.key,
@@ -280,8 +301,9 @@ async def update_memory(
         created_at=updated_memory.created_at,
         updated_at=updated_memory.updated_at,
         last_accessed=updated_memory.last_accessed,
-        expires_at=updated_memory.expires_at
+        expires_at=updated_memory.expires_at,
     )
+
 
 @router.delete("/{memory_id}")
 async def delete_memory(
@@ -289,25 +311,25 @@ async def delete_memory(
     current_user: CurrentUser,
     repos: Annotated[RepositoryContainer, Depends(get_repository_container)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
-    _: Annotated[None, Depends(require_permissions("memories:delete"))]
+    _: Annotated[None, Depends(require_permissions("memories:delete"))],
 ):
     """Delete a memory entry."""
-    
+
     memory = await repos.memories.get_by_id(memory_id)
     if not memory or memory.user_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Memory not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found"
         )
-    
+
     # Delete associated embeddings first
     await repos.memory_embeddings.delete_by_memory_id(memory_id)
-    
+
     # Delete the memory
     await repos.memories.delete(memory_id)
     await session.commit()
-    
+
     return {"message": "Memory deleted successfully"}
+
 
 @router.get("/", response_model=MemoryListResponse)
 async def list_memories(
@@ -317,27 +339,27 @@ async def list_memories(
     memory_type: Optional[str] = Query(None, description="Filter by memory type"),
     category: Optional[str] = Query(None, description="Filter by category"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    limit: int = Query(50, ge=1, le=100, description="Pagination limit")
+    limit: int = Query(50, ge=1, le=100, description="Pagination limit"),
 ):
     """List user's memories with filtering and pagination."""
-    
+
     memories = await repos.memories.get_user_memories(
         user_id=current_user.id,
         memory_type=memory_type,
         category=category,
         offset=offset,
-        limit=limit
+        limit=limit,
     )
-    
+
     # Get total count for pagination - handle case where there are no records
     filters = {"user_id": current_user.id}
     if memory_type:
         filters["memory_type"] = memory_type
     if category:
         filters["category"] = category
-    
+
     total = await repos.memories.count(filters) or 0
-    
+
     memory_responses = [
         MemoryResponse(
             id=memory.id,
@@ -355,17 +377,15 @@ async def list_memories(
             created_at=memory.created_at,
             updated_at=memory.updated_at,
             last_accessed=memory.last_accessed,
-            expires_at=memory.expires_at
+            expires_at=memory.expires_at,
         )
         for memory in memories
     ]
-    
+
     return MemoryListResponse(
-        memories=memory_responses,
-        total=total,
-        offset=offset,
-        limit=limit
+        memories=memory_responses, total=total, offset=offset, limit=limit
     )
+
 
 @router.get("/search", response_model=MemoryListResponse)
 async def search_memories(
@@ -374,17 +394,14 @@ async def search_memories(
     _: Annotated[None, Depends(require_permissions("memories:search"))],
     q: str = Query(..., description="Search query"),
     memory_type: Optional[str] = Query(None, description="Filter by memory type"),
-    limit: int = Query(20, ge=1, le=100, description="Result limit")
+    limit: int = Query(20, ge=1, le=100, description="Result limit"),
 ):
     """Search user's memories by content."""
-    
+
     memories = await repos.memories.search_memories(
-        user_id=current_user.id,
-        search_text=q,
-        memory_type=memory_type,
-        limit=limit
+        user_id=current_user.id, search_text=q, memory_type=memory_type, limit=limit
     )
-    
+
     memory_responses = [
         MemoryResponse(
             id=memory.id,
@@ -402,14 +419,11 @@ async def search_memories(
             created_at=memory.created_at,
             updated_at=memory.updated_at,
             last_accessed=memory.last_accessed,
-            expires_at=memory.expires_at
+            expires_at=memory.expires_at,
         )
         for memory in memories
     ]
-    
+
     return MemoryListResponse(
-        memories=memory_responses,
-        total=len(memory_responses),
-        offset=0,
-        limit=limit
+        memories=memory_responses, total=len(memory_responses), offset=0, limit=limit
     )

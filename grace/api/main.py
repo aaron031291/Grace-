@@ -2,11 +2,11 @@
 Main FastAPI application for Grace system.
 Integrates all API routes with the new repository-based architecture.
 """
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
 
@@ -14,25 +14,27 @@ from grace.core.database import init_database, close_database
 from grace.api.auth import router as auth_router
 from grace.api.memories import router as memory_router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     await init_database()
     yield
-    # Shutdown  
+    # Shutdown
     await close_database()
+
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
-    
+
     app = FastAPI(
         title="Grace AI Governance System",
         description="Advanced AI system with repository-based data layer",
         version="0.3.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
-    
+
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
@@ -41,11 +43,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Include API routers
     app.include_router(auth_router)
     app.include_router(memory_router)
-    
+
     @app.get("/")
     async def root():
         """Root endpoint."""
@@ -55,36 +57,36 @@ def create_app() -> FastAPI:
             "status": "running",
             "features": [
                 "SQLAlchemy-based data layer",
-                "JWT authentication with RBAC", 
+                "JWT authentication with RBAC",
                 "Repository pattern implementation",
                 "Async database operations",
-                "Memory management APIs"
-            ]
+                "Memory management APIs",
+            ],
         }
-    
+
     @app.get("/health")
     async def health_check():
         """Health check endpoint."""
         return {"status": "healthy", "timestamp": "2024-09-28T19:20:00Z"}
-    
+
     @app.get("/demo")
     async def demo_page():
         """Serve P0 implementation demo page."""
-        demo_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "grace_p0_demo.html")
+        demo_file_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "grace_p0_demo.html",
+        )
         if os.path.exists(demo_file_path):
             return FileResponse(demo_file_path, media_type="text/html")
         return {"error": "Demo page not found"}
-    
+
     return app
+
 
 # Create the app instance
 app = create_app()
 
 if __name__ == "__main__":
     uvicorn.run(
-        "grace.api.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        "grace.api.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
     )

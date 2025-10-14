@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  sqlite-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run sqlite tests
+        run: |
+          pytest -q
+
+  postgres-tests:
+    needs: sqlite-tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grace_test
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 && break
+            sleep 1
+          done
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
+        run: |
+          python3 scripts/apply_migrations.py
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
+        run: |
+          pytest -q
+      - name: Verify event logs
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
+        run: |
+          echo "Checking for immutable events in event_logs"
+          COUNT=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM event_logs WHERE event_type LIKE 'immutable_%';" | tr -d ' ')
+          echo "Found $COUNT immutable events"
+          if [ "$COUNT" -lt 1 ]; then
+            echo "No immutable events recorded - failing CI"
+            exit 1
+          fi

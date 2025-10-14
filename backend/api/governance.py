@@ -12,8 +12,7 @@ router = APIRouter()
 
 @router.get("/policies")
 async def list_policies(
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     """List governance policies."""
     # TODO: Implement policy listing

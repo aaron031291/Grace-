@@ -5,11 +5,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CFG = yaml.safe_load(open(ROOT / "config.yaml"))
 
+
 def load_files(patterns):
     files = []
     for p in patterns:
         files += [Path(f) for f in glob.glob(str((ROOT / p).resolve()), recursive=True)]
     return files
+
 
 def md_to_chunks(text, max_chars, overlap, min_chars):
     pieces = re.split(r"(?m)^#{1,6} .*?$|^\s*$", text)
@@ -26,16 +28,25 @@ def md_to_chunks(text, max_chars, overlap, min_chars):
         chunks.append(cur)
     return chunks
 
+
 def infer_domain(path):
     s = path.as_posix().lower()
-    if "ai" in s: return "ai"
-    if "cloud" in s: return "cloud"
-    if "devops" in s: return "devops"
-    if "web" in s: return "web"
-    if "debug" in s: return "debug"
-    if "policy" in s: return "governance"
-    if "db" in s: return "db"
+    if "ai" in s:
+        return "ai"
+    if "cloud" in s:
+        return "cloud"
+    if "devops" in s:
+        return "devops"
+    if "web" in s:
+        return "web"
+    if "debug" in s:
+        return "debug"
+    if "policy" in s:
+        return "governance"
+    if "db" in s:
+        return "db"
     return "reference"
+
 
 def file_tags(text):
     tags = re.findall(r"#tags:\s*(.+)", text)
@@ -43,6 +54,7 @@ def file_tags(text):
     for t in tags:
         flat += [x.strip() for x in t.split(",")]
     return list(set(flat))
+
 
 def main():
     files = load_files(CFG["paths"]["include"])
@@ -62,10 +74,11 @@ def main():
                     "layer": f.parent.name,
                     "source": f.as_posix(),
                     "version": "1.0.0",
-                    "competency": "intermediate"
+                    "competency": "intermediate",
                 }
                 w.write(json.dumps(item) + "\n")
     print(f"Knowledge written to {out}")
+
 
 if __name__ == "__main__":
     main()

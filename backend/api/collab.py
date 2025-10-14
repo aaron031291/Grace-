@@ -12,8 +12,7 @@ router = APIRouter()
 
 @router.get("/sessions")
 async def list_collab_sessions(
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     """List collaboration sessions."""
     # TODO: Implement collab session listing

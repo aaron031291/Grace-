@@ -38,3 +38,22 @@ Next steps (optional actions I can take):
 - Help with a manual interactive merge against `origin/main` and resolve conflicts.
 
 If you'd like, I can open a PR now with this description, or prepare a smaller change set if you prefer a more incremental merge strategy.
+
+PR checklist (for reviewers)
+ - [ ] Verify timezone helper API and edge cases (now_utc / iso_now_utc / to_utc)
+ - [ ] Review model default factory changes for Pydantic compatibility
+ - [ ] Confirm background-task lifecycle changes don't break long-running services
+ - [ ] Sanity-check demo and tests for date/time formatting expectations
+ - [ ] Approve and merge, or request follow-up changes
+
+Recommended next actions (I can do any):
+ - Run and fix high-value linter errors (unused imports, missing newlines, trivial style fixes)
+ - Run a selective static-type check (pyright) and fix critical type issues
+ - Help resolve an interactive merge with `main` if reviewers want the full original branch merged
+ - Keep this PR focused (merge as-is) and address the larger lint cleanup in a follow-up PR
+
+PR link: https://github.com/aaron031291/Grace-/pull/82
+
+# commit marker for PR update
+
+# commit marker

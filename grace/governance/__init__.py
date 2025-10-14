@@ -9,9 +9,9 @@ from .parliament import Parliament
 from .trust_core_kernel import TrustCoreKernel
 
 __all__ = [
-    'VerificationEngine',
-    'UnifiedLogic', 
-    'GovernanceEngine',
-    'Parliament',
-    'TrustCoreKernel'
+    "VerificationEngine",
+    "UnifiedLogic",
+    "GovernanceEngine",
+    "Parliament",
+    "TrustCoreKernel",
 ]

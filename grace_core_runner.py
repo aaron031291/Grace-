@@ -3,6 +3,7 @@ Grace Canonical Core Runner
 Boots: EventBus → Governance → Trigger Mesh → MLDL quorum → API
 Keeps the loop alive with graceful shutdown.
 """
+
 import asyncio
 import logging
 from grace.core.event_bus import EventBus
@@ -12,6 +13,7 @@ from grace.mldl.quorum import MLDLQuorum
 from grace.api.api_service import GraceAPIService
 
 logger = logging.getLogger("grace_core_runner")
+
 
 async def main():
     logger.info("Booting Grace Core Runner...")
@@ -40,6 +42,7 @@ async def main():
         await governance.shutdown()
         await event_bus.shutdown()
         logger.info("Grace Core Runner shutdown complete.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

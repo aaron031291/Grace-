@@ -9,7 +9,12 @@ from typing import Dict, Any
 
 from ..database import get_db
 from ..models import User
-from ..auth import verify_password, get_password_hash, create_access_token, create_refresh_token
+from ..auth import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    create_refresh_token,
+)
 from ..middleware.auth import get_current_user, require_auth
 from ..config import get_settings
 
@@ -42,10 +47,7 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(
-    user_data: UserRegistration,
-    db: AsyncSession = Depends(get_db)
-):
+async def register(user_data: UserRegistration, db: AsyncSession = Depends(get_db)):
     """Register a new user."""
     # Check if user already exists
     result = await db.execute(
@@ -54,13 +56,13 @@ async def register(
         )
     )
     existing_user = result.scalar_one_or_none()
-    
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email or username already exists"
+            detail="User with this email or username already exists",
         )
-    
+
     # Create new user
     user = User(
         username=user_data.username,
@@ -68,13 +70,13 @@ async def register(
         hashed_password=get_password_hash(user_data.password),
         full_name=user_data.full_name,
         storage_quota=settings.default_storage_quota,
-        memory_fragments_quota=settings.default_memory_fragments_quota
+        memory_fragments_quota=settings.default_memory_fragments_quota,
     )
-    
+
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -83,14 +85,13 @@ async def register(
         is_active=user.is_active,
         is_superuser=user.is_superuser,
         storage_quota=user.storage_quota,
-        memory_fragments_quota=user.memory_fragments_quota
+        memory_fragments_quota=user.memory_fragments_quota,
     )
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db)
+    form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
 ):
     """Login and get access tokens."""
     # Find user by username or email
@@ -100,27 +101,22 @@ async def login(
         )
     )
     user = result.scalar_one_or_none()
-    
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
-    
+
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account is inactive"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is inactive"
         )
-    
+
     # Create tokens
     access_token = create_access_token({"sub": user.id, "username": user.username})
     refresh_token = create_refresh_token({"sub": user.id})
-    
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token
-    )
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -134,5 +130,5 @@ async def get_current_user_info(current_user: User = Depends(require_auth)):
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
         storage_quota=current_user.storage_quota,
-        memory_fragments_quota=current_user.memory_fragments_quota
+        memory_fragments_quota=current_user.memory_fragments_quota,
     )

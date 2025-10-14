@@ -1,8 +1,8 @@
 """
 Grace Message Envelope (GME) - Core envelope implementation.
 """
+
 import uuid
-import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 from pydantic import BaseModel, Field
@@ -11,22 +11,25 @@ from enum import Enum
 
 class MessageKind(str, Enum):
     """Message types in Grace communications."""
+
     EVENT = "event"
-    COMMAND = "command"  
+    COMMAND = "command"
     QUERY = "query"
     REPLY = "reply"
 
 
 class Priority(str, Enum):
     """Message priority levels."""
+
     P0 = "P0"  # Critical - governance, security
-    P1 = "P1"  # High - deployments, alerts  
+    P1 = "P1"  # High - deployments, alerts
     P2 = "P2"  # Normal - standard operations
     P3 = "P3"  # Low - background, bulk
 
 
 class QoSClass(str, Enum):
     """Quality of Service classes."""
+
     REALTIME = "realtime"
     STANDARD = "standard"
     BULK = "bulk"
@@ -34,6 +37,7 @@ class QoSClass(str, Enum):
 
 class GovernanceLabel(str, Enum):
     """Data governance classification."""
+
     PUBLIC = "public"
     INTERNAL = "internal"
     RESTRICTED = "restricted"
@@ -41,6 +45,7 @@ class GovernanceLabel(str, Enum):
 
 class RetryPolicy(BaseModel):
     """Retry configuration for message delivery."""
+
     strategy: str = Field(default="exp", pattern="^(exp|lin|none)$")
     max_attempts: int = Field(default=5, ge=0)
     base_ms: int = Field(default=50, ge=1)
@@ -49,13 +54,14 @@ class RetryPolicy(BaseModel):
 
 class MessageHeaders(BaseModel):
     """Headers section of Grace Message Envelope."""
+
     schema_ref: str
     correlation_id: str = Field(pattern="^cor_[a-z0-9_-]{6,}$")
     traceparent: str
     priority: Priority
-    qos: QoSClass  
+    qos: QoSClass
     partition_key: str
-    
+
     # Optional headers
     causation_id: Optional[str] = None
     reply_to: Optional[str] = None
@@ -77,6 +83,7 @@ class MessageHeaders(BaseModel):
 
 class GraceMessageEnvelope(BaseModel):
     """Grace Message Envelope (GME) - Standard message wrapper."""
+
     msg_id: str = Field(pattern="^msg_[a-z0-9]{10,}$")
     kind: MessageKind
     domain: str
@@ -119,10 +126,10 @@ def create_envelope(
     idempotency_key: Optional[str] = None,
     governance_label: GovernanceLabel = GovernanceLabel.INTERNAL,
     rbac: Optional[List[str]] = None,
-    **kwargs
+    **kwargs,
 ) -> GraceMessageEnvelope:
     """Create a Grace Message Envelope with reasonable defaults."""
-    
+
     # Generate required IDs
     msg_id = generate_message_id()
     if correlation_id is None:
@@ -131,7 +138,7 @@ def create_envelope(
         partition_key = correlation_id
     if schema_ref is None:
         schema_ref = f"grace://contracts/{domain}.{name.lower()}.schema.json"
-    
+
     # Create headers
     headers = MessageHeaders(
         schema_ref=schema_ref,
@@ -143,9 +150,9 @@ def create_envelope(
         idempotency_key=idempotency_key,
         governance_label=governance_label,
         rbac=rbac or [],
-        **{k: v for k, v in kwargs.items() if hasattr(MessageHeaders, k)}
+        **{k: v for k, v in kwargs.items() if hasattr(MessageHeaders, k)},
     )
-    
+
     return GraceMessageEnvelope(
         msg_id=msg_id,
         kind=kind,
@@ -154,5 +161,5 @@ def create_envelope(
         ts=datetime.now(timezone.utc),
         headers=headers,
         version="1.0.0",
-        payload=payload
+        payload=payload,
     )

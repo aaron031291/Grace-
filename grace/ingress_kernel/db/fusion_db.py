@@ -198,6 +198,47 @@ class FusionDB:
             )
             self.conn.commit()
             return cur.lastrowid
+        elif table == 'outcome_patterns':
+            # Handle outcome_patterns table schema
+            pattern_id = payload.get('pattern_id', f"pattern_{int(time.time()*1000)}")
+            cur.execute(
+                """INSERT INTO outcome_patterns 
+                   (pattern_id, pattern_type, action_type, conditions, outcome, frequency, 
+                    confidence, first_observed, last_observed, actionable_insight)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    pattern_id,
+                    payload.get('pattern_type', ''),
+                    payload.get('action_type', ''),
+                    json.dumps(payload.get('conditions', {})),  # JSON serialize
+                    json.dumps(payload.get('outcome', {})),  # JSON serialize
+                    payload.get('frequency', 1),
+                    payload.get('confidence', 0.0),
+                    payload.get('first_observed', time.time()),
+                    payload.get('last_observed', time.time()),
+                    json.dumps(payload.get('actionable_insight', ''))  # JSON serialize (might be list)
+                )
+            )
+            self.conn.commit()
+            return pattern_id
+        elif table == 'meta_loop_escalations':
+            # Handle meta_loop_escalations table schema
+            cur.execute(
+                """INSERT INTO meta_loop_escalations 
+                   (loop_type, trigger_observation_id, escalation_reason, escalation_target, 
+                    escalation_data, escalated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    payload.get('loop_type', ''),
+                    payload.get('trigger_observation_id', ''),
+                    payload.get('escalation_reason', ''),
+                    payload.get('escalation_target', ''),
+                    json.dumps(payload.get('escalation_data', {})),
+                    payload.get('escalated_at', time.time())
+                )
+            )
+            self.conn.commit()
+            return cur.lastrowid
         else:
             # Generic insert: store payload as JSON into a text column 'payload' if table has it
             try:

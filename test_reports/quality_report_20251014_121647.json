@@ -1,0 +1,56 @@
+{
+  "timestamp": "2025-10-14T12:16:47.401505",
+  "summary": {
+    "total_components": 1,
+    "passing_components": 1,
+    "system_pass_rate": 1.0,
+    "overall_quality": 0.9937561424762928,
+    "breakdown": {
+      "critical": 0,
+      "degraded": 0,
+      "acceptable": 0,
+      "passing": 0,
+      "excellent": 1
+    },
+    "timestamp": "2025-10-14T12:16:47.401452"
+  },
+  "components": {
+    "general_tests": {
+      "component_id": "general_tests",
+      "raw_score": 1.0,
+      "trust_adjusted_score": 0.9937561424762928,
+      "quality_status": "excellent",
+      "is_passing": true,
+      "total_tests": 34,
+      "passed_tests": 34,
+      "failed_tests": 0,
+      "pass_rate": 1.0,
+      "error_severity_breakdown": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0
+      },
+      "last_updated": "2025-10-14T12:16:47.401301",
+      "historical_trend": [
+        0.9867760092010793,
+        0.987833928464993,
+        0.9888072141877936,
+        0.9897026370527701,
+        0.9905264260885485,
+        0.9912843120014646,
+        0.9919815670413474,
+        0.9926230416780397,
+        0.9932131983437965,
+        0.9937561424762928
+      ]
+    }
+  },
+  "needing_attention": [],
+  "raw_counts": {
+    "total": 34,
+    "passed": 34,
+    "failed": 0,
+    "skipped": 0
+  }
+}

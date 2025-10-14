@@ -328,63 +328,86 @@ class TestQualityMonitor:
                                          severity: str,
                                          reason: str,
                                          recommended_actions: List[str]):
-        """Trigger escalation to AVN/Memory Orchestrator for healing."""
+        """
+        Trigger escalation to AVN/Memory Orchestrator for healing.
+        
+        Publishes 'test_quality.healing_required' event that TriggerMesh routes to:
+        - CRITICAL severity → avn_core.escalate_healing (workflow: test_quality_critical_healing)
+        - WARNING severity → learning_kernel.trigger_adaptive_learning (workflow: test_quality_degraded_learning)
+        """
         if self.event_publisher:
+            score = self.components.get(component_id)
             await self.event_publisher(
                 "test_quality.healing_required",
                 {
                     "component_id": component_id,
+                    "status": score.quality_status.value if score else "unknown",
+                    "score": score.trust_adjusted_score * 100 if score else 0.0,
                     "severity": severity,
-                    "reason": reason,
                     "recommended_actions": recommended_actions,
-                    "timestamp": datetime.now().isoformat(),
-                    "escalate_to": "avn_core"
+                    "error_patterns": [
+                        {
+                            "type": r.error_message.split(':')[0] if r.error_message and ':' in r.error_message else "UnknownError",
+                            "severity": r.error_severity.name
+                        }
+                        for r in self.test_results.get(component_id, [])[-5:]
+                        if not r.passed and r.error_message
+                    ]
                 }
             )
         
-        logger.warning(f"HEALING ESCALATION: {component_id} - {reason}")
+        logger.warning(f"🔴 HEALING EVENT PUBLISHED: {component_id} - {reason}")
     
     async def _trigger_adaptive_learning(self,
                                         component_id: str,
                                         severity: str,
                                         reason: str,
                                         focus_areas: List[str]):
-        """Trigger adaptive learning loop for component improvement."""
+        """
+        Trigger adaptive learning loop for component improvement.
+        
+        Publishes 'test_quality.healing_required' event with WARNING severity
+        that TriggerMesh routes to learning_kernel.trigger_adaptive_learning
+        """
         if self.event_publisher:
+            score = self.components.get(component_id)
             await self.event_publisher(
-                "test_quality.adaptive_learning_required",
+                "test_quality.healing_required",
                 {
                     "component_id": component_id,
+                    "status": score.quality_status.value if score else "degraded",
+                    "score": score.trust_adjusted_score * 100 if score else 0.0,
                     "severity": severity,
-                    "reason": reason,
-                    "focus_areas": focus_areas,
-                    "timestamp": datetime.now().isoformat(),
-                    "trigger": "learning_kernel"
+                    "recommended_actions": focus_areas
                 }
             )
         
-        logger.info(f"ADAPTIVE LEARNING: {component_id} - {reason}")
+        logger.info(f"⚡ ADAPTIVE LEARNING EVENT PUBLISHED: {component_id} - {reason}")
     
     async def _trigger_improvement_suggestion(self,
                                              component_id: str,
                                              current_score: float,
                                              target_score: float,
                                              suggestions: List[str]):
-        """Trigger improvement suggestions for component."""
+        """
+        Trigger improvement suggestions for component.
+        
+        Publishes 'test_quality.improvement_suggested' event that TriggerMesh
+        routes to monitoring_kernel.track_improvement_opportunity
+        """
         if self.event_publisher:
             await self.event_publisher(
                 "test_quality.improvement_suggested",
                 {
                     "component_id": component_id,
-                    "current_score": current_score,
-                    "target_score": target_score,
-                    "gap": target_score - current_score,
-                    "suggestions": suggestions,
-                    "timestamp": datetime.now().isoformat()
+                    "current_score": current_score * 100,  # Convert to percentage
+                    "target_score": target_score * 100,
+                    "gap": (target_score - current_score) * 100,
+                    "suggestions": suggestions
                 }
             )
         
-        logger.info(f"IMPROVEMENT SUGGESTION: {component_id} - Gap: {(target_score - current_score):.1%}")
+        logger.info(f"💡 IMPROVEMENT EVENT PUBLISHED: {component_id} - Gap: {(target_score - current_score):.1%}")
     
     def _identify_problem_areas(self, component_id: str) -> List[str]:
         """Identify specific problem areas from test failures."""

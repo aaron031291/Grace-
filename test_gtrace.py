@@ -8,6 +8,8 @@ and ensures compliance with constitutional principles and vault requirements.
 import asyncio
 import pytest
 import logging
+import tempfile
+import os
 from datetime import datetime
 from typing import Dict, Any
 
@@ -30,43 +32,60 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+async def _create_tracer_resources():
+    """Async helper to setup test environment with all Grace components."""
+    event_bus = EventBus()
+    # Use a temporary file for SQLite so multiple connections see the schema
+    tf = tempfile.NamedTemporaryFile(prefix="grace_mem_", suffix=".db", delete=False)
+    tf.close()
+    temp_db = tf.name
+    memory_core = MemoryCore(temp_db)
+    immutable_logs = ImmutableLogs()
+    kpi_monitor = KPITrustMonitor()
+
+    await event_bus.start()
+    await immutable_logs.start()
+    await kpi_monitor.start()
+
+    tracer = await create_grace_tracer(
+        event_bus=event_bus,
+        memory_core=memory_core,
+        immutable_logs=immutable_logs,
+        kpi_monitor=kpi_monitor,
+    )
+
+    return {
+        "tracer": tracer,
+        "event_bus": event_bus,
+        "memory_core": memory_core,
+        "immutable_logs": immutable_logs,
+        "kpi_monitor": kpi_monitor,
+    }
+
+
+@pytest.fixture
+def tracer_setup():
+    """Synchronous fixture wrapper that runs the async setup and yields resources."""
+    resources = asyncio.run(_create_tracer_resources())
+
+    try:
+        yield resources
+    finally:
+        # Cleanup synchronously
+        asyncio.run(resources["event_bus"].stop())
+        asyncio.run(resources["immutable_logs"].stop())
+        asyncio.run(resources["kpi_monitor"].stop())
+        # Remove temporary DB file if present
+        try:
+            db_path = resources.get("memory_core").db_path
+            if db_path and os.path.exists(db_path):
+                os.unlink(db_path)
+        except Exception:
+            pass
+
+
 class TestGraceTracer:
     """Test suite for Grace Tracer functionality."""
-
-    @pytest.fixture
-    async def tracer_setup(self):
-        """Setup test environment with all Grace components."""
-        # Create core components
-        event_bus = EventBus()
-        memory_core = MemoryCore(":memory:")  # In-memory database for testing
-        immutable_logs = ImmutableLogs()
-        kpi_monitor = KPITrustMonitor()
-
-        # Start components
-        await event_bus.start()
-        await immutable_logs.start()
-        await kpi_monitor.start()
-
-        # Create Grace tracer
-        tracer = await create_grace_tracer(
-            event_bus=event_bus,
-            memory_core=memory_core,
-            immutable_logs=immutable_logs,
-            kpi_monitor=kpi_monitor,
-        )
-
-        yield {
-            "tracer": tracer,
-            "event_bus": event_bus,
-            "memory_core": memory_core,
-            "immutable_logs": immutable_logs,
-            "kpi_monitor": kpi_monitor,
-        }
-
-        # Cleanup
-        await event_bus.stop()
-        await immutable_logs.stop()
-        await kpi_monitor.stop()
 
     @pytest.mark.asyncio
     async def test_basic_trace_creation(self, tracer_setup):
@@ -154,7 +173,8 @@ class TestGraceTracer:
         tracer = tracer_setup["tracer"]
 
         # Register a test contradiction detector
-        def test_contradiction_detector(event, trace_chain):
+        async def test_contradiction_detector(event, trace_chain):
+            # Async-compatible contradiction detector
             contradictions = []
             if event.operation == "conflicting_operation":
                 contradictions.append("Test contradiction detected")

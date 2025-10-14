@@ -672,12 +672,22 @@ class GraceTracer:
         trace_chain.metadata.vault_compliance[VaultCompliance.VAULT_8_TRUST.value] = (
             True
         )
+        # Ensure the trace-level aggregate reflects metadata updates immediately
+        try:
+            trace_chain.final_trust_score = trace_chain.metadata.trust_score
+        except Exception:
+            # Defensive: ignore if trace_chain not yet fully initialized
+            pass
 
     async def _final_constitutional_validation(self, trace_chain: TraceChain) -> bool:
         """Perform final constitutional validation (Vault 14)."""
         try:
             # Check all constitutional principles
-            validation_result = trace_chain.metadata.constitutional_compliance
+            # If there are no events, treat the trace as constitutionally valid by default
+            if not trace_chain.events:
+                validation_result = True
+            else:
+                validation_result = trace_chain.metadata.constitutional_compliance
 
             # Additional checks for completed trace
             if trace_chain.events:

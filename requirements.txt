@@ -68,3 +68,46 @@ joblib>=1.3.0
 # --- Development / Testing (Optional) ---
 pytest>=7.0.0
 pytest-asyncio>=0.21.0
+
+# Grace AI System - Production Dependencies
+
+# Core Framework
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Database
+psycopg2-binary>=2.9.0  # PostgreSQL adapter
+SQLAlchemy>=2.0.0       # ORM for database operations
+alembic>=1.12.0         # Database migrations
+
+# Caching
+redis>=5.0.0            # Redis client
+hiredis>=2.2.0          # Redis protocol parser (performance)
+
+# Embeddings & AI
+openai>=1.0.0           # OpenAI API
+sentence-transformers>=2.2.0  # Alternative embeddings
+tiktoken>=0.5.0         # Token counting
+
+# Async & Performance
+asyncio-redis>=0.16.0
+aioredis>=2.0.0
+
+# Monitoring & Health
+prometheus-client>=0.19.0
+psutil>=5.9.0
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+python-dateutil>=2.8.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+black>=23.0.0
+ruff>=0.1.0
+
+# Grace-specific
+# (Add any custom Grace dependencies here)

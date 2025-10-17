@@ -1,4 +1,16 @@
-"""Grace Memory subsystem - Enhanced memory infrastructure with vector databases and quantum-safe storage."""
+"""
+Grace Memory System - Enhanced memory with production DB and health monitoring
+"""
+
+from .enhanced_memory_core import EnhancedMemoryCore, MemoryHealth, MemoryMetrics
+
+__all__ = [
+    'EnhancedMemoryCore',
+    'MemoryHealth',
+    'MemoryMetrics'
+]
+
+__version__ = '1.0.0'
 
 # Enhanced memory components
 from . import vector_db
@@ -14,5 +26,3 @@ try:
 except ImportError:
     # Gracefully handle missing legacy components
     pass
-
-__all__ = ["vector_db", "quantum_safe_storage", "enhanced_memory_bridge"]

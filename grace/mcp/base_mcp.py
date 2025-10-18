@@ -167,332 +167,205 @@ class BaseMCP:
     manifest_path: str = None  # Override or auto-derive
     owner: OwnerType = OwnerType.SYSTEM
     
-    def __init__(self):
-        if not self.domain:
-            raise ValueError(f"{self.__class__.__name__} must set 'domain' attribute")
+    def __init__(self, embedding_service=None, vector_store=None):
+        """
+        Initialize MCP with embedding service and vector store
         
-        # Load manifest
-        if not self.manifest_path:
-            self.manifest_path = f"grace/mcp/manifests/{self.domain}.yaml"
-        self.manifest = self._load_manifest()
+        Args:
+            embedding_service: EmbeddingService instance from grace.embeddings
+            vector_store: VectorStore instance from grace.vectorstore
+        """
+        self.embedding_service = embedding_service
+        self.vector_store = vector_store
         
-        # Initialize clients (lazy loading)
-        self._db: Optional[FusionDB] = None
-        self._memory: Optional[MemoryCore] = None
-        self._events: Optional[EventBus] = None
-        self._governance: Optional[GovernanceEngine] = None
+        # Initialize services if not provided
+        if not self.embedding_service:
+            try:
+                from grace.embeddings.service import EmbeddingService
+                self.embedding_service = EmbeddingService()
+                logger.info("Initialized default embedding service")
+            except Exception as e:
+                logger.error(f"Could not initialize embedding service: {e}")
+                self.embedding_service = None
         
-    def _load_manifest(self) -> Dict[str, Any]:
-        """Load and validate YAML manifest"""
-        try:
-            with open(self.manifest_path, 'r') as f:
-                manifest = yaml.safe_load(f)
+        if not self.vector_store:
+            try:
+                from grace.vectorstore.service import VectorStoreService
+                dimension = self.embedding_service.dimension if self.embedding_service else 384
+                self.vector_store = VectorStoreService(
+                    dimension=dimension,
+                    index_path="./data/mcp_vectors.bin"
+                )
+                logger.info("Initialized default vector store")
+            except Exception as e:
+                logger.error(f"Could not initialize vector store: {e}")
+                self.vector_store = None
+    
+    def vectorize(self, text: str) -> np.ndarray:
+        """
+        Convert text to embedding vector using production embedding service
+        
+        Args:
+            text: Text to vectorize
             
-            # Validate required fields
-            required = ['mcp_version', 'domain', 'endpoints']
-            missing = [f for f in required if f not in manifest]
-            if missing:
-                raise ValueError(f"Manifest missing required fields: {missing}")
-            
-            return manifest
-        except FileNotFoundError:
-            raise ValueError(f"Manifest not found: {self.manifest_path}")
-    
-    # --- Lazy client initialization ---
-    
-    @property
-    def db(self) -> FusionDB:
-        """Get database instance"""
-        if not self._db:
-            self._db = FusionDB.get_instance()
-        return self._db
-    
-    @property
-    def memory(self) -> MemoryCore:
-        if not self._memory:
-            self._memory = MemoryCore()
-        return self._memory
-    
-    @property
-    def events(self) -> EventBus:
-        if not self._events:
-            self._events = EventBus()
-        return self._events
-    
-    @events.setter
-    def events(self, value):
-        """Allow setting events for testing."""
-        self._events = value
-    
-    @property
-    def governance(self) -> GovernanceEngine:
-        if not self._governance:
-            self._governance = GovernanceEngine()
-        return self._governance
-    
-    @governance.setter
-    def governance(self, value):
-        """Allow setting governance for testing."""
-        self._governance = value
-    
-    # --- Meta-Loop integration ---
-    
-    async def observe(self, 
-                     operation: str, 
-                     data: Dict[str, Any],
-                     context: MCPContext) -> str:
+        Returns:
+            Embedding vector as numpy array
         """
-        Record observation in O-Loop.
-        Returns observation_id for lineage tracking.
-        """
-        # Convert Pydantic models in data to dicts
-        serializable_data = {}
-        for key, value in data.items():
-            if hasattr(value, 'model_dump'):
-                serializable_data[key] = value.model_dump()
-            elif hasattr(value, 'dict'):
-                serializable_data[key] = value.dict()
-            else:
-                serializable_data[key] = value
+        if not self.embedding_service:
+            logger.warning("No embedding service available, returning zero vector")
+            return np.zeros(384, dtype=np.float32)
         
-        observation = {
-            "observation_type": "mcp_operation",
-            "source_module": f"mcp.{self.domain}",
-            "observation_data": json.dumps({
-                "operation": operation,
-                "domain": self.domain,
-                "caller": context.caller.id,
-                "request_id": context.request_id,
-                **serializable_data
-            }),
-            "context": json.dumps({
-                "session_id": context.caller.session_id,
-                "trust_score": context.caller.trust_score,
-                "elapsed_ms": context.elapsed_ms
-            }),
-            "credibility_score": context.caller.trust_score,
-            "observed_at": time.time()
-        }
+        if not text or not text.strip():
+            logger.warning("Empty text provided, returning zero vector")
+            return np.zeros(self.embedding_service.dimension, dtype=np.float32)
         
-        # Insert into observations table (assumes it exists from database build)
-        # Use raw SQL for now - can be upgraded to ORM later
-        obs_id = f"obs_{hashlib.md5(f'{operation}{time.time()}'.encode()).hexdigest()}"
-        observation['observation_id'] = obs_id
-        
-        # Store observation snapshot in memory
-        snapshot = type('GovernanceSnapshot', (), {
-            'to_dict': lambda self: {
-                'snapshot_id': obs_id,
-                'snapshot_type': 'observation',
-                'data': observation
-            }
-        })()
-        await self.memory.store_snapshot(snapshot)
-        
-        return obs_id
-    
-    async def record_decision(self,
-                             orientation_id: Optional[str],
-                             decision_type: str,
-                             selected_option: Dict[str, Any],
-                             rationale: str,
-                             context: MCPContext,
-                             governance_approved: bool = True) -> str:
-        """
-        Record decision in D-Loop.
-        Returns decision_id for lineage tracking.
-        """
-        # Convert Pydantic model to dict if needed
-        if hasattr(selected_option, 'model_dump'):
-            selected_option = selected_option.model_dump()
-        elif hasattr(selected_option, 'dict'):
-            selected_option = selected_option.dict()
-        
-        decision = {
-            "orientation_id": orientation_id,
-            "decision_type": decision_type,
-            "selected_option": json.dumps(selected_option),
-            "selection_rationale": rationale,
-            "confidence": context.caller.trust_score,
-            "governance_approved": governance_approved,
-            "decided_at": time.time()
-        }
-        
-        dec_id = f"dec_{hashlib.md5(f'{decision_type}{time.time()}'.encode()).hexdigest()}"
-        decision['decision_id'] = dec_id
-        
-        # Store in memory core - create a snapshot-like dict
-        snapshot = type('GovernanceSnapshot', (), {
-            'to_dict': lambda self: {
-                'snapshot_id': dec_id,
-                'snapshot_type': 'decision',
-                'data': decision
-            }
-        })()
-        await self.memory.store_snapshot(snapshot)
-        
-        return dec_id
-    
-    async def evaluate_outcome(self,
-                              action_id: str,
-                              intended: Dict[str, Any],
-                              actual: Dict[str, Any],
-                              success: bool,
-                              metrics: Dict[str, Any],
-                              context: MCPContext) -> str:
-        """
-        Record evaluation in E-Loop.
-        Returns evaluation_id.
-        """
-        # Convert Pydantic models to dicts if needed
-        if hasattr(intended, 'model_dump'):
-            intended = intended.model_dump()
-        elif hasattr(intended, 'dict'):
-            intended = intended.dict()
-        
-        if hasattr(actual, 'model_dump'):
-            actual = actual.model_dump()
-        elif hasattr(actual, 'dict'):
-            actual = actual.dict()
-        
-        if hasattr(metrics, 'model_dump'):
-            metrics = metrics.model_dump()
-        elif hasattr(metrics, 'dict'):
-            metrics = metrics.dict()
-        
-        evaluation = {
-            "action_id": action_id,
-            "intended_outcome": json.dumps(intended),
-            "actual_outcome": json.dumps(actual),
-            "success": success,
-            "performance_metrics": json.dumps(metrics),
-            "confidence_adjustment": 0.05 if success else -0.05,
-            "evaluated_at": time.time()
-        }
-        
-        eval_id = f"eval_{hashlib.md5(f'{action_id}{time.time()}'.encode()).hexdigest()}"
-        evaluation['evaluation_id'] = eval_id
-        
-        # Store in memory core - create a snapshot-like dict
-        snapshot = type('GovernanceSnapshot', (), {
-            'to_dict': lambda self: {
-                'snapshot_id': eval_id,
-                'snapshot_type': 'evaluation',
-                'data': evaluation
-            }
-        })()
-        await self.memory.store_snapshot(snapshot)
-        
-        # Update caller's trust score
-        if success:
-            await self._adjust_trust(context.caller.id, +0.02)
-        else:
-            await self._adjust_trust(context.caller.id, -0.02)
-        
-        return eval_id
-    
-    async def _adjust_trust(self, component: str, delta: float):
-        """Adjust trust score for component/caller"""
-        # Store trust adjustment in memory for now
-        trust_update = {
-            "component": component,
-            "delta": delta,
-            "timestamp": time.time()
-        }
-        snapshot = type('GovernanceSnapshot', (), {
-            'to_dict': lambda self: {
-                'snapshot_id': f"trust_{component}_{time.time()}",
-                'snapshot_type': 'trust_adjustment',
-                'data': trust_update
-            }
-        })()
-        await self.memory.store_snapshot(snapshot)
-    
-    # --- Vectorization helpers ---
-    
-    async def vectorize(self, 
-                       text: str,
-                       metadata: Optional[Dict[str, Any]] = None) -> List[float]:
-        """
-        Embed text using system embedding model.
-        Handles retries and cost tracking.
-        
-        TODO: Integrate with actual embedding service when available.
-        For now, returns a mock embedding vector.
-        """
         try:
-            # Mock embedding - replace with actual embedding service
-            # embedding = await self.vector.embed(text, metadata=metadata)
-            import random
-            embedding = [random.random() for _ in range(384)]  # Mock 384-dim vector
+            embedding = self.embedding_service.embed_text(text)
+            logger.debug(f"Vectorized text (length={len(text)}, dim={len(embedding)})")
             return embedding
         except Exception as e:
-            # Log failure - in production, escalate to healing system
-            logger.error(f"Embedding service failed: {e}")
-            raise ServiceUnavailable("embedding_model")
+            logger.error(f"Error vectorizing text: {e}")
+            # Return zero vector as fallback
+            return np.zeros(self.embedding_service.dimension, dtype=np.float32)
     
-    async def upsert_vector(self,
-                           collection: str,
-                           id: str,
-                           embedding: List[float],
-                           metadata: Optional[Dict[str, Any]] = None):
+    def upsert_vector(
+        self,
+        vector_id: str,
+        vector: np.ndarray,
+        metadata: Dict[str, Any]
+    ) -> bool:
         """
-        Upsert vector to collection with retry logic.
+        Insert or update a vector in the vector store with retries
         
-        TODO: Integrate with actual vector store when available.
-        For now, stores vectors in memory core.
+        Args:
+            vector_id: Unique identifier for the vector
+            vector: Embedding vector
+            metadata: Associated metadata
+            
+        Returns:
+            Success status
         """
-        max_attempts = 3
-        for attempt in range(1, max_attempts + 1):
+        if not self.vector_store:
+            logger.error("No vector store available")
+            return False
+        
+        if vector is None or len(vector) == 0:
+            logger.error("Invalid vector provided")
+            return False
+        
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                # Mock vector storage - replace with actual vector store
-                vector_record = {
-                    "collection": collection,
-                    "id": id,
-                    "embedding_dim": len(embedding),
-                    "metadata": metadata or {}
-                }
-                snapshot = type('GovernanceSnapshot', (), {
-                    'to_dict': lambda self: {
-                        'snapshot_id': f"vec_{collection}_{id}",
-                        'snapshot_type': 'vector',
-                        'data': vector_record
-                    }
-                })()
-                await self.memory.store_snapshot(snapshot)
-                return
+                # Add timestamp to metadata
+                metadata = metadata.copy()
+                metadata["indexed_at"] = datetime.now(timezone.utc).isoformat()
+                metadata["vector_id"] = vector_id
+                
+                # Check if vector already exists
+                existing = self.vector_store.get_store().get_by_id(vector_id)
+                
+                if existing:
+                    # Delete old vector
+                    self.vector_store.get_store().delete([vector_id])
+                    logger.debug(f"Deleted existing vector: {vector_id}")
+                
+                # Insert new/updated vector
+                self.vector_store.get_store().add_vectors(
+                    vectors=[vector],
+                    metadata=[metadata],
+                    ids=[vector_id]
+                )
+                
+                logger.info(f"Upserted vector: {vector_id} (attempt {attempt + 1})")
+                return True
+                
             except Exception as e:
-                if attempt >= max_attempts:
-                    logger.error(f"Vector store upsert failed after {max_attempts} attempts: {e}")
-                    raise ServiceUnavailable("vector_store")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                logger.warning(f"Upsert attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to upsert vector {vector_id} after {max_retries} attempts")
+                    return False
+                import time
+                time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+        
+        return False
     
-    async def semantic_search(self,
-                             collection: str,
-                             query: str,
-                             top_k: int = 10,
-                             filters: Optional[Dict[str, Any]] = None,
-                             trust_threshold: float = 0.0) -> List[Dict[str, Any]]:
+    def semantic_search(
+        self,
+        query: str,
+        k: int = 10,
+        filter: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Perform semantic search with trust filtering.
-        Returns fused results from vector + DB.
+        Perform semantic search using vector similarity with error handling
         
-        TODO: Integrate with actual vector store when available.
-        For now, returns mock results from memory.
+        Args:
+            query: Search query text
+            k: Number of results to return
+            filter: Optional metadata filter
+            
+        Returns:
+            List of search results with scores and metadata
         """
-        # Check cache first (mock)
-        cache_key = self._cache_key(collection, query, top_k, filters)
+        if not self.embedding_service or not self.vector_store:
+            logger.error("Embedding service or vector store not available")
+            return []
         
-        # Mock semantic search - replace with actual implementation
-        # For now, return empty results
-        results = []
+        if not query or not query.strip():
+            logger.warning("Empty query provided")
+            return []
         
-        return results
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Vectorize query
+                query_vector = self.vectorize(query)
+                
+                if np.all(query_vector == 0):
+                    logger.warning("Query vectorization produced zero vector")
+                    return []
+                
+                # Search vector store
+                results = self.vector_store.get_store().search(
+                    query_vector=query_vector,
+                    k=k,
+                    filter=filter
+                )
+                
+                # Format results
+                formatted_results = []
+                for vector_id, score, metadata in results:
+                    formatted_results.append({
+                        "id": vector_id,
+                        "score": float(score),
+                        "metadata": metadata,
+                        "relevance": self._calculate_relevance(score)
+                    })
+                
+                logger.info(f"Semantic search completed: {len(formatted_results)} results")
+                return formatted_results
+                
+            except Exception as e:
+                logger.warning(f"Search attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"Search failed after {max_retries} attempts")
+                    return []
+                import time
+                time.sleep(0.5 * (attempt + 1))
+        
+        return []
     
-    def _cache_key(self, *args) -> str:
-        """Generate cache key from arguments"""
-        data = json.dumps(args, sort_keys=True)
-        return hashlib.sha256(data.encode()).hexdigest()
+    def _calculate_relevance(self, score: float) -> str:
+        """Calculate relevance category from similarity score"""
+        if score > 0.9:
+            return "very_high"
+        elif score > 0.75:
+            return "high"
+        elif score > 0.5:
+            return "medium"
+        elif score > 0.25:
+            return "low"
+        else:
+            return "very_low"
     
     # --- Event emission ---
     

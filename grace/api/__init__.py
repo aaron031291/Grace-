@@ -7,12 +7,19 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from grace.database import init_db
+from grace.middleware.logging import LoggingMiddleware, setup_logging
+from grace.middleware.rate_limit import RateLimitMiddleware
+from grace.middleware.metrics import MetricsMiddleware, get_metrics_response
 
 logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
+    
+    # Setup structured logging
+    setup_logging(log_level="INFO", json_logs=True)
+    
     app = FastAPI(
         title="Grace AI System API",
         description="Advanced Multi-Agent AI System with Authentication, Documents, Vector Search, Governance, and Real-time WebSocket",
@@ -29,6 +36,28 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    
+    # Add custom middleware (order matters - last added is executed first)
+    
+    # 1. Metrics middleware (outermost - measures everything)
+    app.add_middleware(MetricsMiddleware)
+    
+    # 2. Logging middleware
+    app.add_middleware(
+        LoggingMiddleware,
+        exclude_paths=["/health", "/metrics"],
+        log_request_body=False,
+        log_response_body=False
+    )
+    
+    # 3. Rate limiting middleware
+    app.add_middleware(
+        RateLimitMiddleware,
+        default_limit=100,
+        window_seconds=60,
+        redis_client=None,  # Use Redis in production
+        exclude_paths=["/health", "/metrics"]
     )
     
     # Include routers
@@ -63,6 +92,12 @@ def create_app() -> FastAPI:
             "features": ["auth", "documents", "vector_search", "policies", "sessions", "tasks", "websocket"]
         }
     
+    # Metrics endpoint
+    @app.get("/metrics")
+    async def metrics_endpoint():
+        """Prometheus metrics endpoint"""
+        return get_metrics_response()
+    
     # Root endpoint
     @app.get("/")
     async def root():
@@ -77,7 +112,9 @@ def create_app() -> FastAPI:
                 "policies": "/api/v1/policies",
                 "sessions": "/api/v1/sessions",
                 "tasks": "/api/v1/tasks",
-                "websocket": "ws://localhost:8000/api/v1/ws/connect?token=<jwt>"
+                "websocket": "ws://localhost:8000/api/v1/ws/connect?token=<jwt>",
+                "metrics": "/metrics",
+                "health": "/health"
             }
         }
     

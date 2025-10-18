@@ -121,3 +121,8 @@ requests>=2.31.0
 # Development
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
+
+# NLP for topic extraction
+keybert>=0.7.0  # Preferred: KeyBERT for topic extraction
+spacy>=3.7.0  # Alternative: spaCy for NLP
+# Download spaCy model: python -m spacy download en_core_web_sm

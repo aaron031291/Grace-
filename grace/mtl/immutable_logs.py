@@ -223,3 +223,157 @@ class ImmutableLogs:
             'constitutional_compliant': sum(1 for e in self.chain if e.constitutional_check),
             'unique_actors': len(set(e.actor for e in self.chain))
         }
+    
+    async def log_entry_with_vector_indexing(
+        self,
+        entry_data: Dict[str, Any],
+        embedding_service=None,
+        vector_store=None
+    ) -> str:
+        """
+        Log entry and index in vector database for semantic search
+        
+        Args:
+            entry_data: Log entry data
+            embedding_service: Embedding service instance
+            vector_store: Vector store instance
+            
+        Returns:
+            Entry ID
+        """
+        # First, create the immutable log entry
+        entry_id = self.log_constitutional_operation(
+            operation_type=entry_data.get("operation_type", "general"),
+            actor=entry_data.get("actor", "system"),
+            action=entry_data.get("action", {}),
+            result=entry_data.get("result", {}),
+            metadata=entry_data.get("metadata", {})
+        )
+        
+        # If services available, create embeddings and store in vector DB
+        if embedding_service and vector_store:
+            try:
+                # Get the full entry
+                full_entry = self.get_log_entry(entry_id)
+                
+                # Create searchable text representation
+                searchable_text = self._create_searchable_text(full_entry)
+                
+                # Generate embedding
+                embedding = embedding_service.embed_text(searchable_text)
+                
+                # Prepare metadata for vector store
+                vector_metadata = {
+                    "log_entry_id": entry_id,
+                    "operation_type": full_entry.get("operation_type"),
+                    "actor": full_entry.get("actor"),
+                    "timestamp": full_entry.get("timestamp"),
+                    "signature": full_entry.get("signature"),
+                    "type": "immutable_log"
+                }
+                
+                # Store in vector database
+                vector_store.get_store().add_vectors(
+                    vectors=[embedding],
+                    metadata=[vector_metadata],
+                    ids=[f"log:{entry_id}"]
+                )
+                
+                logger.info(f"Indexed log entry {entry_id} in vector database")
+                
+            except Exception as e:
+                logger.error(f"Failed to index log entry {entry_id} in vector database: {e}")
+                # Don't fail the logging operation if vector indexing fails
+        
+        return entry_id
+    
+    def _create_searchable_text(self, entry: Dict[str, Any]) -> str:
+        """
+        Create a searchable text representation of a log entry
+        
+        Args:
+            entry: Log entry dictionary
+            
+        Returns:
+            Searchable text
+        """
+        parts = [
+            f"Operation: {entry.get('operation_type')}",
+            f"Actor: {entry.get('actor')}",
+            f"Timestamp: {entry.get('timestamp')}",
+        ]
+        
+        # Add action details
+        action = entry.get("action", {})
+        if action:
+            parts.append("Action:")
+            for key, value in action.items():
+                parts.append(f"  {key}: {value}")
+        
+        # Add result details
+        result = entry.get("result", {})
+        if result:
+            parts.append("Result:")
+            for key, value in result.items():
+                parts.append(f"  {key}: {value}")
+        
+        # Add metadata
+        metadata = entry.get("metadata", {})
+        if metadata:
+            parts.append("Metadata:")
+            for key, value in metadata.items():
+                if isinstance(value, (str, int, float, bool)):
+                    parts.append(f"  {key}: {value}")
+        
+        return "\n".join(parts)
+    
+    async def semantic_search_logs(
+        self,
+        query: str,
+        k: int = 10,
+        embedding_service=None,
+        vector_store=None
+    ) -> List[Dict[str, Any]]:
+        """
+        Perform semantic search on immutable logs
+        
+        Args:
+            query: Search query
+            k: Number of results
+            embedding_service: Embedding service
+            vector_store: Vector store
+            
+        Returns:
+            List of matching log entries
+        """
+        if not embedding_service or not vector_store:
+            logger.warning("Cannot perform semantic search: services not available")
+            return []
+        
+        try:
+            # Vectorize query
+            query_embedding = embedding_service.embed_text(query)
+            
+            # Search vector store
+            results = vector_store.get_store().search(
+                query_vector=query_embedding,
+                k=k,
+                filter={"type": "immutable_log"}
+            )
+            
+            # Retrieve full log entries
+            log_entries = []
+            for vector_id, score, metadata in results:
+                log_id = metadata.get("log_entry_id")
+                if log_id:
+                    entry = self.get_log_entry(log_id)
+                    if entry:
+                        entry["search_score"] = score
+                        log_entries.append(entry)
+            
+            logger.info(f"Semantic search found {len(log_entries)} matching log entries")
+            return log_entries
+            
+        except Exception as e:
+            logger.error(f"Error in semantic log search: {e}")
+            return []

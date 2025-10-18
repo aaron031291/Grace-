@@ -4,202 +4,122 @@ Structured logging middleware using structlog
 
 import time
 import uuid
-from typing import Callable, Optional
 from datetime import datetime, timezone
+from typing import Callable, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 import structlog
-from structlog.processors import JSONRenderer, TimeStamper, add_log_level
 
-# Configure structlog
-def setup_logging(log_level: str = "INFO", json_logs: bool = True):
-    """
-    Configure structured logging with structlog
-    
-    Args:
-        log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
-        json_logs: Whether to output JSON formatted logs
-    """
+# Try to import verify_token for JWT decoding (optional)
+try:
+    from grace.auth.security import verify_token
+except Exception:
+    verify_token = None  # type: ignore
+
+# Configure a minimal structlog config if not configured elsewhere
+def setup_structlog(json_output: bool = True, log_level: str = "INFO"):
     processors = [
         structlog.contextvars.merge_contextvars,
-        add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        TimeStamper(fmt="iso", utc=True),
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
     ]
-    
-    if json_logs:
-        processors.append(JSONRenderer())
+    if json_output:
+        processors.append(structlog.processors.JSONRenderer())
     else:
         processors.append(structlog.dev.ConsoleRenderer())
-    
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(structlog.stdlib, log_level.upper(), structlog.INFO)
-        ),
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
+    structlog.configure(processors=processors)
 
-
-# Get logger
 logger = structlog.get_logger()
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """
-    Middleware that logs request and response metadata with structured logging
-    
-    Logs:
-    - Request ID (generated or from header)
-    - HTTP method and path
-    - Query parameters
-    - User ID (if authenticated)
-    - Client IP address
-    - User agent
-    - Response status code
-    - Response time (duration)
-    - Request/response size
-    - Errors and exceptions
+    Middleware that logs request and response metadata with structured logging.
+
+    Logged fields:
+      - request_id
+      - method, path, query_string
+      - client_ip, user_agent
+      - user_id (from request.state.user or decoded JWT)
+      - status_code, duration_ms
     """
-    
-    def __init__(
-        self,
-        app: ASGIApp,
-        exclude_paths: Optional[list[str]] = None,
-        log_request_body: bool = False,
-        log_response_body: bool = False
-    ):
-        """
-        Initialize logging middleware
-        
-        Args:
-            app: ASGI application
-            exclude_paths: List of paths to exclude from logging (e.g., /health)
-            log_request_body: Whether to log request body
-            log_response_body: Whether to log response body
-        """
+
+    def __init__(self, app: ASGIApp, exclude_paths: Optional[list[str]] = None, json_logs: bool = True):
         super().__init__(app)
         self.exclude_paths = exclude_paths or ["/health", "/metrics", "/docs", "/openapi.json"]
-        self.log_request_body = log_request_body
-        self.log_response_body = log_response_body
-    
+        setup_structlog(json_output=json_logs)
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        """Process request and log metadata"""
-        
-        # Skip excluded paths
         if request.url.path in self.exclude_paths:
             return await call_next(request)
-        
-        # Generate or extract request ID
+
+        start = time.time()
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        
-        # Extract client information
-        client_host = request.client.host if request.client else "unknown"
+        client_ip = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("User-Agent", "unknown")
-        
-        # Extract user ID from request state (set by auth dependencies)
+        method = request.method
+        path = request.url.path
+        query = dict(request.query_params)
+
+        # Try to obtain user id: prefer request.state.user (set by dependency), else decode Bearer token
         user_id = None
         username = None
-        if hasattr(request.state, "user"):
-            user = request.state.user
-            user_id = getattr(user, "id", None)
-            username = getattr(user, "username", None)
-        
-        # Start timing
-        start_time = time.time()
-        
-        # Build context
-        log_context = structlog.contextvars.bind_contextvars(
+        try:
+            if hasattr(request.state, "user") and request.state.user is not None:
+                user = request.state.user
+                user_id = getattr(user, "id", None)
+                username = getattr(user, "username", None)
+            else:
+                # decode Authorization header if token available and verify_token imported
+                auth = request.headers.get("Authorization", "")
+                if auth.startswith("Bearer ") and verify_token:
+                    token = auth.split(" ", 1)[1]
+                    payload = verify_token(token, token_type="access")
+                    if payload:
+                        user_id = payload.get("user_id")
+                        username = payload.get("username")
+        except Exception:
+            # Never raise from logging middleware
+            logger.exception("failed_to_extract_user", path=path)
+
+        # Bind context for this request
+        bound = logger.bind(
             request_id=request_id,
-            method=request.method,
-            path=request.url.path,
-            query_params=str(request.query_params) if request.query_params else None,
-            client_ip=client_host,
+            method=method,
+            path=path,
+            query=query,
+            client_ip=client_ip,
             user_agent=user_agent,
             user_id=user_id,
             username=username,
-            timestamp=datetime.now(timezone.utc).isoformat()
         )
-        
-        # Log request
-        logger.info(
-            "request_started",
-            method=request.method,
-            path=request.url.path,
-            query_params=str(request.query_params) if request.query_params else None,
-            client_ip=client_host,
-            user_id=user_id,
-            username=username
-        )
-        
-        # Log request body if enabled
-        if self.log_request_body and request.method in ["POST", "PUT", "PATCH"]:
-            try:
-                body = await request.body()
-                if body:
-                    logger.debug(
-                        "request_body",
-                        body_size=len(body),
-                        content_type=request.headers.get("Content-Type")
-                    )
-            except Exception as e:
-                logger.warning("failed_to_read_request_body", error=str(e))
-        
-        # Process request
-        response = None
-        error = None
-        
+        bound.info("request_start")
+
         try:
             response = await call_next(request)
-            
-        except Exception as e:
-            error = e
-            logger.error(
-                "request_failed",
-                error_type=type(e).__name__,
-                error_message=str(e),
-                exc_info=True
-            )
+        except Exception as exc:
+            duration_ms = int((time.time() - start) * 1000)
+            bound.error("request_exception", error=str(exc), duration_ms=duration_ms)
             raise
-        
-        finally:
-            # Calculate duration
-            duration_ms = (time.time() - start_time) * 1000
-            
-            # Log response
-            if response:
-                logger.info(
-                    "request_completed",
-                    status_code=response.status_code,
-                    duration_ms=round(duration_ms, 2),
-                    response_size=response.headers.get("Content-Length"),
-                )
-                
-                # Log slow requests
-                if duration_ms > 1000:  # > 1 second
-                    logger.warning(
-                        "slow_request",
-                        duration_ms=round(duration_ms, 2),
-                        threshold_ms=1000
-                    )
-                
-                # Log errors
-                if response.status_code >= 400:
-                    log_level = "error" if response.status_code >= 500 else "warning"
-                    getattr(logger, log_level)(
-                        "request_error",
-                        status_code=response.status_code,
-                        duration_ms=round(duration_ms, 2)
-                    )
-            
-            # Clear context
-            structlog.contextvars.clear_contextvars()
-        
+        duration_ms = int((time.time() - start) * 1000)
+
+        # Response metadata
+        status_code = getattr(response, "status_code", 500)
+        content_length = response.headers.get("content-length")
+
+        bound.info(
+            "request_end",
+            status_code=status_code,
+            duration_ms=duration_ms,
+            response_size=content_length,
+        )
+
+        # Warn on slow requests
+        if duration_ms > 1000:
+            bound.warning("slow_request", duration_ms=duration_ms)
+
         return response
 
 

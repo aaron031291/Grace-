@@ -7,7 +7,12 @@ import numpy as np
 import logging
 import os
 
-from .providers import EmbeddingProvider, OpenAIEmbeddings, HuggingFaceEmbeddings, LocalEmbeddings
+from .providers import (
+    EmbeddingProvider,
+    OpenAIEmbeddings,
+    HuggingFaceEmbeddings,
+    LocalEmbeddings
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,22 +20,23 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     """Service for managing embeddings with automatic provider selection"""
     
-    def __init__(self, provider: Optional[str] = None):
+    def __init__(self, provider: Optional[str] = None, **kwargs):
         """
         Initialize embedding service
         
         Args:
             provider: 'openai', 'huggingface', 'local', or None for auto-detect
+            **kwargs: Provider-specific arguments
         """
         self.provider_name = provider or os.getenv("EMBEDDING_PROVIDER", "auto")
-        self.provider = self._initialize_provider()
+        self.provider = self._initialize_provider(**kwargs)
     
-    def _initialize_provider(self) -> EmbeddingProvider:
-        """Initialize the embedding provider"""
+    def _initialize_provider(self, **kwargs) -> EmbeddingProvider:
+        """Initialize the embedding provider with fallback chain"""
         
         if self.provider_name == "openai":
             try:
-                provider = OpenAIEmbeddings()
+                provider = OpenAIEmbeddings(**kwargs)
                 logger.info("Using OpenAI embeddings")
                 return provider
             except Exception as e:
@@ -38,7 +44,7 @@ class EmbeddingService:
         
         elif self.provider_name == "huggingface":
             try:
-                provider = HuggingFaceEmbeddings()
+                provider = HuggingFaceEmbeddings(**kwargs)
                 logger.info("Using HuggingFace embeddings")
                 return provider
             except Exception as e:
@@ -49,37 +55,46 @@ class EmbeddingService:
             logger.info("Using local embeddings")
             return provider
         
-        # Auto-detect
-        else:
-            # Try OpenAI first if API key available
-            if os.getenv("OPENAI_API_KEY"):
-                try:
-                    provider = OpenAIEmbeddings()
-                    logger.info("Auto-detected: Using OpenAI embeddings")
-                    return provider
-                except Exception:
-                    pass
-            
-            # Try HuggingFace next
+        # Auto-detect with fallback chain
+        # Try OpenAI first if API key available
+        if os.getenv("OPENAI_API_KEY"):
             try:
-                provider = HuggingFaceEmbeddings()
-                logger.info("Auto-detected: Using HuggingFace embeddings")
+                provider = OpenAIEmbeddings(**kwargs)
+                logger.info("Auto-detected: Using OpenAI embeddings")
                 return provider
             except Exception:
                 pass
-            
-            # Fallback to local
-            provider = LocalEmbeddings()
-            logger.info("Auto-detected: Using local embeddings (fallback)")
+        
+        # Try HuggingFace next
+        try:
+            provider = HuggingFaceEmbeddings(**kwargs)
+            logger.info("Auto-detected: Using HuggingFace embeddings")
             return provider
+        except Exception:
+            pass
+        
+        # Fallback to local
+        provider = LocalEmbeddings()
+        logger.info("Auto-detected: Using local embeddings (fallback)")
+        return provider
     
     def embed_text(self, text: str) -> np.ndarray:
-        """Embed a single text"""
-        return self.provider.embed_text(text)
+        """Embed a single text with error handling"""
+        try:
+            return self.provider.embed_text(text)
+        except Exception as e:
+            logger.error(f"Embedding failed: {e}")
+            # Return zero vector as fallback
+            return np.zeros(self.dimension, dtype=np.float32)
     
     def embed_texts(self, texts: List[str]) -> List[np.ndarray]:
-        """Embed multiple texts"""
-        return self.provider.embed_texts(texts)
+        """Embed multiple texts with error handling"""
+        try:
+            return self.provider.embed_texts(texts)
+        except Exception as e:
+            logger.error(f"Batch embedding failed: {e}")
+            # Return zero vectors as fallback
+            return [np.zeros(self.dimension, dtype=np.float32) for _ in texts]
     
     @property
     def dimension(self) -> int:

@@ -4,7 +4,7 @@ Unified Output Schema - Canonical loop output format (Class 9)
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
 import json
 import logging
 

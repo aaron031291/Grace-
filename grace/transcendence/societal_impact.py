@@ -3,7 +3,7 @@ Societal Impact Evaluator - Policy simulation and impact assessment
 """
 
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import numpy as np
 import logging
@@ -22,7 +22,7 @@ class PolicySimulation:
     benefits: List[Dict[str, Any]]
     confidence: float
     time_horizon: str
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class SocietalImpactEvaluator:

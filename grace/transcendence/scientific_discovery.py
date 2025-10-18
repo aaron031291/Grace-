@@ -3,7 +3,7 @@ Scientific Discovery Accelerator - Hypothesis generation from data
 """
 
 from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import numpy as np
 import logging
@@ -22,7 +22,7 @@ class Hypothesis:
     testable: bool
     variables: List[str]
     predicted_outcomes: Dict[str, Any]
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class ScientificDiscoveryAccelerator:

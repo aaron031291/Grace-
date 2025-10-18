@@ -4,7 +4,7 @@ Feedback Integration - Captures and applies loop feedback (Class 7)
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,12 +16,12 @@ class FeedbackRecord:
     feedback_id: str
     loop_id: str
     decision_id: str
-    feedback_type: str  # human_correction, reviewer_vote, auto_eval
-    rating: float  # -1 to 1
+    feedback_type: str
+    rating: float
     corrections: Optional[Dict[str, Any]]
     reviewer_id: Optional[str]
     timestamp: datetime
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class FeedbackIntegrator:

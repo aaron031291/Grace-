@@ -27,22 +27,22 @@ class SpecialistOutput:
     specialist_type: str
     prediction: Any
     confidence: float
-    uncertainty: Optional[Dict[str, float]] = None  # confidence intervals
-    metadata: Optional[Dict[str, Any]] = None
+    uncertainty: Optional[Dict[str, Any]] = None
     weight: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class QuorumResult:
-    """Aggregated consensus result"""
+    """Result of quorum aggregation"""
     consensus_prediction: Any
     consensus_confidence: float
-    agreement_score: float  # 0-1, how much specialists agree
-    participating_specialists: List[str]
-    method_used: ConsensusMethod
+    agreement_score: float
+    method_used: "ConsensusMethod"
     individual_outputs: List[SpecialistOutput]
-    uncertainty_bounds: Optional[Dict[str, float]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    participating_specialists: List[str]
+    uncertainty_bounds: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class MLDLQuorumAggregator:

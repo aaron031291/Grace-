@@ -39,7 +39,7 @@ class MessageTransport(ABC):
         pass
     
     @abstractmethod
-    async def subscribe(self, topic: str, callback: Callable):
+    async def subscribe(self, topic: str, callback: Callable) -> None:
         """Subscribe to topic"""
         pass
 

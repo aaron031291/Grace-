@@ -3,7 +3,7 @@ Loop Memory Bank - Memory scoring and trust-based filtering (Class 5)
 """
 
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from dataclasses import dataclass
 import numpy as np
 import logging

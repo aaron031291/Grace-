@@ -2,9 +2,9 @@
 Governance Validator - Constitutional constraint checking (Class 6)
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from dataclasses import dataclass
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,11 +14,10 @@ logger = logging.getLogger(__name__)
 class ValidationResult:
     """Result of governance validation"""
     passed: bool
-    decision: Any
-    violations: List[str]
-    amendments: List[str]
-    confidence: float
-    metadata: Dict[str, Any]
+    violations: List[str] = field(default_factory=list)
+    amendments: List[Dict[str, Any]] = field(default_factory=list)
+    confidence: float = 1.0
+    decision: Optional[Dict[str, Any]] = None
 
 
 class ConstitutionalConstraint:

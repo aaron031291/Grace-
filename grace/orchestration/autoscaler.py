@@ -2,10 +2,11 @@
 Advanced autoscaling with trust scores and backlog management
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 import asyncio
+import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)

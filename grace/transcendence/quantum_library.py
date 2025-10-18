@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class QuantumState:
     """Represents a quantum-inspired state"""
-    amplitudes: np.ndarray  # Complex amplitudes
+    amplitudes: np.ndarray
     basis_labels: List[str]
     
     def probabilities(self) -> np.ndarray:
@@ -29,8 +29,8 @@ class QuantumState:
     def entropy(self) -> float:
         """Calculate von Neumann entropy"""
         probs = self.probabilities()
-        probs = probs[probs > 0]  # Remove zeros
-        return -np.sum(probs * np.log2(probs))
+        probs = probs[probs > 0]
+        return float(-np.sum(probs * np.log2(probs)))
 
 
 class QuantumCircuit:

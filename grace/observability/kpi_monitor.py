@@ -3,7 +3,7 @@ KPI Trust Monitor with event publishing and governance integration
 """
 
 from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 import logging
@@ -23,15 +23,15 @@ class TrustThreshold(Enum):
 class TrustEvent:
     """Trust-related event"""
     event_id: str
-    event_type: str  # threshold_breach, anomaly, recovery
+    event_type: str
     component: str
     entity_id: str
     current_score: float
     previous_score: float
     threshold: Optional[float]
-    severity: str  # critical, warning, info
+    severity: str
     timestamp: str
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class KPITrustMonitor:

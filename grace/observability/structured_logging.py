@@ -4,12 +4,12 @@ Structured logging with consistent format for Grace system
 
 import logging
 import json
-import uuid
-from typing import Optional, Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
 import structlog
 from contextlib import contextmanager
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -36,36 +36,19 @@ class LogContext:
 
 
 class StructuredLogger:
-    """
-    Structured logger for Grace system
-    
-    Features:
-    - Consistent log format across all components
-    - Automatic trace ID generation
-    - Integration with immutable logs
-    - Export to log aggregators (Loki, ELK)
-    """
+    """Structured logger for Grace system"""
     
     def __init__(
         self,
         component: str,
-        immutable_logs=None,
-        log_aggregator=None
+        immutable_logs: Optional[Any] = None,
+        log_aggregator: Optional[Any] = None
     ):
-        """
-        Initialize structured logger
-        
-        Args:
-            component: Component name (e.g., 'auth', 'governance', 'mldl')
-            immutable_logs: ImmutableLogs instance for audit trail
-            log_aggregator: Log aggregator client (Loki, Elasticsearch)
-        """
         self.component = component
         self.immutable_logs = immutable_logs
         self.log_aggregator = log_aggregator
         self.trace_id = str(uuid.uuid4())
         
-        # Setup structlog
         self.log = structlog.get_logger(component)
     
     def _create_context(
@@ -209,7 +192,7 @@ class StructuredLogger:
             )
     
     @contextmanager
-    def span(self, operation: str, **kwargs):
+    def span(self, operation: str, **kwargs: Any):
         """Create a logging span for tracing operations"""
         span_id = str(uuid.uuid4())
         start_time = datetime.now(timezone.utc)

@@ -2,15 +2,14 @@
 Structured logging middleware using structlog
 """
 
-import time
-import uuid
-from datetime import datetime, timezone
-from typing import Callable, Optional
-
+from typing import Callable, Set, Optional
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
-import structlog
+import time
+import logging
+import uuid
+
+logger = logging.getLogger(__name__)
 
 # Try to import verify_token for JWT decoding (optional)
 try:
@@ -36,95 +35,92 @@ def setup_structlog(json_output: bool = True, log_level: str = "INFO"):
 logger = structlog.get_logger()
 
 
+def setup_logging(
+    log_level: str = "INFO",
+    json_output: bool = True,
+    log_file: Optional[str] = None
+) -> None:
+    """Setup global logging configuration"""
+    import structlog
+    
+    processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+    
+    if json_output:
+        processors.append(structlog.processors.JSONRenderer())
+    else:
+        processors.append(structlog.dev.ConsoleRenderer())
+    
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.make_filtering_bound_logger(
+            getattr(logging, log_level.upper())
+        ),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+    
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter('%(message)s'))
+        logging.root.addHandler(file_handler)
+
+
 class LoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware that logs request and response metadata with structured logging.
-
-    Logged fields:
-      - request_id
-      - method, path, query_string
-      - client_ip, user_agent
-      - user_id (from request.state.user or decoded JWT)
-      - status_code, duration_ms
-    """
-
-    def __init__(self, app: ASGIApp, exclude_paths: Optional[list[str]] = None, json_logs: bool = True):
+    """Middleware for request/response logging"""
+    
+    def __init__(
+        self,
+        app,
+        exclude_paths: Optional[Set[str]] = None,
+        log_request_body: bool = False,
+        log_response_body: bool = False
+    ):
         super().__init__(app)
-        self.exclude_paths = exclude_paths or ["/health", "/metrics", "/docs", "/openapi.json"]
-        setup_structlog(json_output=json_logs)
-
+        self.exclude_paths = exclude_paths or set()
+        self.log_request_body = log_request_body
+        self.log_response_body = log_response_body
+    
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and log metadata"""
-
-        # Skip excluded paths
+        
         if request.url.path in self.exclude_paths:
             return await call_next(request)
-
-        start = time.time()
+        
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        client_ip = request.client.host if request.client else "unknown"
-        user_agent = request.headers.get("User-Agent", "unknown")
-        method = request.method
-        path = request.url.path
-        query = dict(request.query_params)
-
-        # Try to obtain user id: prefer request.state.user (set by dependency), else decode Bearer token
-        user_id = None
-        username = None
-        try:
-            if hasattr(request.state, "user") and request.state.user is not None:
-                user = request.state.user
-                user_id = getattr(user, "id", None)
-                username = getattr(user, "username", None)
-            else:
-                # decode Authorization header if token available and verify_token imported
-                auth = request.headers.get("Authorization", "")
-                if auth.startswith("Bearer ") and verify_token:
-                    token = auth.split(" ", 1)[1]
-                    payload = verify_token(token, token_type="access")
-                    if payload:
-                        user_id = payload.get("user_id")
-                        username = payload.get("username")
-        except Exception:
-            # Never raise from logging middleware
-            logger.exception("failed_to_extract_user", path=path)
-
-        # Bind context for this request
-        bound = logger.bind(
-            request_id=request_id,
-            method=method,
-            path=path,
-            query=query,
-            client_ip=client_ip,
-            user_agent=user_agent,
-            user_id=user_id,
-            username=username,
+        
+        start_time = time.time()
+        
+        logger.info(
+            f"Request started: {request.method} {request.url.path}",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "client": request.client.host if request.client else None
+            }
         )
-        bound.info("request_start")
-
-        try:
-            response = await call_next(request)
-        except Exception as exc:
-            duration_ms = int((time.time() - start) * 1000)
-            bound.error("request_exception", error=str(exc), duration_ms=duration_ms)
-            raise
-        duration_ms = int((time.time() - start) * 1000)
-
-        # Response metadata
-        status_code = getattr(response, "status_code", 500)
-        content_length = response.headers.get("content-length")
-
-        bound.info(
-            "request_end",
-            status_code=status_code,
-            duration_ms=duration_ms,
-            response_size=content_length,
+        
+        response = await call_next(request)
+        
+        duration = time.time() - start_time
+        
+        logger.info(
+            f"Request completed: {request.method} {request.url.path}",
+            extra={
+                "request_id": request_id,
+                "status_code": response.status_code,
+                "duration": duration
+            }
         )
-
-        # Warn on slow requests
-        if duration_ms > 1000:
-            bound.warning("slow_request", duration_ms=duration_ms)
-
+        
+        response.headers["X-Request-ID"] = request_id
         return response
 
 

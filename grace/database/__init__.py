@@ -2,53 +2,57 @@
 Database configuration and initialization
 """
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from typing import Generator, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-# Will be initialized with actual URL
-engine = None
-SessionLocal = None
+# Global engine and session maker
+_engine: Optional[Engine] = None
+_SessionLocal: Optional[sessionmaker] = None
 
 
-def init_db(database_url: str = None):
+def init_db(database_url: Optional[str] = None) -> None:
     """Initialize database with given URL"""
-    global engine, SessionLocal
+    global _engine, _SessionLocal
     
     if database_url is None:
         from grace.config import get_settings
         settings = get_settings()
         database_url = settings.database.url
     
-    engine = create_engine(
+    _engine = create_engine(
         database_url,
         echo=False,
         pool_pre_ping=True
     )
     
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     
     # Create all tables
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=_engine)
     
     logger.info(f"Database initialized: {database_url}")
 
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     """Get database session"""
-    if SessionLocal is None:
+    if _SessionLocal is None:
         init_db()
     
-    db = SessionLocal()
+    if _SessionLocal is None:
+        raise RuntimeError("Database not initialized")
+    
+    db = _SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
 
-__all__ = ['Base', 'engine', 'SessionLocal', 'init_db', 'get_db']
+__all__ = ['Base', 'init_db', 'get_db']

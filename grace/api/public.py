@@ -2,7 +2,7 @@
 Public-facing API endpoints for external integration
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -17,7 +17,7 @@ class SearchRequest(BaseModel):
     """Public API search request"""
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     k: int = Field(10, ge=1, le=100, description="Number of results")
-    filters: Optional[dict] = Field(None, description="Optional filters")
+    filters: Optional[Dict[str, Any]] = Field(None, description="Optional filters")
 
 
 class SearchResult(BaseModel):
@@ -26,28 +26,28 @@ class SearchResult(BaseModel):
     title: str
     content: str
     score: float
-    metadata: dict
+    metadata: Dict[str, Any]
 
 
 class SearchResponse(BaseModel):
     """Public API search response"""
-    results: list[SearchResult]
+    results: List[SearchResult]
     total: int
     query: str
 
 
 class DecisionRequest(BaseModel):
     """Public API decision request"""
-    context: dict = Field(..., description="Decision context")
+    context: Dict[str, Any] = Field(..., description="Decision context")
     require_consensus: bool = Field(False, description="Require swarm consensus")
     include_reasoning: bool = Field(True, description="Include reasoning chain")
 
 
 class DecisionResponse(BaseModel):
     """Public API decision response"""
-    decision: dict
+    decision: Dict[str, Any]
     confidence: float
-    reasoning: Optional[list[dict]] = None
+    reasoning: Optional[List[Dict[str, Any]]] = None
     consensus_id: Optional[str] = None
 
 
@@ -56,7 +56,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     environment: str
-    features: dict
+    features: Dict[str, bool]
 
 
 @router.get(
@@ -65,12 +65,8 @@ class HealthResponse(BaseModel):
     summary="Public health check",
     description="Get system health and feature status (no authentication required)"
 )
-async def public_health():
-    """
-    Public health check endpoint
-    
-    Returns system status and available features
-    """
+async def public_health() -> HealthResponse:
+    """Public health check endpoint"""
     settings = get_settings()
     
     return HealthResponse(
@@ -90,15 +86,9 @@ async def public_health():
 async def public_search(
     request: SearchRequest,
     current_user: User = Depends(get_current_user)
-):
-    """
-    Public semantic search endpoint
-    
-    Performs vector-based semantic search across accessible documents
-    """
+) -> SearchResponse:
+    """Public semantic search endpoint"""
     # TODO: Implement actual search
-    # This is a placeholder - integrate with document search
-    
     return SearchResponse(
         results=[],
         total=0,
@@ -115,15 +105,9 @@ async def public_search(
 async def public_decision(
     request: DecisionRequest,
     current_user: User = Depends(require_role(["admin"]))
-):
-    """
-    Public decision endpoint
-    
-    Requests a decision from Grace with optional consensus and reasoning
-    """
+) -> DecisionResponse:
+    """Public decision endpoint"""
     # TODO: Implement actual decision logic
-    # This is a placeholder - integrate with unified logic
-    
     return DecisionResponse(
         decision={"placeholder": True},
         confidence=0.0,
@@ -138,12 +122,8 @@ async def public_decision(
 )
 async def get_capabilities(
     current_user: User = Depends(get_current_user)
-):
-    """
-    Get system capabilities
-    
-    Returns information about available features and their configuration
-    """
+) -> Dict[str, Any]:
+    """Get system capabilities"""
     settings = get_settings()
     
     return {

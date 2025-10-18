@@ -2,9 +2,9 @@
 Centralized configuration using Pydantic BaseSettings
 """
 
-from typing import Optional, Literal
-from pydantic import Field, validator
-from pydantic_settings import BaseSettings
+from typing import Optional, Literal, Dict, Any
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 import logging
 
@@ -34,8 +34,7 @@ class DatabaseSettings(BaseSettings):
         description="Max overflow connections"
     )
     
-    class Config:
-        env_prefix = "DATABASE_"
+    model_config = SettingsConfigDict(env_prefix="DATABASE_")
 
 
 class AuthSettings(BaseSettings):
@@ -61,16 +60,16 @@ class AuthSettings(BaseSettings):
         description="Refresh token expiration (days)"
     )
     
-    @validator('secret_key')
-    def validate_secret_key(cls, v):
+    @field_validator('secret_key')
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
         if v == "dev-secret-key-change-in-production":
             logger.warning("⚠️  Using default secret key - CHANGE IN PRODUCTION!")
         if len(v) < 32:
             raise ValueError("Secret key must be at least 32 characters")
         return v
     
-    class Config:
-        env_prefix = "AUTH_"
+    model_config = SettingsConfigDict(env_prefix="AUTH_")
 
 
 class EmbeddingSettings(BaseSettings):
@@ -94,14 +93,15 @@ class EmbeddingSettings(BaseSettings):
         description="Embedding dimension"
     )
     
-    @validator('openai_api_key')
-    def validate_openai_key(cls, v, values):
+    @field_validator('openai_api_key')
+    @classmethod
+    def validate_openai_key(cls, v: Optional[str], info) -> Optional[str]:
+        values = info.data
         if values.get('provider') == 'openai' and not v:
             raise ValueError("OpenAI API key required when provider is 'openai'")
         return v
     
-    class Config:
-        env_prefix = "EMBEDDING_"
+    model_config = SettingsConfigDict(env_prefix="EMBEDDING_")
 
 
 class VectorStoreSettings(BaseSettings):
@@ -119,8 +119,7 @@ class VectorStoreSettings(BaseSettings):
         description="pgvector table name"
     )
     
-    class Config:
-        env_prefix = "VECTOR_"
+    model_config = SettingsConfigDict(env_prefix="VECTOR_")
 
 
 class SwarmSettings(BaseSettings):
@@ -150,8 +149,7 @@ class SwarmSettings(BaseSettings):
         description="Peer discovery interval (seconds)"
     )
     
-    class Config:
-        env_prefix = "SWARM_"
+    model_config = SettingsConfigDict(env_prefix="SWARM_")
 
 
 class TranscendenceSettings(BaseSettings):
@@ -169,8 +167,7 @@ class TranscendenceSettings(BaseSettings):
         description="Enable societal impact evaluation"
     )
     
-    class Config:
-        env_prefix = "TRANSCENDENCE_"
+    model_config = SettingsConfigDict(env_prefix="TRANSCENDENCE_")
 
 
 class ObservabilitySettings(BaseSettings):
@@ -198,8 +195,7 @@ class ObservabilitySettings(BaseSettings):
         description="Metrics endpoint port"
     )
     
-    class Config:
-        env_prefix = "OBSERVABILITY_"
+    model_config = SettingsConfigDict(env_prefix="OBSERVABILITY_")
 
 
 class RateLimitSettings(BaseSettings):
@@ -225,22 +221,12 @@ class RateLimitSettings(BaseSettings):
         description="Rate limit window (seconds)"
     )
     
-    class Config:
-        env_prefix = "RATE_LIMIT_"
+    model_config = SettingsConfigDict(env_prefix="RATE_LIMIT_")
 
 
 class Settings(BaseSettings):
-    """
-    Main configuration class for Grace system
+    """Main configuration class for Grace system"""
     
-    Loads configuration from:
-    1. Environment variables
-    2. .env file
-    3. Config files (optional)
-    4. Defaults
-    """
-    
-    # Environment
     environment: Literal["development", "staging", "production"] = Field(
         default="development",
         description="Deployment environment"
@@ -250,7 +236,6 @@ class Settings(BaseSettings):
         description="Debug mode"
     )
     
-    # API
     api_title: str = Field(
         default="Grace AI System API",
         description="API title"
@@ -264,7 +249,6 @@ class Settings(BaseSettings):
         description="API path prefix"
     )
     
-    # Component settings
     database: DatabaseSettings = Field(
         default_factory=DatabaseSettings,
         description="Database settings"
@@ -298,22 +282,18 @@ class Settings(BaseSettings):
         description="Rate limiting settings"
     )
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
     
-    def validate_production_config(self) -> list[str]:
-        """
-        Validate configuration for production deployment
-        
-        Returns:
-            List of validation warnings/errors
-        """
-        issues = []
+    def validate_production_config(self) -> List[str]:
+        """Validate configuration for production deployment"""
+        issues: List[str] = []
         
         if self.environment == "production":
-            # Check critical settings
             if self.auth.secret_key == "dev-secret-key-change-in-production":
                 issues.append("CRITICAL: Using default secret key in production!")
             
@@ -331,7 +311,7 @@ class Settings(BaseSettings):
         
         return issues
     
-    def get_deployment_info(self) -> dict:
+    def get_deployment_info(self) -> Dict[str, Any]:
         """Get deployment information"""
         return {
             "environment": self.environment,

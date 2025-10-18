@@ -2,7 +2,7 @@
 FastAPI dependencies for authentication
 """
 
-from typing import Callable
+from typing import Callable, List
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -45,7 +45,7 @@ async def get_current_user(
     return user
 
 
-def require_role(allowed_roles: list[str]) -> Callable:
+def require_role(allowed_roles: List[str]) -> Callable:
     """Dependency to require specific roles"""
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:
         user_roles = [role.name for role in current_user.roles]

@@ -67,6 +67,8 @@ def create_app() -> FastAPI:
     from grace.api.v1.sessions import router as sessions_router
     from grace.api.v1.tasks import router as tasks_router
     from grace.api.v1.websocket import router as websocket_router
+    from grace.api.v1.logs import router as logs_router
+    from grace.api.v1.avn import router as avn_router
     
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
@@ -74,6 +76,8 @@ def create_app() -> FastAPI:
     app.include_router(sessions_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(websocket_router, prefix="/api/v1")
+    app.include_router(logs_router, prefix="/api/v1")
+    app.include_router(avn_router, prefix="/api/v1")
     
     # Startup event
     @app.on_event("startup")
@@ -112,6 +116,8 @@ def create_app() -> FastAPI:
                 "policies": "/api/v1/policies",
                 "sessions": "/api/v1/sessions",
                 "tasks": "/api/v1/tasks",
+                "logs": "/api/v1/logs",
+                "avn": "/api/v1/avn",
                 "websocket": "ws://localhost:8000/api/v1/ws/connect?token=<jwt>",
                 "metrics": "/metrics",
                 "health": "/health"

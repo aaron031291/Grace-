@@ -1,11 +1,19 @@
 """
-Pushback escalation system for Adaptive Verification Network (AVN)
+Pushback escalation system with database-backed error tracking and AVN integration
 """
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone, timedelta
 from enum import Enum
+import hashlib
+import uuid
 import logging
+import traceback
+
+from sqlalchemy import select, func, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from grace.avn.models import ErrorAudit, AVNAlert
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +35,30 @@ class EscalationDecision(Enum):
     IMMEDIATE_ACTION = "immediate_action"
 
 
+class ThresholdRule:
+    """Represents an escalation threshold rule"""
+    
+    def __init__(
+        self,
+        name: str,
+        error_count: int,
+        time_window_seconds: int,
+        severity: PushbackSeverity,
+        decision: EscalationDecision
+    ):
+        self.name = name
+        self.error_count = error_count
+        self.time_window_seconds = time_window_seconds
+        self.severity = severity
+        self.decision = decision
+    
+    def __repr__(self):
+        return f"<ThresholdRule({self.name}: {self.error_count} errors in {self.time_window_seconds}s)>"
+
+
 class PushbackEscalation:
     """
-    Intelligent pushback escalation system
-    
-    Decides when errors should be escalated to the AVN based on:
-    - Error frequency and patterns
-    - Severity and impact
-    - Historical context
-    - System state
+    Database-backed pushback escalation system with time-windowed threshold monitoring
     """
     
     def __init__(self, avn_client=None):
@@ -46,28 +69,48 @@ class PushbackEscalation:
             avn_client: AVN client for sending escalations
         """
         self.avn_client = avn_client
-        self.error_history: List[Dict[str, Any]] = []
-        self.escalation_thresholds = {
-            PushbackSeverity.LOW: 10,      # 10 occurrences
-            PushbackSeverity.MEDIUM: 5,    # 5 occurrences
-            PushbackSeverity.HIGH: 2,      # 2 occurrences
-            PushbackSeverity.CRITICAL: 1,  # Immediate
-        }
-        self.time_window = timedelta(minutes=5)  # Rolling 5-minute window
+        
+        # Define threshold rules (can be loaded from config)
+        self.threshold_rules = [
+            # Critical errors escalate immediately
+            ThresholdRule("critical_immediate", 1, 60, PushbackSeverity.CRITICAL, EscalationDecision.IMMEDIATE_ACTION),
+            
+            # High severity: 2 errors in 5 minutes
+            ThresholdRule("high_rapid", 2, 300, PushbackSeverity.HIGH, EscalationDecision.ESCALATE_TO_AVN),
+            
+            # Medium severity: 5 errors in 5 minutes
+            ThresholdRule("medium_burst", 5, 300, PushbackSeverity.MEDIUM, EscalationDecision.ESCALATE_TO_AVN),
+            
+            # Low severity: 10 errors in 10 minutes
+            ThresholdRule("low_sustained", 10, 600, PushbackSeverity.LOW, EscalationDecision.NOTIFY),
+            
+            # Generic burst detection: 15 errors in 5 minutes regardless of severity
+            ThresholdRule("generic_burst", 15, 300, PushbackSeverity.HIGH, EscalationDecision.ESCALATE_TO_AVN),
+        ]
+        
+        logger.info(f"Initialized PushbackEscalation with {len(self.threshold_rules)} threshold rules")
     
-    def evaluate_error(
+    async def record_and_evaluate_error(
         self,
+        db: AsyncSession,
         error: Exception,
         context: Dict[str, Any],
-        severity: Optional[PushbackSeverity] = None
+        severity: Optional[PushbackSeverity] = None,
+        user_id: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        ip_address: Optional[str] = None
     ) -> EscalationDecision:
         """
-        Evaluate an error and decide on escalation
+        Record error in database and evaluate escalation thresholds
         
         Args:
+            db: Async database session
             error: The error/exception
-            context: Context information (user, operation, etc.)
+            context: Context information
             severity: Optional severity override
+            user_id: User ID if applicable
+            endpoint: API endpoint if applicable
+            ip_address: Client IP if applicable
             
         Returns:
             Escalation decision
@@ -76,215 +119,172 @@ class PushbackEscalation:
         if severity is None:
             severity = self._assess_severity(error, context)
         
-        # Record error
-        error_record = {
-            "error_type": type(error).__name__,
-            "error_message": str(error),
-            "severity": severity.value,
-            "context": context,
-            "timestamp": datetime.now(timezone.utc),
-        }
-        self.error_history.append(error_record)
+        # Create error hash for grouping similar errors
+        error_hash = self._compute_error_hash(error)
         
-        # Clean old entries
-        self._clean_old_history()
+        # Record error in audit table
+        error_audit = ErrorAudit(
+            id=str(uuid.uuid4()),
+            error_type=type(error).__name__,
+            error_message=str(error),
+            error_hash=error_hash,
+            severity=severity.value,
+            context_json=context,
+            stack_trace=traceback.format_exc() if context.get('include_stack_trace') else None,
+            user_id=user_id,
+            endpoint=endpoint,
+            ip_address=ip_address,
+            occurred_at=datetime.now(timezone.utc)
+        )
         
-        # Check for patterns
-        pattern_severity = self._detect_patterns(error_record)
-        if pattern_severity:
-            severity = max(severity, pattern_severity, key=lambda s: list(PushbackSeverity).index(s))
-        
-        # Make escalation decision
-        decision = self._make_decision(severity, error_record)
-        
-        # Execute decision
-        if decision == EscalationDecision.ESCALATE_TO_AVN:
-            self._escalate_to_avn(error_record)
-        elif decision == EscalationDecision.IMMEDIATE_ACTION:
-            self._immediate_action(error_record)
-        elif decision == EscalationDecision.NOTIFY:
-            self._send_notification(error_record)
+        db.add(error_audit)
+        await db.flush()  # Ensure ID is available
         
         logger.info(
-            f"Pushback evaluation: {severity.value} -> {decision.value}",
-            extra={"error_type": type(error).__name__, "context": context}
+            f"Recorded error audit: {error_audit.id} "
+            f"(type={error_audit.error_type}, severity={severity.value})"
         )
+        
+        # Evaluate thresholds and determine escalation decision
+        decision = await self._evaluate_thresholds(db, error_audit, error_hash, severity)
+        
+        # Update audit record with escalation decision
+        error_audit.escalation_decision = decision.value
+        
+        if decision in [EscalationDecision.ESCALATE_TO_AVN, EscalationDecision.IMMEDIATE_ACTION]:
+            error_audit.escalated = True
+            error_audit.escalated_at = datetime.now(timezone.utc)
+            
+            # Create AVN alert
+            await self._create_avn_alert(db, error_audit, error_hash, decision)
+        
+        await db.commit()
+        
+        logger.info(f"Escalation decision for {error_audit.id}: {decision.value}")
         
         return decision
     
-    def _assess_severity(self, error: Exception, context: Dict[str, Any]) -> PushbackSeverity:
-        """
-        Assess the severity of an error
-        
-        Args:
-            error: The error
-            context: Error context
-            
-        Returns:
-            Severity level
-        """
-        error_type = type(error).__name__
-        
-        # Critical errors
-        critical_patterns = [
-            "SecurityError", "AuthenticationError", "DataCorruption",
-            "DatabaseConnectionError", "OutOfMemory"
-        ]
-        if any(pattern in error_type for pattern in critical_patterns):
-            return PushbackSeverity.CRITICAL
-        
-        # High severity
-        high_patterns = [
-            "PermissionError", "ValidationError", "IntegrityError",
-            "Timeout", "ConnectionError"
-        ]
-        if any(pattern in error_type for pattern in high_patterns):
-            return PushbackSeverity.HIGH
-        
-        # Check context for severity indicators
-        if context.get("affects_multiple_users"):
-            return PushbackSeverity.HIGH
-        
-        if context.get("data_loss_risk"):
-            return PushbackSeverity.CRITICAL
-        
-        if context.get("user_facing"):
-            return PushbackSeverity.MEDIUM
-        
-        # Default to low
-        return PushbackSeverity.LOW
-    
-    def _detect_patterns(self, current_error: Dict[str, Any]) -> Optional[PushbackSeverity]:
-        """
-        Detect error patterns that may warrant escalation
-        
-        Args:
-            current_error: Current error record
-            
-        Returns:
-            Severity if pattern detected, None otherwise
-        """
-        recent_errors = self._get_recent_errors()
-        
-        # Check for error bursts
-        if len(recent_errors) > 20:
-            logger.warning("Error burst detected (>20 errors in 5 minutes)")
-            return PushbackSeverity.HIGH
-        
-        # Check for repeated errors of same type
-        same_type_count = sum(
-            1 for e in recent_errors
-            if e["error_type"] == current_error["error_type"]
-        )
-        
-        if same_type_count >= 5:
-            logger.warning(f"Repeated error pattern: {current_error['error_type']} x{same_type_count}")
-            return PushbackSeverity.MEDIUM
-        
-        # Check for cascading failures
-        unique_types = set(e["error_type"] for e in recent_errors[-10:])
-        if len(unique_types) >= 5:
-            logger.warning("Cascading failures detected (5+ different error types)")
-            return PushbackSeverity.HIGH
-        
-        return None
-    
-    def _make_decision(
+    async def _evaluate_thresholds(
         self,
-        severity: PushbackSeverity,
-        error_record: Dict[str, Any]
+        db: AsyncSession,
+        current_error: ErrorAudit,
+        error_hash: str,
+        severity: PushbackSeverity
     ) -> EscalationDecision:
         """
-        Make escalation decision based on severity and history
+        Evaluate threshold rules against recent error history
         
         Args:
+            db: Database session
+            current_error: Current error audit record
+            error_hash: Error hash for grouping
             severity: Error severity
-            error_record: Error record
             
         Returns:
             Escalation decision
         """
-        # Critical always escalates immediately
-        if severity == PushbackSeverity.CRITICAL:
-            return EscalationDecision.IMMEDIATE_ACTION
+        now = datetime.now(timezone.utc)
         
-        # Check frequency against thresholds
-        same_type_count = sum(
-            1 for e in self._get_recent_errors()
-            if e["error_type"] == error_record["error_type"]
-        )
+        # Check each threshold rule
+        for rule in self.threshold_rules:
+            # Skip rules that don't match severity (except generic rules)
+            if rule.severity != severity and rule.name != "generic_burst":
+                continue
+            
+            # Calculate time window
+            window_start = now - timedelta(seconds=rule.time_window_seconds)
+            
+            # Query error count in time window
+            if rule.name == "generic_burst":
+                # Generic burst: count all errors regardless of type
+                query = select(func.count(ErrorAudit.id)).where(
+                    ErrorAudit.occurred_at >= window_start
+                )
+            else:
+                # Specific pattern: count errors with same hash
+                query = select(func.count(ErrorAudit.id)).where(
+                    and_(
+                        ErrorAudit.error_hash == error_hash,
+                        ErrorAudit.occurred_at >= window_start
+                    )
+                )
+            
+            result = await db.execute(query)
+            error_count = result.scalar()
+            
+            logger.debug(
+                f"Rule '{rule.name}': {error_count}/{rule.error_count} errors "
+                f"in {rule.time_window_seconds}s window"
+            )
+            
+            # Check if threshold exceeded
+            if error_count >= rule.error_count:
+                logger.warning(
+                    f"Threshold exceeded for rule '{rule.name}': "
+                    f"{error_count} errors in {rule.time_window_seconds}s "
+                    f"(threshold: {rule.error_count})"
+                )
+                return rule.decision
         
-        threshold = self.escalation_thresholds[severity]
-        
-        if same_type_count >= threshold:
-            return EscalationDecision.ESCALATE_TO_AVN
-        
-        # High severity gets notification
-        if severity == PushbackSeverity.HIGH:
-            return EscalationDecision.NOTIFY
-        
-        # Medium and low just log
-        if severity == PushbackSeverity.MEDIUM:
-            return EscalationDecision.LOG_ONLY
-        
-        return EscalationDecision.IGNORE
+        # No threshold exceeded, default to log only
+        return EscalationDecision.LOG_ONLY
     
-    def _escalate_to_avn(self, error_record: Dict[str, Any]):
+    async def _create_avn_alert(
+        self,
+        db: AsyncSession,
+        error_audit: ErrorAudit,
+        error_hash: str,
+        decision: EscalationDecision
+    ):
         """
-        Escalate error to AVN for verification and healing
+        Create AVN alert record and notify AVN if client available
         
         Args:
-            error_record: Error record to escalate
+            db: Database session
+            error_audit: Error audit that triggered alert
+            error_hash: Error hash for querying related errors
+            decision: Escalation decision
         """
-        if not self.avn_client:
-            logger.warning("No AVN client configured, cannot escalate")
-            return
+        now = datetime.now(timezone.utc)
         
-        try:
-            escalation_data = {
-                "type": "error_escalation",
-                "error_type": error_record["error_type"],
-                "error_message": error_record["error_message"],
-                "severity": error_record["severity"],
-                "context": error_record["context"],
-                "timestamp": error_record["timestamp"].isoformat(),
-                "recent_errors": len(self._get_recent_errors()),
-                "escalation_reason": "Threshold exceeded"
-            }
-            
-            # Send to AVN
-            self.avn_client.report_issue(escalation_data)
-            
-            logger.info(f"Escalated error to AVN: {error_record['error_type']}")
-            
-        except Exception as e:
-            logger.error(f"Failed to escalate to AVN: {e}")
-    
-    def _immediate_action(self, error_record: Dict[str, Any]):
-        """
-        Take immediate action for critical errors
+        # Find related errors in last 10 minutes
+        window_start = now - timedelta(minutes=10)
+        query = select(ErrorAudit.id).where(
+            and_(
+                ErrorAudit.error_hash == error_hash,
+                ErrorAudit.occurred_at >= window_start
+            )
+        ).limit(50)
         
-        Args:
-            error_record: Critical error record
-        """
-        logger.critical(
-            f"CRITICAL ERROR: {error_record['error_type']}",
-            extra=error_record
+        result = await db.execute(query)
+        related_error_ids = [row[0] for row in result.fetchall()]
+        
+        # Determine alert severity
+        alert_severity = error_audit.severity
+        if decision == EscalationDecision.IMMEDIATE_ACTION:
+            alert_severity = "critical"
+        
+        # Create alert
+        alert = AVNAlert(
+            id=str(uuid.uuid4()),
+            alert_type="error_threshold_exceeded",
+            severity=alert_severity,
+            title=f"Error threshold exceeded: {error_audit.error_type}",
+            description=(
+                f"Multiple occurrences of {error_audit.error_type} detected. "
+                f"Error count: {len(related_error_ids)} in recent window. "
+                f"Message: {error_audit.error_message}"
+            ),
+            error_pattern=error_audit.error_type,
+            error_count=len(related_error_ids),
+            time_window_seconds=600,  # 10 minutes
+            threshold_value=len(related_error_ids),
+            related_error_ids=related_error_ids,
+            triggered_at=now,
+            status="active"
         )
         
-        # Escalate to AVN
-        self._escalate_to_avn(error_record)
-        
-        # Additional immediate actions could include:
-        # - Circuit breaker activation
-        # - Failover to backup systems
-        # - Emergency notifications
-        # - Automated rollback
-        
-        logger.info("Immediate action protocol activated")
-    
-    def _send_notification(self, error_record: Dict[str, Any]):
-        """
+       
         Send notification for high-severity errors
         
         Args:

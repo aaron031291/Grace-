@@ -1,14 +1,11 @@
 """
-Integration Layer - Connects various Grace components
+Integration modules for connecting Grace components
 """
 
-from .event_bus import EventBus, Event
-from .quorum_integration import QuorumIntegration
+from .event_bus import EventBus
+from .event_bus_integration import AVNEventIntegration
 
 __all__ = [
     'EventBus',
-    'Event',
-    'QuorumIntegration'
+    'AVNEventIntegration'
 ]
-
-__version__ = '1.0.0'

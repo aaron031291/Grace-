@@ -30,6 +30,31 @@ else:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Create async engine for async operations
+async_engine = create_async_engine(
+    DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://").replace("postgresql://", "postgresql+asyncpg://"),
+    echo=False,
+    pool_pre_ping=True if not DATABASE_URL.startswith("sqlite") else False
+)
+
+# Async session factory
+AsyncSessionLocal = async_sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+
+async def get_async_db() -> AsyncSession:
+    """
+    Async database session dependency for FastAPI
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
 
 def get_db() -> Session:
     """Database session dependency for FastAPI"""
@@ -116,4 +141,4 @@ def init_db():
         db.close()
 
 
-__all__ = ['engine', 'SessionLocal', 'get_db', 'init_db']
+__all__ = ['engine', 'SessionLocal', 'get_db', 'async_engine', 'AsyncSessionLocal', 'get_async_db', 'init_db']

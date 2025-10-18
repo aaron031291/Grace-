@@ -2,7 +2,7 @@
 Grace Node Coordinator - Orchestrates swarm nodes
 """
 
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional
 import asyncio
 import logging
 

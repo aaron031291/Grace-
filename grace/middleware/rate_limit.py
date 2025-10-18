@@ -2,7 +2,7 @@
 Rate limiting middleware with Redis and in-memory support
 """
 
-from typing import Dict, Callable, Optional, Set
+from typing import Dict, Callable, Optional, Set, Any
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 import time

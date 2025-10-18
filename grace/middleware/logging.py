@@ -2,7 +2,7 @@
 Structured logging middleware using structlog
 """
 
-from typing import Callable, Set, Optional
+from typing import Callable, Set, Optional, Any
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 import time

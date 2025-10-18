@@ -2,6 +2,7 @@
 Grace API - FastAPI application setup
 """
 
+from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging

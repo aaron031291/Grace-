@@ -226,7 +226,7 @@ class PushbackEscalation:
             extra=error_record
         )
         
-        # Send to AVN if client available
+        # Send to AVN if client
         if self.avn_client:
             try:
                 self.avn_client.report_metrics(

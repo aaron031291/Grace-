@@ -1,6 +1,9 @@
 """
-Collaboration Sessions API endpoints - CRUD operations
+Collaboration session API endpoints
 """
+
+from typing import List, Any
+from fastapi import APIRouter, Depends, HTTPException
 
 from datetime import datetime, timezone
 from typing import List, Optional

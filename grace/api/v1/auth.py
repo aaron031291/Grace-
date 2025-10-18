@@ -1,12 +1,9 @@
 """
-Authentication API endpoints - Production-ready with real user management
+Authentication API endpoints
 """
 
-from datetime import datetime, timezone, timedelta
-import uuid
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from typing import Any
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 

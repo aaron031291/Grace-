@@ -1,11 +1,8 @@
 """
-Immutable Logs API endpoints with semantic search
+Immutable logs API endpoints
 """
 
-from datetime import datetime, timezone
-from typing import List, Optional
-import logging
-
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
 

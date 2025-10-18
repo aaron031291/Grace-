@@ -2,7 +2,7 @@
 Embedding service - Main interface for embeddings
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any
 import numpy as np
 from grace.config import get_settings
 

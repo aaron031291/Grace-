@@ -2,15 +2,14 @@
 WebSocket connection manager with ping/pong and heartbeat
 """
 
-import asyncio
-import json
-from typing import Dict, Set, Optional, Any
+from typing import Dict, List, Set, Optional, Any
+from fastapi import WebSocket
 from datetime import datetime, timezone
+import asyncio
+import logging
+import json
 from dataclasses import dataclass, asdict
 from enum import Enum
-import logging
-
-from fastapi import WebSocket, WebSocketDisconnect
 
 from grace.auth.models import User
 

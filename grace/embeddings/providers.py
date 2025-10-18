@@ -2,8 +2,8 @@
 Embedding providers - OpenAI, HuggingFace, and local models
 """
 
+from typing import List, Optional, Any
 from abc import ABC, abstractmethod
-from typing import List, Optional
 import numpy as np
 import logging
 import os

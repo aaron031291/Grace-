@@ -1,13 +1,9 @@
 """
-Documents and Search API endpoints
+Document management API endpoints
 """
 
-from datetime import datetime, timezone
-from typing import List, Optional
-import uuid
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import List, Optional, Any
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 

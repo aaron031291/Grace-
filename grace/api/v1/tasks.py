@@ -1,9 +1,9 @@
 """
-Tasks API endpoints - CRUD operations
+Task management API endpoints
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any
 import uuid
 import logging
 

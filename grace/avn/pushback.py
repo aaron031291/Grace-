@@ -66,12 +66,12 @@ class PushbackEscalation:
         Args:
             avn_client: AVN client for sending escalations
         """
-        self.avn_client = avn_client
+        self.avn_client: Optional[Any] = avn_client
         self.error_history: List[Dict[str, Any]] = []
-        self.time_window = timedelta(minutes=10)
+        self.time_window: timedelta = timedelta(minutes=10)
         
         # Define threshold rules
-        self.threshold_rules = [
+        self.threshold_rules: List[ThresholdRule] = [
             ThresholdRule("critical_immediate", 1, 60, PushbackSeverity.CRITICAL, EscalationDecision.IMMEDIATE_ACTION),
             ThresholdRule("high_rapid", 2, 300, PushbackSeverity.HIGH, EscalationDecision.ESCALATE_TO_AVN),
             ThresholdRule("medium_burst", 5, 300, PushbackSeverity.MEDIUM, EscalationDecision.ESCALATE_TO_AVN),

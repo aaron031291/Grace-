@@ -2,7 +2,8 @@
 Vector store service - Main interface
 """
 
-from typing import Optional
+from typing import List, Tuple, Optional, Any
+import numpy as np
 from grace.config import get_settings
 
 import logging

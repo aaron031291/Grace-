@@ -205,10 +205,9 @@ def create_unified_logic_with_extensions(
     enable_quantum: bool = True,
     enable_discovery: bool = True,
     enable_impact: bool = True
-) -> 'UnifiedLogicWithExtensions':
-    """Factory function to create UnifiedLogic with transcendence extensions"""
+) -> 'UnifiedLogicExtensions':  # FIXED: Correct class name
     
-    class UnifiedLogicWithExtensions:
+    class UnifiedLogicExtensions:  # FIXED: Renamed from UnifiedLogicWithExtensions
         """UnifiedLogic enhanced with transcendence layer"""
         
         def __init__(self):
@@ -242,4 +241,4 @@ def create_unified_logic_with_extensions(
                 'transcendence_extensions': self.extensions.get_extension_status()
             }
     
-    return UnifiedLogicWithExtensions()
+    return UnifiedLogicExtensions()

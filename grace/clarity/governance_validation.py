@@ -4,6 +4,7 @@ Class 6: Governance Validation - Constitution compliance checking
 
 from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, field
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 import logging
 
@@ -188,7 +189,7 @@ class ConstitutionValidator:
             self.violation_history.append({
                 'action': action,
                 'violations': violations,
-                'timestamp': str(datetime.now())
+                'timestamp': datetime.now(timezone.utc).isoformat()  # FIXED: timezone-aware
             })
             logger.warning(f"Constitution violations detected: {len(violations)}")
         

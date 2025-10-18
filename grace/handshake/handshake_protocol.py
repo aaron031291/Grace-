@@ -4,7 +4,7 @@ Component Handshake Protocol - Production implementation
 
 from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta  # FIXED: Added timezone
 from enum import Enum
 import hashlib
 import secrets
@@ -31,7 +31,7 @@ class ComponentIdentity:
     component_type: str
     public_key: str
     signature: str
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))  # FIXED
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -45,7 +45,7 @@ class HandshakeSession:
     challenge_response: Optional[str] = None
     capabilities: Set[str] = field(default_factory=set)
     version: str = ""
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))  # FIXED
     expires_at: Optional[datetime] = None
     trust_score: float = 0.5
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -87,11 +87,13 @@ class ComponentHandshake:
             component_type=component_type,
             public_key=self._generate_public_key(component_id),
             signature=self._sign_identity(component_id, component_type),
+            timestamp=datetime.now(timezone.utc),  # FIXED
             metadata=metadata or {}
         )
         
         # Create session
         session_id = self._generate_session_id()
+        now = datetime.now(timezone.utc)  # FIXED
         session = HandshakeSession(
             session_id=session_id,
             component_identity=identity,
@@ -99,7 +101,8 @@ class ComponentHandshake:
             challenge=challenge,
             capabilities=capabilities,
             version=version,
-            expires_at=datetime.now() + self.session_timeout,
+            started_at=now,
+            expires_at=now + self.session_timeout,
             metadata=metadata or {}
         )
         
@@ -125,8 +128,8 @@ class ComponentHandshake:
         
         session = self.active_sessions[session_id]
         
-        # Check expiration
-        if datetime.now() > session.expires_at:
+        # Check expiration - FIXED: timezone-aware
+        if datetime.now(timezone.utc) > session.expires_at:
             session.status = HandshakeStatus.EXPIRED
             logger.warning(f"Session expired: {session_id}")
             return False
@@ -219,7 +222,7 @@ class ComponentHandshake:
             'required_capabilities': list(required_capabilities),
             'available_optional': list(available_optional),
             'all_capabilities': list(session.capabilities),
-            'negotiated_at': datetime.now().isoformat()
+            'negotiated_at': datetime.now(timezone.utc).isoformat()  # FIXED
         }
         
         session.metadata['negotiation_result'] = negotiation_result
@@ -306,7 +309,7 @@ class ComponentHandshake:
                 metadata={
                     'capabilities': list(session.capabilities),
                     'version': session.version,
-                    'registered_at': datetime.now().isoformat()
+                    'registered_at': datetime.now(timezone.utc).isoformat()  # FIXED
                 }
             )
         
@@ -357,13 +360,13 @@ class ComponentHandshake:
     def _generate_public_key(self, component_id: str) -> str:
         """Generate public key for component (simplified)"""
         # In production, use proper PKI
-        data = f"{component_id}:{datetime.now().isoformat()}:{secrets.token_hex(16)}"
+        data = f"{component_id}:{datetime.now(timezone.utc).isoformat()}:{secrets.token_hex(16)}"  # FIXED
         return hashlib.sha256(data.encode()).hexdigest()
     
     def _sign_identity(self, component_id: str, component_type: str) -> str:
         """Sign component identity (simplified)"""
         # In production, use proper digital signatures
-        data = f"{component_id}:{component_type}:{datetime.now().isoformat()}"
+        data = f"{component_id}:{component_type}:{datetime.now(timezone.utc).isoformat()}"  # FIXED
         return hashlib.sha256(data.encode()).hexdigest()
     
     def _compute_challenge_response(self, challenge: str, component_id: str) -> str:
@@ -433,7 +436,7 @@ class ComponentHandshake:
     
     def cleanup_expired_sessions(self):
         """Clean up expired handshake sessions"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)  # FIXED
         expired = []
         
         for session_id, session in self.active_sessions.items():

@@ -4,6 +4,7 @@ Class 8: Specialist Consensus - MLDL Specialist evaluation with quorum logic
 
 from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, field
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 import logging
 
@@ -128,7 +129,7 @@ class MLDLSpecialist:
             'proposal': proposal,
             'result': result,
             'votes': votes,
-            'timestamp': str(datetime.now())
+            'timestamp': datetime.now(timezone.utc).isoformat()  # FIXED: timezone-aware
         })
         
         logger.info(

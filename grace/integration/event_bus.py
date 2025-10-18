@@ -136,3 +136,44 @@ class EventBus:
             'total_events': len(self.event_history),
             'event_types_seen': len(set(e.event_type for e in self.event_history))
         }
+
+class SimpleEventBus:
+    """
+    Simple in-memory event bus for pub/sub messaging
+    """
+    
+    def __init__(self):
+        self.subscribers: Dict[str, List[Callable]] = {}
+        self.events: List[Dict[str, Any]] = []
+        
+    def subscribe(self, event_type: str, callback: Callable):
+        """Subscribe to event type"""
+        if event_type not in self.subscribers:
+            self.subscribers[event_type] = []
+        self.subscribers[event_type].append(callback)
+        
+    def publish(self, event: Dict[str, Any]):
+        """Publish event to subscribers"""
+        event_type = event.get("type", "unknown")
+        self.events.append({
+            **event,
+            "published_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        if event_type in self.subscribers:
+            for callback in self.subscribers[event_type]:
+                try:
+                    callback(event)
+                except Exception as e:
+                    logger.error(f"Event callback error: {e}")
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get event bus statistics"""
+        return {
+            "total_events": len(self.events),
+            "active_channels": len(self.subscribers),
+            "subscribers": {
+                channel: len(subs) 
+                for channel, subs in self.subscribers.items()
+            }
+        }

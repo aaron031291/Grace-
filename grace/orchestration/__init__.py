@@ -44,3 +44,25 @@ __all__ = [
     "WorkflowAction",
     "WorkflowTrigger",
 ]
+
+"""
+Grace Orchestration - Scheduling, autoscaling, and heartbeat monitoring
+"""
+
+from .enhanced_scheduler import EnhancedScheduler, SchedulerLoop, SchedulerPolicy
+from .autoscaler import AdvancedAutoscaler, ScalingMetrics, ScalingDecision
+from .heartbeat import HeartbeatMonitor, HeartbeatRecord
+from .scheduler_metrics import SchedulerMetrics, scheduler_metrics
+
+__all__ = [
+    "EnhancedScheduler",
+    "SchedulerLoop",
+    "SchedulerPolicy",
+    "AdvancedAutoscaler",
+    "ScalingMetrics",
+    "ScalingDecision",
+    "HeartbeatMonitor",
+    "HeartbeatRecord",
+    "SchedulerMetrics",
+    "scheduler_metrics",
+]

@@ -1,37 +1,37 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "grace-ai"
-version = "0.1.0"
-description = "Grace AI System - Advanced Multi-Agent AI with Distributed Intelligence"
+version = "1.0.0"
+description = "Constitutional AI System with Multi-Agent Coordination"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Grace AI Team"}
+    {name = "Grace AI Team", email = "team@grace-ai.example"}
 ]
-keywords = ["ai", "consciousness", "multi-agent", "swarm", "governance"]
+keywords = ["ai", "governance", "multi-agent", "constitutional-ai"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
 ]
 
 dependencies = [
-    "numpy>=1.26.0",
-    "redis>=5.0.0",
-    "psycopg2-binary>=2.9.0",
-    "sqlalchemy>=2.0.0",
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
     "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "python-dotenv>=1.0.0",
-    "structlog>=23.0.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.4.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.9",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
     "prometheus-client>=0.19.0",
+    "structlog>=23.0.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
@@ -44,24 +44,63 @@ dev = [
     "mypy>=1.7.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["grace*"]
+embeddings = [
+    "openai>=1.0.0",
+    "sentence-transformers>=2.2.2",
+    "transformers>=4.35.0",
+    "torch>=2.1.0",
+]
+
+vector = [
+    "faiss-cpu>=1.7.4",
+    "pgvector>=0.2.3",
+]
+
+swarm = [
+    "grpcio>=1.59.0",
+    "aiokafka>=0.8.1",
+]
+
+all = [
+    "grace-ai[dev,embeddings,vector,swarm]",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourorg/grace"
+Documentation = "https://grace-ai.readthedocs.io"
+Repository = "https://github.com/yourorg/grace"
+Issues = "https://github.com/yourorg/grace/issues"
+
+[tool.setuptools]
+packages = ["grace"]
+
+[tool.setuptools.package-data]
+grace = ["py.typed"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310', 'py311']
+target-version = ['py311']
+include = '\.pyi?$'
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "I", "N", "W"]
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+follow_imports = "normal"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -69,3 +108,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --strict-markers"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+]

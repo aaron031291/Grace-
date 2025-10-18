@@ -2,10 +2,9 @@
 Embedding service - Main interface for embeddings
 """
 
-from typing import List, Optional
+from typing import Optional, List
 import numpy as np
-import logging
-import os
+from grace.config import get_settings
 
 from .providers import (
     EmbeddingProvider,
@@ -20,23 +19,17 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     """Service for managing embeddings with automatic provider selection"""
     
-    def __init__(self, provider: Optional[str] = None, **kwargs):
-        """
-        Initialize embedding service
-        
-        Args:
-            provider: 'openai', 'huggingface', 'local', or None for auto-detect
-            **kwargs: Provider-specific arguments
-        """
-        self.provider_name = provider or os.getenv("EMBEDDING_PROVIDER", "auto")
-        self.provider = self._initialize_provider(**kwargs)
+    def __init__(self, provider: Optional[str] = None):
+        settings = get_settings()
+        self.provider_name = provider or settings.embedding.provider
+        self.provider = self._initialize_provider()
     
-    def _initialize_provider(self, **kwargs) -> EmbeddingProvider:
+    def _initialize_provider(self) -> EmbeddingProvider:
         """Initialize the embedding provider with fallback chain"""
         
         if self.provider_name == "openai":
             try:
-                provider = OpenAIEmbeddings(**kwargs)
+                provider = OpenAIEmbeddings()
                 logger.info("Using OpenAI embeddings")
                 return provider
             except Exception as e:
@@ -44,7 +37,7 @@ class EmbeddingService:
         
         elif self.provider_name == "huggingface":
             try:
-                provider = HuggingFaceEmbeddings(**kwargs)
+                provider = HuggingFaceEmbeddings()
                 logger.info("Using HuggingFace embeddings")
                 return provider
             except Exception as e:
@@ -59,7 +52,7 @@ class EmbeddingService:
         # Try OpenAI first if API key available
         if os.getenv("OPENAI_API_KEY"):
             try:
-                provider = OpenAIEmbeddings(**kwargs)
+                provider = OpenAIEmbeddings()
                 logger.info("Auto-detected: Using OpenAI embeddings")
                 return provider
             except Exception:
@@ -67,7 +60,7 @@ class EmbeddingService:
         
         # Try HuggingFace next
         try:
-            provider = HuggingFaceEmbeddings(**kwargs)
+            provider = HuggingFaceEmbeddings()
             logger.info("Auto-detected: Using HuggingFace embeddings")
             return provider
         except Exception:

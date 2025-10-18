@@ -1,14 +1,7 @@
 """
-WebSocket support for real-time communication
+Grace WebSocket - Real-time communication
 """
 
-from .manager import ConnectionManager, WebSocketMessage
-from .auth import get_current_user_ws
-from .channels import ChannelManager
+from .manager import ConnectionManager
 
-__all__ = [
-    'ConnectionManager',
-    'WebSocketMessage',
-    'get_current_user_ws',
-    'ChannelManager'
-]
+__all__ = ['ConnectionManager']

@@ -5,51 +5,21 @@ Quorum Bridge - Connects governance to MLDL specialists with real consensus
 from typing import Dict, Any, List, Optional
 import logging
 
-from grace.mldl.quorum_aggregator import (
-    MLDLQuorumAggregator,
-    SpecialistOutput,
-    ConsensusMethod
-)
-
 logger = logging.getLogger(__name__)
-
 
 class QuorumBridge:
     """
-    Bridge between governance and MLDL specialists
-    
-    Replaces mock consensus with real aggregation
+    Bridge between Clarity and MLDL quorum aggregation
     """
     
     def __init__(self, intelligence_kernel=None):
-        """
-        Initialize quorum bridge
-        
-        Args:
-            intelligence_kernel: Optional intelligence kernel for specialist access
-        """
         self.intelligence_kernel = intelligence_kernel
-        self.aggregator = MLDLQuorumAggregator(
-            default_method=ConsensusMethod.CONFIDENCE_WEIGHTED
-        )
         
-        # Register known specialists
-        self._register_default_specialists()
+        # Import here to avoid circular dependency
+        from grace.mldl.quorum_aggregator import MLDLQuorumAggregator
+        self.quorum_aggregator = MLDLQuorumAggregator()
         
-        logger.info("QuorumBridge initialized with real consensus aggregation")
-    
-    def _register_default_specialists(self):
-        """Register default MLDL specialists"""
-        default_specialists = [
-            ("lstm_time_series", 1.2),  # Higher weight for time series
-            ("transformer_nlp", 1.1),
-            ("cnn_vision", 1.0),
-            ("random_forest_tabular", 0.9),
-            ("gradient_boost", 1.0)
-        ]
-        
-        for spec_id, weight in default_specialists:
-            self.aggregator.register_specialist(spec_id, weight)
+        logger.info("QuorumBridge initialized")
     
     def get_specialist_consensus(
         self,
@@ -82,7 +52,7 @@ class QuorumBridge:
         
         try:
             # Real consensus aggregation
-            result = self.aggregator.aggregate_outputs(
+            result = self.quorum_aggregator.aggregate_outputs(
                 specialist_outputs,
                 method=ConsensusMethod.CONFIDENCE_WEIGHTED,
                 min_agreement=min_agreement
@@ -184,7 +154,7 @@ class QuorumBridge:
         
         try:
             # Use majority vote for fallback
-            result = self.aggregator.aggregate_outputs(
+            result = self.quorum_aggregator.aggregate_outputs(
                 outputs,
                 method=ConsensusMethod.MAJORITY_VOTE
             )
@@ -228,5 +198,5 @@ class QuorumBridge:
         error = abs(actual_outcome - predicted_outcome)
         performance = 1.0 / (1.0 + error)
         
-        self.aggregator.update_specialist_weight(specialist_id, performance)
+        self.quorum_aggregator.update_specialist_weight(specialist_id, performance)
         logger.info(f"Updated {specialist_id} performance: {performance:.3f}")

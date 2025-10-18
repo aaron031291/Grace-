@@ -2,8 +2,8 @@
 MLDL Quorum Aggregator - Real consensus from specialist outputs
 """
 
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 import logging

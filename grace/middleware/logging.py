@@ -18,6 +18,8 @@ try:
 except Exception:
     verify_token = None  # type: ignore
 
+from grace.config import get_settings
+
 # Configure a minimal structlog config if not configured elsewhere
 def setup_structlog(json_output: bool = True, log_level: str = "INFO"):
     processors = [
@@ -52,6 +54,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         setup_structlog(json_output=json_logs)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        """Process request and log metadata"""
+
+        # Skip excluded paths
         if request.url.path in self.exclude_paths:
             return await call_next(request)
 

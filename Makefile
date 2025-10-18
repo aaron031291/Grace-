@@ -118,3 +118,63 @@ format:
 	@echo "✨ Formatting code..."
 	@black grace/
 	@ruff check --fix grace/
+
+.PHONY: help install test validate clean run
+
+help:
+	@echo "Grace AI System - Available Commands"
+	@echo "===================================="
+	@echo "install    - Install dependencies"
+	@echo "validate   - Run all validations"
+	@echo "test       - Run test suite"
+	@echo "clean      - Clean generated files"
+	@echo "run        - Start API server"
+	@echo "config     - Validate configuration"
+	@echo "imports    - Check imports"
+	@echo "types      - Run type checking"
+
+install:
+	pip install -r requirements.txt
+	pip install -e .
+
+validate:
+	python scripts/master_validation.py
+
+test:
+	pytest tests/ -v
+
+quick-test:
+	python test_integration_full.py
+
+config:
+	python scripts/validate_config.py
+
+imports:
+	python scripts/check_imports.py
+
+types:
+	python -m mypy grace --ignore-missing-imports
+
+clean:
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name ".DS_Store" -delete
+	rm -rf .pytest_cache .mypy_cache .coverage htmlcov *.egg-info
+
+run:
+	uvicorn grace.api:app --reload --port 8000
+
+run-prod:
+	uvicorn grace.api:app --host 0.0.0.0 --port 8000 --workers 4
+
+dev:
+	uvicorn grace.api:app --reload --port 8000 --log-level debug
+
+format:
+	black grace/ tests/
+	ruff check grace/ tests/ --fix
+
+lint:
+	ruff check grace/ tests/
+	black grace/ tests/ --check

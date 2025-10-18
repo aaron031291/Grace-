@@ -1,14 +1,13 @@
 """
-Embeddings service - Support for multiple embedding providers
+Grace Embeddings - Multi-provider embedding generation
 """
 
-from .providers import EmbeddingProvider, OpenAIEmbeddings, HuggingFaceEmbeddings, LocalEmbeddings
 from .service import EmbeddingService
+from .providers import OpenAIEmbeddings, HuggingFaceEmbeddings, LocalEmbeddings
 
 __all__ = [
-    'EmbeddingProvider',
+    'EmbeddingService',
     'OpenAIEmbeddings',
     'HuggingFaceEmbeddings',
-    'LocalEmbeddings',
-    'EmbeddingService'
+    'LocalEmbeddings'
 ]

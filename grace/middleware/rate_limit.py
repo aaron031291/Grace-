@@ -13,6 +13,8 @@ from starlette.types import ASGIApp
 from fastapi import status
 import structlog
 
+from grace.config import get_settings
+
 logger = structlog.get_logger()
 
 

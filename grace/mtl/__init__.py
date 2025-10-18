@@ -1,15 +1,7 @@
 """
-MTL - Immutable Transaction Logs
-Blockchain-inspired immutable audit trail with human-readable format
+Grace MTL - Merkle Tree Logs (Immutable audit logs)
 """
 
-from .immutable_logs import ImmutableLogs, LogEntry
-from .audit_overseer import DemocraticAuditOverseer
-from .human_readable import HumanReadableFormatter
+from .immutable_logs import ImmutableLogs
 
-__all__ = [
-    'ImmutableLogs',
-    'LogEntry',
-    'DemocraticAuditOverseer',
-    'HumanReadableFormatter'
-]
+__all__ = ['ImmutableLogs']

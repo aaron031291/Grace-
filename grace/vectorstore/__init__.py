@@ -1,15 +1,13 @@
 """
-Vector store implementations - FAISS, PostgreSQL pgvector
+Grace Vector Store - Vector database abstraction
 """
 
-from .base import VectorStore
+from .service import VectorStoreService
 from .faiss_store import FAISSVectorStore
 from .pgvector_store import PgVectorStore
-from .service import VectorStoreService
 
 __all__ = [
-    'VectorStore',
+    'VectorStoreService',
     'FAISSVectorStore',
-    'PgVectorStore',
-    'VectorStoreService'
+    'PgVectorStore'
 ]

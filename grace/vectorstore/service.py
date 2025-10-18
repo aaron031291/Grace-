@@ -3,6 +3,8 @@ Vector store service - Main interface
 """
 
 from typing import Optional
+from grace.config import get_settings
+
 import logging
 import os
 
@@ -18,25 +20,15 @@ class VectorStoreService:
     
     def __init__(
         self,
-        dimension: int,
-        store_type: Optional[str] = None,
-        db_session = None,
+        dimension: int = 384,
         index_path: Optional[str] = None
     ):
-        """
-        Initialize vector store service
-        
-        Args:
-            dimension: Embedding dimension
-            store_type: 'faiss', 'pgvector', or None for auto-detect
-            db_session: SQLAlchemy session (for pgvector)
-            index_path: Path to FAISS index (for faiss)
-        """
-        self.dimension = dimension
-        self.store_type = store_type or os.getenv("VECTOR_STORE", "faiss")
-        self.store = self._initialize_store(db_session, index_path)
+        settings = get_settings()
+        self.index_path = index_path or settings.vector_store.faiss_index_path
+        self.store_type = settings.vector_store.store_type or os.getenv("VECTOR_STORE", "faiss")
+        self.store = self._initialize_store()
     
-    def _initialize_store(self, db_session, index_path) -> VectorStore:
+    def _initialize_store(self) -> VectorStore:
         """Initialize the vector store"""
         
         if self.store_type == "pgvector":
@@ -51,7 +43,7 @@ class VectorStoreService:
                 logger.warning(f"Failed to initialize pgvector: {e}, falling back to FAISS")
         
         # Default to FAISS
-        index_path = index_path or os.getenv("FAISS_INDEX_PATH", "./data/faiss_index.bin")
+        index_path = self.index_path or os.getenv("FAISS_INDEX_PATH", "./data/faiss_index.bin")
         store = FAISSVectorStore(self.dimension, index_path)
         logger.info("Using FAISS vector store")
         return store

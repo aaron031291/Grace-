@@ -1,18 +1,21 @@
 """
-Swarm Intelligence Layer - Distributed coordination and collective intelligence
-Enables multiple Grace instances to collaborate, reach consensus, and share knowledge.
+Grace Swarm Intelligence - Multi-node orchestration and collective intelligence
 """
 
-from .node_coordinator import GraceNodeCoordinator
-from .consensus_engine import CollectiveConsensusEngine
-from .knowledge_graph_manager import GlobalKnowledgeGraphManager
-from .swarm_orchestrator import SwarmOrchestrator
+from .coordinator import GraceNodeCoordinator, NodeInfo
+from .transport import TransportProtocol, GRPCTransport, KafkaTransport, HTTPTransport
+from .consensus import CollectiveConsensusEngine, ConsensusAlgorithm
+from .discovery import PeerDiscovery, ServiceRegistry
 
 __all__ = [
     'GraceNodeCoordinator',
+    'NodeInfo',
+    'TransportProtocol',
+    'GRPCTransport',
+    'KafkaTransport',
+    'HTTPTransport',
     'CollectiveConsensusEngine',
-    'GlobalKnowledgeGraphManager',
-    'SwarmOrchestrator'
+    'ConsensusAlgorithm',
+    'PeerDiscovery',
+    'ServiceRegistry'
 ]
-
-__version__ = '1.0.0'

@@ -1,7 +1,25 @@
 """
-Configuration package for Grace Governance Kernel.
+Grace Configuration Management - Centralized settings
 """
 
-from .governance_config import GRACE_CONFIG
+from .settings import (
+    Settings,
+    get_settings,
+    DatabaseSettings,
+    AuthSettings,
+    EmbeddingSettings,
+    VectorStoreSettings,
+    SwarmSettings,
+    ObservabilitySettings
+)
 
-__all__ = ["GRACE_CONFIG"]
+__all__ = [
+    'Settings',
+    'get_settings',
+    'DatabaseSettings',
+    'AuthSettings',
+    'EmbeddingSettings',
+    'VectorStoreSettings',
+    'SwarmSettings',
+    'ObservabilitySettings'
+]

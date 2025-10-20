@@ -5,6 +5,13 @@ Quorum Bridge - Connects governance to MLDL specialists with real consensus
 from typing import Dict, Any, List, Optional
 import logging
 
+# Import MLDL types
+from grace.mldl.quorum_aggregator import (
+    MLDLQuorumAggregator,
+    SpecialistOutput,
+    ConsensusMethod
+)
+
 logger = logging.getLogger(__name__)
 
 class QuorumBridge:
@@ -12,11 +19,10 @@ class QuorumBridge:
     Bridge between Clarity and MLDL quorum aggregation
     """
     
-    def __init__(self, intelligence_kernel=None):
+    def __init__(self, intelligence_kernel: Optional[Any] = None):
         self.intelligence_kernel = intelligence_kernel
         
-        # Import here to avoid circular dependency
-        from grace.mldl.quorum_aggregator import MLDLQuorumAggregator
+        # Initialize quorum aggregator
         self.quorum_aggregator = MLDLQuorumAggregator()
         
         logger.info("QuorumBridge initialized")

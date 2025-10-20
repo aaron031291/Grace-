@@ -1,37 +1,25 @@
-# Grace Scripts Directory
+# Scripts Directory
 
-This directory contains helpful scripts for Grace development:
+Utility scripts and tools for Grace system.
 
-## Scripts Overview
+## Available Scripts
 
-- **setup.sh**: Automated development environment setup
-- **git-workflow.sh**: Git workflow automation (Linux/macOS)
-- **git-workflow.ps1**: Git workflow automation (Windows)
-- **pre-commit**: Git pre-commit hook for code quality
+- `run_full_diagnostics.py` - Run complete Pylance diagnostics
+- `fix_all_pylance_issues.py` - Automatically fix common Pylance issues
+- `fix_all_imports.py` - Fix import issues
+- `master_validation.py` - Run complete system validation
+- `validate_config.py` - Validate configuration
+- `check_imports.py` - Check for missing imports
 
 ## Usage
 
-### Quick Setup
 ```bash
-./setup.sh
+# Run diagnostics
+python scripts/run_full_diagnostics.py
+
+# Fix issues
+python scripts/fix_all_pylance_issues.py
+
+# Validate
+python scripts/master_validation.py
 ```
-
-### Git Workflow
-```bash
-# Create a new feature branch
-./git-workflow.sh new-branch feature/my-awesome-feature
-
-# Complete workflow (test, commit, push)
-./git-workflow.sh workflow feat core "implement new feature"
-
-# Sync with main branch
-./git-workflow.sh sync
-```
-
-### Manual Hook Installation
-```bash
-cp pre-commit ../.git/hooks/
-chmod +x ../.git/hooks/pre-commit
-```
-
-For detailed usage, run any script with `help` or no arguments.

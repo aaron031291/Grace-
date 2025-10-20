@@ -4,6 +4,7 @@ Quorum Bridge - Connects governance to MLDL specialists with real consensus
 
 from typing import Dict, Any, List, Optional
 import logging
+import random
 
 # Import MLDL types
 from grace.mldl.quorum_aggregator import (
@@ -13,6 +14,15 @@ from grace.mldl.quorum_aggregator import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Optional numpy import for fallback specialist simulation
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    np = None  # type: ignore
+    HAS_NUMPY = False
+    logger.warning("NumPy not available - fallback specialist simulation will use basic random")
 
 class QuorumBridge:
     """
@@ -47,7 +57,7 @@ class QuorumBridge:
             Consensus result with confidence and agreement
         """
         # Get specialist outputs
-        specialist_outputs = self._query_specialists(task, data)
+        specialist_outputs: List[SpecialistOutput] = self._query_specialists(task, data)
         
         if len(specialist_outputs) < min_specialists:
             logger.warning(
@@ -88,7 +98,7 @@ class QuorumBridge:
         data: Dict[str, Any]
     ) -> List[SpecialistOutput]:
         """Query available specialists"""
-        outputs = []
+        outputs: List[SpecialistOutput] = []
         
         # If intelligence kernel available, use it
         if self.intelligence_kernel:
@@ -102,22 +112,26 @@ class QuorumBridge:
         
         # Fallback: simulate specialist responses (for when kernel unavailable)
         # In production, this would query actual specialist services
-        import numpy as np
-        
-        specialists = ["lstm_time_series", "transformer_nlp", "random_forest_tabular"]
+        specialists: List[str] = ["lstm_time_series", "transformer_nlp", "random_forest_tabular"]
         
         for spec_id in specialists:
             # Generate realistic prediction based on data
             base_pred = hash(str(data)) % 100 / 100.0
-            noise = np.random.normal(0, 0.1)
-            prediction = np.clip(base_pred + noise, 0, 1)
+            
+            if HAS_NUMPY and np is not None:
+                noise = float(np.random.normal(0, 0.1))
+                prediction = float(np.clip(base_pred + noise, 0, 1))
+            else:
+                # Fallback without numpy
+                noise = random.gauss(0, 0.1)
+                prediction = max(0.0, min(1.0, base_pred + noise))
             
             # Confidence based on data quality
             data_size = len(str(data))
-            confidence = min(0.95, 0.5 + (data_size / 1000))
+            confidence = float(min(0.95, 0.5 + (data_size / 1000)))
             
             # Uncertainty estimation
-            uncertainty = {
+            uncertainty: Dict[str, float] = {
                 "lower": prediction - 0.1,
                 "upper": prediction + 0.1,
                 "std": 0.05
@@ -191,7 +205,7 @@ class QuorumBridge:
         specialist_id: str,
         actual_outcome: float,
         predicted_outcome: float
-    ):
+    ) -> None:
         """
         Update specialist weight based on prediction accuracy
         
@@ -201,8 +215,8 @@ class QuorumBridge:
             predicted_outcome: Predicted result
         """
         # Calculate performance score (inverse of error)
-        error = abs(actual_outcome - predicted_outcome)
-        performance = 1.0 / (1.0 + error)
+        error: float = abs(actual_outcome - predicted_outcome)
+        performance: float = 1.0 / (1.0 + error)
         
         self.quorum_aggregator.update_specialist_weight(specialist_id, performance)
         logger.info(f"Updated {specialist_id} performance: {performance:.3f}")

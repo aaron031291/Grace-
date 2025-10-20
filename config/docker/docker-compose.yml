@@ -1,185 +1,108 @@
-
+version: '3.8'
 
 services:
-  # PostgreSQL for persistent storage
+  # PostgreSQL Database
   postgres:
-    image: postgres:15
-    container_name: grace_postgres
+    image: ankane/pgvector:latest
+    container_name: grace-postgres
     environment:
-      POSTGRES_DB: grace_governance
+      POSTGRES_DB: grace_db
       POSTGRES_USER: grace_user
-      POSTGRES_PASSWORD: grace_pass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-grace_secure_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init_db:/docker-entrypoint-initdb.d
-    networks:
-      - grace_network
+      - ./grace/memory/db_setup.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U grace_user -d grace_governance"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U grace_user -d grace_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - grace-network
 
-  # Redis for caching and event coordination  
+  # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: grace_redis
-    command: redis-server --appendonly yes --requirepass grace_redis_pass --appendfsync everysec
-      # sysctls removed for Codespaces compatibility
+    container_name: grace-redis
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - grace_network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - grace-network
 
-  # MinIO for S3-compatible object storage
-  minio:
-    image: minio/minio:latest
-    container_name: grace_minio
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+  # Grace Application
+  grace-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grace-app
     environment:
-      - MINIO_ROOT_USER=grace_minio_user
-      - MINIO_ROOT_PASSWORD=grace_minio_pass
-    volumes:
-      - minio_data:/data
-    networks:
-      - grace_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  # Qdrant for vector storage and similarity search
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: grace_qdrant
+      - DATABASE_URL=postgresql://grace_user:${POSTGRES_PASSWORD:-grace_secure_password}@postgres:5432/grace_db
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "8000:8000"
     volumes:
-      - qdrant_data:/qdrant/storage
+      - ./grace:/app/grace
+      - ./tests:/app/tests
     networks:
-      - grace_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - grace-network
+    command: python -m grace.memory.production_demo
 
-  # Prometheus for metrics collection
+  # Prometheus (optional - for metrics)
   prometheus:
     image: prom/prometheus:latest
-    container_name: grace_prometheus
+    container_name: grace-prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
     networks:
-      - grace_network
+      - grace-network
+    profiles:
+      - monitoring
 
-  # Grafana for metrics visualization
+  # Grafana (optional - for visualization)
   grafana:
     image: grafana/grafana:latest
-    container_name: grace_grafana
+    container_name: grace-grafana
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=grace_grafana_pass
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     networks:
-      - grace_network
-    depends_on:
-      - prometheus
-
-  # Grace API Service
-  api:
-    build: .
-    container_name: grace_api
-    depends_on:
-      - postgres
-      - redis
-      - minio
-      - qdrant
-    environment:
-      - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace_governance
-      - REDIS_URL=redis://:grace_redis_pass@redis:6379
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=grace_minio_user
-      - S3_SECRET_KEY=grace_minio_pass
-      - VECTOR_URL=http://qdrant:6333
-      - SERVICE_MODE=api
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./grace:/app/grace
-      - ./logs:/app/logs
-    networks:
-      - grace_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Grace Worker Service
-  worker:
-    build: .
-  # container_name removed to allow scaling with replicas
-    depends_on:
-      - postgres
-      - redis
-      - minio
-      - qdrant
-    environment:
-      - DATABASE_URL=postgresql://grace_user:grace_pass@postgres:5432/grace_governance
-      - REDIS_URL=redis://:grace_redis_pass@redis:6379
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=grace_minio_user
-      - S3_SECRET_KEY=grace_minio_pass
-      - VECTOR_URL=http://qdrant:6333
-      - SERVICE_MODE=worker
-      - WORKER_QUEUES=ingestion,embeddings,media
-    volumes:
-      - ./grace:/app/grace
-      - ./logs:/app/logs
-    networks:
-      - grace_network
-    restart: unless-stopped
-    deploy:
-      replicas: 2
+      - grace-network
+    profiles:
+      - monitoring
 
 volumes:
   postgres_data:
-  redis_data:  
-  minio_data:
-  qdrant_data:
+  redis_data:
   prometheus_data:
   grafana_data:
 
 networks:
-  grace_network:
+  grace-network:
     driver: bridge

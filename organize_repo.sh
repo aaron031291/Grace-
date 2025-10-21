@@ -48,10 +48,14 @@ mv init_db database/ 2>/dev/null || true
 # Move test files
 echo "🧪 Moving test files..."
 mkdir -p tests
+# Don't move test_complete_system.py if it's new
 mv test_*.py tests/ 2>/dev/null || true
 mv test_run_log.txt tests/ 2>/dev/null || true
 mv test_reports tests/ 2>/dev/null || true
-mv conftest.py tests/ 2>/dev/null || true
+# Keep conftest.py in tests/
+if [ -f "conftest.py" ]; then
+    mv conftest.py tests/
+fi
 
 # Move configuration files
 echo "⚙️  Moving configuration files..."
@@ -133,7 +137,7 @@ echo "  tests/          - All test files"
 echo "  grace/          - Core application code"
 echo ""
 echo "⚠️  Next steps:"
-echo "  1. Update import paths in affected files"
-echo "  2. Update docker-compose paths"
-echo "  3. Update documentation references"
-echo "  4. Test the application"
+echo "  1. Run validation: python scripts/validate_all_components.py"
+echo "  2. Run tests: python scripts/run_all_tests.py"
+echo "  3. Run with coverage: python scripts/run_all_tests.py --coverage"
+echo "  4. Start service: uvicorn grace.api:app --reload"

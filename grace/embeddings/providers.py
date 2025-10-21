@@ -1,5 +1,5 @@
 """
-Embedding providers - OpenAI, HuggingFace, and local models
+Embedding providers for Grace - Open Source Only
 """
 
 from typing import List, Optional, Any
@@ -67,142 +67,27 @@ class EmbeddingProvider(ABC):
         return embeddings
 
 
-class OpenAIEmbeddings(EmbeddingProvider):
-    """OpenAI embeddings using text-embedding-ada-002 or text-embedding-3-small"""
-    
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        model: str = "text-embedding-3-small",
-        max_retries: int = 3
-    ):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.model = model
-        self.max_retries = max_retries
-        self._dimension = 1536 if "ada-002" in model else 1536  # text-embedding-3-small also 1536
-        
-        if not self.api_key:
-            raise ValueError("OpenAI API key not provided")
-        
-        try:
-            import openai
-            self.client = openai.OpenAI(api_key=self.api_key)
-            logger.info(f"Initialized OpenAI embeddings with model: {model}")
-        except ImportError:
-            raise ImportError("openai package not installed. Install with: pip install openai")
-    
-    @retry_on_error(max_retries=3, delay=1.0)
-    def embed_text(self, text: str) -> np.ndarray:
-        """Embed a single text using OpenAI"""
-        if not text or not text.strip():
-            logger.warning("Empty text provided, returning zero vector")
-            return np.zeros(self._dimension, dtype=np.float32)
-        
-        try:
-            # Truncate if too long (8191 tokens max for ada-002)
-            if len(text) > 8000:
-                text = text[:8000]
-                logger.warning("Text truncated to 8000 characters")
-            
-            response = self.client.embeddings.create(
-                input=text,
-                model=self.model
-            )
-            embedding = np.array(response.data[0].embedding, dtype=np.float32)
-            
-            # Normalize the embedding
-            norm = np.linalg.norm(embedding)
-            if norm > 0:
-                embedding = embedding / norm
-            
-            return embedding
-            
-        except Exception as e:
-            logger.error(f"OpenAI embedding error: {e}")
-            raise
-    
-    @retry_on_error(max_retries=3, delay=1.0)
-    def embed_texts(self, texts: List[str]) -> List[np.ndarray]:
-        """Embed multiple texts using OpenAI (batch API)"""
-        if not texts:
-            return []
-        
-        # Filter empty texts
-        valid_texts = []
-        valid_indices = []
-        for i, text in enumerate(texts):
-            if text and text.strip():
-                valid_texts.append(text[:8000])  # Truncate
-                valid_indices.append(i)
-        
-        if not valid_texts:
-            return [np.zeros(self._dimension, dtype=np.float32) for _ in texts]
-        
-        try:
-            response = self.client.embeddings.create(
-                input=valid_texts,
-                model=self.model
-            )
-            
-            embeddings = [None] * len(texts)
-            for i, idx in enumerate(valid_indices):
-                embedding = np.array(response.data[i].embedding, dtype=np.float32)
-                # Normalize
-                norm = np.linalg.norm(embedding)
-                if norm > 0:
-                    embedding = embedding / norm
-                embeddings[idx] = embedding
-            
-            # Fill empty texts with zero vectors
-            for i, emb in enumerate(embeddings):
-                if emb is None:
-                    embeddings[i] = np.zeros(self._dimension, dtype=np.float32)
-            
-            return embeddings
-            
-        except Exception as e:
-            logger.error(f"OpenAI batch embedding error: {e}")
-            raise
-    
-    @property
-    def dimension(self) -> int:
-        return self._dimension
-
-
 class HuggingFaceEmbeddings(EmbeddingProvider):
-    """HuggingFace sentence transformers embeddings"""
+    """
+    HuggingFace embedding provider using sentence-transformers
     
-    def __init__(
-        self,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-        device: Optional[str] = None
-    ):
-        self.model_name = model_name
-        self._dimension = None
-        
+    Free, open-source, and runs locally without API keys
+    """
+    
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
         try:
             from sentence_transformers import SentenceTransformer
-            
-            self.model = SentenceTransformer(model_name, device=device)
-            self._dimension = self.model.get_sentence_embedding_dimension()
-            
-            logger.info(
-                f"Initialized HuggingFace model: {model_name} "
-                f"(dimension: {self._dimension})"
-            )
+            self.model = SentenceTransformer(model_name)
+            self.dimension = self.model.get_sentence_embedding_dimension()
+            logger.info(f"Loaded HuggingFace model: {model_name}")
         except ImportError:
-            raise ImportError(
-                "sentence-transformers not installed. "
-                "Install with: pip install sentence-transformers"
-            )
-        except Exception as e:
-            logger.error(f"Failed to load HuggingFace model: {e}")
+            logger.error("sentence-transformers not installed. Install with: pip install sentence-transformers")
             raise
     
     def embed_text(self, text: str) -> np.ndarray:
         """Embed a single text using HuggingFace"""
         if not text or not text.strip():
-            return np.zeros(self._dimension, dtype=np.float32)
+            return np.zeros(self.dimension, dtype=np.float32)
         
         try:
             embedding = self.model.encode(
@@ -239,28 +124,34 @@ class HuggingFaceEmbeddings(EmbeddingProvider):
     
     @property
     def dimension(self) -> int:
-        return self._dimension if self._dimension else 384
+        return self.dimension if self.dimension else 384
 
 
 class LocalEmbeddings(EmbeddingProvider):
-    """Local embeddings using lightweight models (fallback)"""
+    """
+    Local embedding provider using transformers library directly
     
-    def __init__(self):
-        self._dimension = 384
-        
+    Completely self-contained, no external API calls
+    """
+    
+    def __init__(self, model_name: str = "bert-base-uncased"):
         try:
-            from sentence_transformers import SentenceTransformer
-            # Use smallest model for fallback
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("Loaded local embedding model (all-MiniLM-L6-v2)")
-        except Exception as e:
-            logger.warning(f"Could not load sentence-transformers: {e}")
-            self.model = None
+            from transformers import AutoTokenizer, AutoModel
+            import torch
+            
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModel.from_pretrained(model_name)
+            self.dimension = self.model.config.hidden_size
+            
+            logger.info(f"Loaded local model: {model_name}")
+        except ImportError:
+            logger.error("transformers not installed. Install with: pip install transformers torch")
+            raise
     
     def embed_text(self, text: str) -> np.ndarray:
         """Embed a single text locally"""
         if not text or not text.strip():
-            return np.zeros(self._dimension, dtype=np.float32)
+            return np.zeros(self.dimension, dtype=np.float32)
         
         if self.model:
             try:
@@ -279,7 +170,7 @@ class LocalEmbeddings(EmbeddingProvider):
         hash_obj = hashlib.sha256(text.encode())
         seed = int.from_bytes(hash_obj.digest()[:4], 'little')
         np.random.seed(seed)
-        embedding = np.random.randn(self._dimension).astype(np.float32)
+        embedding = np.random.randn(self.dimension).astype(np.float32)
         # Normalize
         norm = np.linalg.norm(embedding)
         if norm > 0:
@@ -310,4 +201,4 @@ class LocalEmbeddings(EmbeddingProvider):
     
     @property
     def dimension(self) -> int:
-        return self._dimension
+        return self.dimension

@@ -73,14 +73,10 @@ class AuthSettings(BaseSettings):
 
 
 class EmbeddingSettings(BaseSettings):
-    """Embedding provider configuration"""
-    provider: Literal["openai", "huggingface", "local"] = Field(
+    """Embedding provider configuration - Open Source Only"""
+    provider: Literal["huggingface", "local"] = Field(
         default="huggingface",
-        description="Embedding provider"
-    )
-    openai_api_key: Optional[str] = Field(
-        default=None,
-        description="OpenAI API key"
+        description="Embedding provider (OpenAI removed)"
     )
     huggingface_model: str = Field(
         default="sentence-transformers/all-MiniLM-L6-v2",
@@ -92,14 +88,6 @@ class EmbeddingSettings(BaseSettings):
         le=1536,
         description="Embedding dimension"
     )
-    
-    @field_validator('openai_api_key')
-    @classmethod
-    def validate_openai_key(cls, v: Optional[str], info) -> Optional[str]:
-        values = info.data
-        if values.get('provider') == 'openai' and not v:
-            raise ValueError("OpenAI API key required when provider is 'openai'")
-        return v
     
     model_config = SettingsConfigDict(env_prefix="EMBEDDING_")
 

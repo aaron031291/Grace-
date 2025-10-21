@@ -14,7 +14,9 @@ import argparse
 import sqlite3
 import re
 
-MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "migrations")
+MIGRATIONS_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "database", "migrations"
+)
 
 
 def _apply_sql_sqlite(db_path: str, sql_text: str):
@@ -63,6 +65,11 @@ def main(dry_run: bool = False):
     sqlite_path = os.environ.get("GRACE_SQLITE_PATH", "./grace_dev.sqlite3")
 
     files = sorted(glob.glob(os.path.join(MIGRATIONS_DIR, "*.sql")))
+    if not files:
+        raise AssertionError(
+            f"No migration files found in {MIGRATIONS_DIR}."
+            " Ensure the path is correct before running the script."
+        )
     print(f"Found {len(files)} migration files")
 
     for path in files:

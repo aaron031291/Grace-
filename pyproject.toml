@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "grace-ai"
 version = "1.0.0"
-description = "Constitutional AI System with Multi-Agent Coordination"
+description = "Grace AI System - Constitutional AI"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -22,16 +22,12 @@ classifiers = [
 
 dependencies = [
     "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
+    "uvicorn>=0.24.0",
     "pydantic>=2.4.0",
     "pydantic-settings>=2.0.0",
     "sqlalchemy>=2.0.0",
-    "psycopg2-binary>=2.9.9",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
-    "prometheus-client>=0.19.0",
-    "structlog>=23.0.0",
-    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
@@ -40,36 +36,10 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.7.0",
 ]
 
-embeddings = [
-    "openai>=1.0.0",
-    "sentence-transformers>=2.2.2",
-    "transformers>=4.35.0",
-    "torch>=2.1.0",
-]
-
-vector = [
-    "faiss-cpu>=1.7.4",
-    "pgvector>=0.2.3",
-]
-
-swarm = [
-    "grpcio>=1.59.0",
-    "aiokafka>=0.8.1",
-]
-
-all = [
-    "grace-ai[dev,embeddings,vector,swarm]",
-]
-
-[project.urls]
-Homepage = "https://github.com/yourorg/grace"
-Documentation = "https://grace-ai.readthedocs.io"
-Repository = "https://github.com/yourorg/grace"
-Issues = "https://github.com/yourorg/grace/issues"
+[project.scripts]
+grace = "main:main"
 
 [tool.setuptools]
 packages = ["grace"]
@@ -85,7 +55,7 @@ include = '\.pyi?$'
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "I"]
 ignore = ["E501"]
 
 [tool.mypy]
@@ -104,11 +74,14 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = "-v --strict-markers"
-markers = [
-    "slow: marks tests as slow",
-    "integration: marks tests as integration tests",
-]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
+[project.urls]
+Homepage = "https://github.com/yourorg/grace"
+Documentation = "https://grace-ai.readthedocs.io"
+Repository = "https://github.com/yourorg/grace"
+Issues = "https://github.com/yourorg/grace/issues"

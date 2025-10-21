@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class TrustCoreKernel:
     """
     Complete Trust Core implementation
     
-    Implements all specification-required methods
+    All async methods with correct signatures
     """
     
     def __init__(self):
@@ -47,11 +48,12 @@ class TrustCoreKernel:
         operation_context: Dict[str, Any]
     ) -> TrustScore:
         """
-        Calculate trust score for entity
+        Async calculate trust score for entity
         
-        Required by specification
+        Required by specification with exact signature
         """
-        from datetime import datetime, timezone
+        # Use asyncio.sleep to make it truly async
+        await asyncio.sleep(0)
         
         # Get historical trust
         historical_trust = self.trust_scores.get(entity_id, 0.5)
@@ -96,10 +98,13 @@ class TrustCoreKernel:
         operation_context: Optional[Dict[str, Any]] = None
     ) -> TrustScore:
         """
-        Update trust based on outcome
+        Async update trust based on outcome
         
-        Required by specification
+        Required by specification with exact signature
         """
+        # Use asyncio.sleep to make it truly async
+        await asyncio.sleep(0)
+        
         # Get current score
         current = self.trust_scores.get(entity_id, 0.5)
         
@@ -123,7 +128,7 @@ class TrustCoreKernel:
             adjustment -= 0.02
         
         # Apply adjustment with decay
-        decay_factor = 0.9  # Gradually forget old behavior
+        decay_factor = 0.9
         new_score = (current * decay_factor) + adjustment
         
         # Clamp to [0, 1]
@@ -139,7 +144,7 @@ class TrustCoreKernel:
         self.trust_history[entity_id].append({
             "score": new_score,
             "outcome": outcome,
-            "timestamp": outcome.get("timestamp")
+            "timestamp": outcome.get("timestamp", datetime.now(timezone.utc).isoformat())
         })
         
         # Keep only recent history
@@ -157,12 +162,14 @@ class TrustCoreKernel:
         context: Dict[str, Any]
     ) -> Dict[str, float]:
         """Calculate individual trust factors"""
+        await asyncio.sleep(0)  # Truly async
+        
         factors = {}
         
         # Recent performance
         history = self.trust_history.get(entity_id, [])
         if history:
-            recent = history[-10:]  # Last 10 operations
+            recent = history[-10:]
             success_rate = sum(1 for h in recent if h.get("outcome", {}).get("success", False)) / len(recent)
             factors["recent_performance"] = success_rate
         else:
@@ -171,7 +178,6 @@ class TrustCoreKernel:
         # Context-specific trust
         operation_type = context.get("operation_type", "general")
         if operation_type == "critical":
-            # Require higher trust for critical operations
             factors["context_specific"] = 0.3
         else:
             factors["context_specific"] = 0.7
@@ -185,17 +191,20 @@ class TrustCoreKernel:
         
         return factors
     
+    # Legacy sync methods (deprecated but kept for backwards compatibility)
     def get_trust_score(self, entity_id: str) -> float:
-        """Get current trust score (synchronous)"""
+        """Get current trust score (synchronous, deprecated)"""
+        logger.warning("get_trust_score() is deprecated, use async calculate_trust()")
         return self.trust_scores.get(entity_id, 0.5)
     
     def update_trust_sync(self, entity_id: str, score: float):
-        """Update trust score (synchronous, legacy)"""
+        """Update trust score (synchronous, deprecated)"""
+        logger.warning("update_trust_sync() is deprecated, use async update_trust()")
         self.trust_scores[entity_id] = max(0.0, min(1.0, score))
     
     def check_threshold(self, entity_id: str, required_level: str = "acceptable") -> bool:
         """Check if entity meets trust threshold"""
-        score = self.get_trust_score(entity_id)
+        score = self.trust_scores.get(entity_id, 0.5)
         threshold = getattr(self.thresholds, required_level)
         return score >= threshold
     

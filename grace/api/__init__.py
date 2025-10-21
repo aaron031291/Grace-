@@ -86,6 +86,7 @@ def create_app() -> FastAPI:
     from grace.api.v1.tasks import router as tasks_router
     from grace.api.v1.websocket import router as websocket_router
     from grace.api.v1.logs import router as logs_router
+    from grace.api.v1.llm import router as llm_router  # NEW
     from grace.api.public import router as public_router
     
     app.include_router(auth_router, prefix=settings.api_prefix)
@@ -95,8 +96,10 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router, prefix=settings.api_prefix)
     app.include_router(websocket_router, prefix=settings.api_prefix)
     app.include_router(logs_router, prefix=settings.api_prefix)
+    app.include_router(llm_router, prefix=settings.api_prefix)  # NEW
     app.include_router(public_router, prefix=settings.api_prefix)
     
+    # Startup event
     @app.on_event("startup")
     async def startup_event():
         logger.info(f"Starting {settings.api_title} v{settings.api_version}")
@@ -112,6 +115,11 @@ def create_app() -> FastAPI:
         
         init_db()
         logger.info("Database initialized")
+        
+        # Initialize LLM service
+        from grace.api.v1.llm import initialize_llm_service
+        await initialize_llm_service()
+        logger.info("LLM service ready")
         
         deployment_info = settings.get_deployment_info()
         logger.info(f"Deployment info: {deployment_info}")

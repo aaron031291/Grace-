@@ -1,5 +1,9 @@
 # Grace AI System
 
+[![CI/CD](https://github.com/yourorg/grace/workflows/Grace%20CI%2FCD/badge.svg)](https://github.com/yourorg/grace/actions)
+[![Quick Check](https://github.com/yourorg/grace/workflows/Quick%20Check/badge.svg)](https://github.com/yourorg/grace/actions)
+[![codecov](https://codecov.io/gh/yourorg/grace/branch/main/graph/badge.svg)](https://codecov.io/gh/yourorg/grace)
+
 **Status**: 🚧 **Active Development** - Core features complete, advanced features in progress
 
 Grace is a constitutional AI system with multi-agent coordination, governance framework, and advanced reasoning capabilities.
@@ -213,6 +217,33 @@ curl -X POST http://localhost:8000/api/v1/documents/search \
     "k": 10
   }'
 ```
+
+---
+
+## 📊 CI/CD Status
+
+Our GitHub Actions workflows ensure code quality:
+
+- ✅ **Lint & Type Check**: Code formatting and type safety
+- ✅ **Test Suite**: Unit and integration tests
+- ✅ **Security Scan**: Dependency and code security
+- ✅ **Coverage**: Code coverage tracking
+- ✅ **Build Check**: Package build verification
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run specific test class
+pytest tests/test_complete_system.py::TestEventSystem -v
+
+# Run with coverage
+pytest --cov=grace --cov-report=html
+```
+
+See [IMPLEMENTATION_STATUS_ACTUAL.md](documentation/IMPLEMENTATION_STATUS_ACTUAL.md) for detailed status.
 
 ---
 

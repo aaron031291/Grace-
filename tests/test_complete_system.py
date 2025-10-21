@@ -5,6 +5,7 @@ Tests all newly implemented async components
 
 import pytest
 import asyncio
+import os
 from datetime import datetime, timezone
 
 # Test all async memory layers
@@ -27,13 +28,18 @@ from grace.trust.core import TrustCoreKernel, TrustScore
 from grace.llm import ModelManager, InferenceRouter, ModelConfig, LLMProvider
 
 
+# Get database URLs from environment
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/grace_test")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+
+
 class TestAsyncMemoryLayers:
     """Test async memory implementations"""
     
     @pytest.mark.asyncio
     async def test_lightning_memory_operations(self):
         """Test Lightning memory (Redis) basic operations"""
-        memory = AsyncLightningMemory()
+        memory = AsyncLightningMemory(redis_url=REDIS_URL)
         await memory.connect()
         
         try:
@@ -62,10 +68,13 @@ class TestAsyncMemoryLayers:
     @pytest.mark.asyncio
     async def test_fusion_memory_patterns(self):
         """Test Fusion memory (Postgres) pattern storage"""
-        memory = AsyncFusionMemory("postgresql://localhost/grace_test")
+        memory = AsyncFusionMemory(DATABASE_URL)
         
         try:
             await memory.connect()
+            
+            if not memory._connected:
+                pytest.skip("Postgres not available")
             
             # Store pattern
             pattern_id = await memory.store_pattern(
@@ -91,10 +100,13 @@ class TestAsyncMemoryLayers:
     @pytest.mark.asyncio
     async def test_fusion_memory_interactions(self):
         """Test interaction logging"""
-        memory = AsyncFusionMemory("postgresql://localhost/grace_test")
+        memory = AsyncFusionMemory(DATABASE_URL)
         
         try:
             await memory.connect()
+            
+            if not memory._connected:
+                pytest.skip("Postgres not available")
             
             # Record interaction
             interaction_id = await memory.record_interaction(
@@ -120,10 +132,13 @@ class TestAsyncMemoryLayers:
     @pytest.mark.asyncio
     async def test_immutable_logs_chaining(self):
         """Test immutable log cryptographic chaining"""
-        logs = AsyncImmutableLogs("postgresql://localhost/grace_test", batch_size=2)
+        logs = AsyncImmutableLogs(DATABASE_URL, batch_size=2)
         
         try:
             await logs.connect()
+            
+            if not logs.pool:
+                pytest.skip("Postgres not available")
             
             # Log multiple entries
             hash1 = await logs.log(

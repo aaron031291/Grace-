@@ -1,5 +1,5 @@
 """
-EventBus - Multi-agent signal routing for distributed Grace instances
+Event Bus - Specification-compliant implementation
 """
 
 from typing import Dict, List, Any, Callable, Optional
@@ -9,6 +9,9 @@ from collections import defaultdict
 import uuid
 import logging
 import asyncio
+
+from grace.events.schema import GraceEvent
+from grace.events.factory import GraceEventFactory
 
 logger = logging.getLogger(__name__)
 
@@ -27,62 +30,71 @@ class Event:
 
 class EventBus:
     """
-    Central event bus for multi-agent signal routing
-    Enables pub/sub communication between distributed Grace components
+    Specification-compliant event bus
     """
     
     def __init__(self):
-        self.subscribers: Dict[str, List[Callable]] = defaultdict(list)
-        self.event_history: List[Event] = []
-        self.async_queue: asyncio.Queue = asyncio.Queue()
-        self.max_history = 10000
-        logger.info("EventBus initialized")
-    
-    def subscribe(self, event_type: str, handler: Callable):
-        """Subscribe to an event type"""
-        self.subscribers[event_type].append(handler)
-        logger.debug(f"Subscribed handler to event type: {event_type}")
-    
-    def unsubscribe(self, event_type: str, handler: Callable):
-        """Unsubscribe from an event type"""
+        self.subscribers: Dict[str, List[Callable]] = {}
+        self.events: List[GraceEvent] = []
+        self.factory = GraceEventFactory()
+        
+        # Idempotency tracking
+        self.processed_events: set = set()
+        
+    def subscribe(self, event_type: str, callback: Callable):
+        """Subscribe to event type"""
+        if event_type not in self.subscribers:
+            self.subscribers[event_type] = []
+        self.subscribers[event_type].append(callback)
+        
+    def publish(self, event: GraceEvent) -> bool:
+        """
+        Publish GraceEvent (not dict!)
+        
+        Specification-compliant publishing
+        """
+        # Idempotency check
+        if event.idempotency_key and event.idempotency_key in self.processed_events:
+            logger.debug(f"Skipping duplicate event: {event.idempotency_key}")
+            return False
+        
+        # Store event
+        self.events.append(event)
+        
+        # Mark as processed
+        if event.idempotency_key:
+            self.processed_events.add(event.idempotency_key)
+        
+        # Route to subscribers
+        event_type = event.event_type
         if event_type in self.subscribers:
-            self.subscribers[event_type] = [
-                h for h in self.subscribers[event_type] if h != handler
-            ]
-            logger.debug(f"Unsubscribed handler from event type: {event_type}")
+            for callback in self.subscribers[event_type]:
+                try:
+                    callback(event)
+                except Exception as e:
+                    logger.error(f"Event callback error: {e}")
+        
+        # Route by targets
+        for target in event.targets:
+            if target in self.subscribers:
+                for callback in self.subscribers[target]:
+                    try:
+                        callback(event)
+                    except Exception as e:
+                        logger.error(f"Target callback error: {e}")
+        
+        return True
     
-    def publish(
+    def create_and_publish(
         self,
         event_type: str,
         payload: Dict[str, Any],
-        source: str = "system",
-        priority: int = 0,
-        metadata: Optional[Dict] = None
-    ):
-        """Publish an event to all subscribers"""
-        event = Event(
-            event_id=str(uuid.uuid4()),
-            event_type=event_type,
-            source=source,
-            payload=payload,
-            priority=priority,
-            metadata=metadata or {}
-        )
-        
-        # Store in history
-        self._add_to_history(event)
-        
-        # Notify subscribers
-        handlers = self.subscribers.get(event_type, [])
-        wildcard_handlers = self.subscribers.get("*", [])
-        
-        for handler in handlers + wildcard_handlers:
-            try:
-                handler(event)
-            except Exception as e:
-                logger.error(f"Event handler error for {event_type}: {e}")
-        
-        logger.debug(f"Published event: {event_type} from {source}")
+        **kwargs
+    ) -> GraceEvent:
+        """Create and publish event in one step"""
+        event = self.factory.create_event(event_type, payload, **kwargs)
+        self.publish(event)
+        return event
     
     async def publish_async(
         self,

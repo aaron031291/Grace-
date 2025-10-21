@@ -1,13 +1,10 @@
 """
-Integration modules for connecting Grace components
+Grace Integration Layer
 """
 
-from .event_bus import EventBus
-from .event_bus_integration import AVNEventIntegration
-from .swarm_transcendence_integration import SwarmTranscendenceIntegration
+from .event_bus import EventBus, get_event_bus
 
 __all__ = [
     'EventBus',
-    'AVNEventIntegration',
-    'SwarmTranscendenceIntegration'
+    'get_event_bus'
 ]

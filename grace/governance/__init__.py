@@ -1,25 +1,11 @@
 """
-Grace Governance - Policy and collaboration management
+Grace Governance System
 """
 
-from .models import (
-    Policy,
-    PolicyStatus,
-    PolicyVersion,
-    CollaborationSession,
-    SessionMessage,
-    Task,
-    TaskStatus,
-    TaskPriority
-)
+from .engine import GovernanceEngine, ValidationResult, EscalationResult
 
 __all__ = [
-    'Policy',
-    'PolicyStatus',
-    'PolicyVersion',
-    'CollaborationSession',
-    'SessionMessage',
-    'Task',
-    'TaskStatus',
-    'TaskPriority'
+    'GovernanceEngine',
+    'ValidationResult',
+    'EscalationResult'
 ]

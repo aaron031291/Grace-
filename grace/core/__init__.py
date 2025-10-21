@@ -32,6 +32,7 @@ from .gtrace import (
     create_grace_tracer,
     trace_operation,
 )
+from .unified_service import create_unified_app
 
 __all__ = [
     "DecisionSubject",
@@ -60,4 +61,5 @@ __all__ = [
     "TraceStatus",
     "create_grace_tracer",
     "trace_operation",
+    "create_unified_app",
 ]

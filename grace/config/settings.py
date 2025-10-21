@@ -1,8 +1,8 @@
 """
-Centralized configuration using Pydantic BaseSettings
+Configuration settings for Grace system
 """
 
-from typing import Optional, Literal, Dict, Any
+from typing import Optional, Literal, Dict, Any, List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
@@ -293,9 +293,6 @@ class Settings(BaseSettings):
             
             if not self.rate_limit.enabled:
                 issues.append("WARNING: Rate limiting disabled in production")
-            
-            if self.embedding.provider == "openai" and not self.embedding.openai_api_key:
-                issues.append("ERROR: OpenAI provider selected but no API key")
         
         return issues
     
@@ -323,13 +320,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """
-    Get cached settings instance
-    
-    Usage:
-        from grace.config import get_settings
-        settings = get_settings()
-    """
+    """Get cached settings instance"""
     settings = Settings()
     
     # Validate production config
@@ -356,3 +347,17 @@ def _get_setting_value(key: str, default=None):
     )
     settings = get_settings()
     return getattr(settings, key, default)
+
+
+__all__ = [
+    'Settings',
+    'get_settings',
+    'DatabaseSettings',
+    'AuthSettings',
+    'EmbeddingSettings',
+    'VectorStoreSettings',
+    'SwarmSettings',
+    'TranscendenceSettings',
+    'ObservabilitySettings',
+    'RateLimitSettings',
+]

@@ -1,5 +1,5 @@
 """
-Structured logging middleware using structlog
+Structured logging middleware
 """
 
 from typing import Callable, Set, Optional, Any
@@ -9,30 +9,14 @@ import time
 import logging
 import uuid
 
-logger = logging.getLogger(__name__)
-
-# Try to import verify_token for JWT decoding (optional)
+# Try to import structlog, fall back to standard logging
 try:
-    from grace.auth.security import verify_token
-except Exception:
-    verify_token = None  # type: ignore
-
-from grace.config import get_settings
-
-# Configure a minimal structlog config if not configured elsewhere
-def setup_structlog(json_output: bool = True, log_level: str = "INFO"):
-    processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso", utc=True),
-    ]
-    if json_output:
-        processors.append(structlog.processors.JSONRenderer())
-    else:
-        processors.append(structlog.dev.ConsoleRenderer())
-    structlog.configure(processors=processors)
-
-logger = structlog.get_logger()
+    import structlog
+    HAS_STRUCTLOG = True
+    logger = structlog.get_logger()
+except ImportError:
+    HAS_STRUCTLOG = False
+    logger = logging.getLogger(__name__)
 
 
 def setup_logging(
@@ -41,30 +25,35 @@ def setup_logging(
     log_file: Optional[str] = None
 ) -> None:
     """Setup global logging configuration"""
-    import structlog
-    
-    processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso", utc=True),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-    ]
-    
-    if json_output:
-        processors.append(structlog.processors.JSONRenderer())
+    if HAS_STRUCTLOG:
+        processors = [
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso", utc=True),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+        ]
+        
+        if json_output:
+            processors.append(structlog.processors.JSONRenderer())
+        else:
+            processors.append(structlog.dev.ConsoleRenderer())
+        
+        structlog.configure(
+            processors=processors,
+            wrapper_class=structlog.make_filtering_bound_logger(
+                getattr(logging, log_level.upper())
+            ),
+            context_class=dict,
+            logger_factory=structlog.PrintLoggerFactory(),
+            cache_logger_on_first_use=True,
+        )
     else:
-        processors.append(structlog.dev.ConsoleRenderer())
-    
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, log_level.upper())
-        ),
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
+        # Fallback to basic logging
+        logging.basicConfig(
+            level=getattr(logging, log_level.upper()),
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
     
     if log_file:
         file_handler = logging.FileHandler(log_file)
@@ -124,16 +113,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def get_request_logger(request: Request) -> structlog.BoundLogger:
-    """
-    Get a logger bound with request context
-    
-    Usage in endpoints:
-        logger = get_request_logger(request)
-        logger.info("processing_data", item_count=10)
-    """
-    return structlog.get_logger().bind(
-        request_id=request.headers.get("X-Request-ID", "unknown"),
-        path=request.url.path,
-        method=request.method
-    )
+def get_request_logger(request: Request):
+    """Get logger for request (works with or without structlog)"""
+    if HAS_STRUCTLOG:
+        return structlog.get_logger().bind(
+            request_id=request.headers.get("X-Request-ID"),
+            path=request.url.path,
+            method=request.method
+        )
+    else:
+        return logger

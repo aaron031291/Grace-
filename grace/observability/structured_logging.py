@@ -1,15 +1,20 @@
 """
-Structured logging with consistent format for Grace system
+Structured logging for Grace system
 """
 
-import logging
-import json
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
-import structlog
 from contextlib import contextmanager
 import uuid
+import logging
+
+# Try to import structlog, fall back to standard logging
+try:
+    import structlog
+    HAS_STRUCTLOG = True
+except ImportError:
+    HAS_STRUCTLOG = False
 
 logger = logging.getLogger(__name__)
 
@@ -49,147 +54,38 @@ class StructuredLogger:
         self.log_aggregator = log_aggregator
         self.trace_id = str(uuid.uuid4())
         
-        self.log = structlog.get_logger(component)
+        if HAS_STRUCTLOG:
+            self.log = structlog.get_logger(component)
+        else:
+            self.log = logging.getLogger(component)
     
-    def _create_context(
-        self,
-        message: str,
-        severity: str,
-        user_id: Optional[str] = None,
-        decision_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        **kwargs
-    ) -> LogContext:
-        """Create log context"""
-        return LogContext(
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            component=self.component,
-            trace_id=self.trace_id,
-            user_id=user_id,
-            decision_id=decision_id,
-            session_id=session_id,
-            severity=severity,
-            message=message,
-            metadata=kwargs
-        )
-    
-    def info(
-        self,
-        message: str,
-        user_id: Optional[str] = None,
-        decision_id: Optional[str] = None,
-        **kwargs
-    ):
+    def info(self, message: str, **kwargs: Any):
         """Log info message"""
-        context = self._create_context(
-            message, "INFO", user_id, decision_id, **kwargs
-        )
-        self._emit_log(context)
+        if HAS_STRUCTLOG:
+            self.log.info(message, **kwargs)
+        else:
+            self.log.info(message, extra=kwargs)
     
-    def warning(
-        self,
-        message: str,
-        user_id: Optional[str] = None,
-        decision_id: Optional[str] = None,
-        **kwargs
-    ):
+    def warning(self, message: str, **kwargs: Any):
         """Log warning message"""
-        context = self._create_context(
-            message, "WARNING", user_id, decision_id, **kwargs
-        )
-        self._emit_log(context)
+        if HAS_STRUCTLOG:
+            self.log.warning(message, **kwargs)
+        else:
+            self.log.warning(message, extra=kwargs)
     
-    def error(
-        self,
-        message: str,
-        error: Optional[Exception] = None,
-        user_id: Optional[str] = None,
-        decision_id: Optional[str] = None,
-        **kwargs
-    ):
+    def error(self, message: str, **kwargs: Any):
         """Log error message"""
-        if error:
-            kwargs['error_type'] = type(error).__name__
-            kwargs['error_message'] = str(error)
-        
-        context = self._create_context(
-            message, "ERROR", user_id, decision_id, **kwargs
-        )
-        self._emit_log(context)
+        if HAS_STRUCTLOG:
+            self.log.error(message, **kwargs)
+        else:
+            self.log.error(message, extra=kwargs)
     
-    def critical(
-        self,
-        message: str,
-        error: Optional[Exception] = None,
-        user_id: Optional[str] = None,
-        decision_id: Optional[str] = None,
-        **kwargs
-    ):
-        """Log critical message"""
-        if error:
-            kwargs['error_type'] = type(error).__name__
-            kwargs['error_message'] = str(error)
-        
-        context = self._create_context(
-            message, "CRITICAL", user_id, decision_id, **kwargs
-        )
-        self._emit_log(context)
-    
-    def _emit_log(self, context: LogContext):
-        """Emit log to all configured destinations"""
-        log_data = context.to_dict()
-        
-        # 1. Emit to structlog
-        log_func = getattr(self.log, context.severity.lower())
-        log_func(
-            context.message,
-            **{k: v for k, v in log_data.items() if k not in ['message', 'severity']}
-        )
-        
-        # 2. Send to immutable logs (async for critical/error)
-        if self.immutable_logs and context.severity in ['ERROR', 'CRITICAL']:
-            try:
-                self.immutable_logs.log_constitutional_operation(
-                    operation_type=f"log_{context.severity.lower()}",
-                    actor=f"component:{self.component}",
-                    action={"message": context.message, "metadata": context.metadata},
-                    result={"logged": True},
-                    severity=context.severity.lower(),
-                    tags=[self.component, context.severity.lower(), "audit"]
-                )
-            except Exception as e:
-                logger.error(f"Failed to write to immutable logs: {e}")
-        
-        # 3. Send to log aggregator
-        if self.log_aggregator:
-            try:
-                self._send_to_aggregator(log_data)
-            except Exception as e:
-                logger.error(f"Failed to send to log aggregator: {e}")
-    
-    def _send_to_aggregator(self, log_data: Dict[str, Any]):
-        """Send log to aggregator (Loki, Elasticsearch)"""
-        # Loki format
-        if hasattr(self.log_aggregator, 'push'):
-            self.log_aggregator.push({
-                "streams": [{
-                    "stream": {
-                        "component": self.component,
-                        "severity": log_data['severity']
-                    },
-                    "values": [[
-                        str(int(datetime.fromisoformat(log_data['timestamp']).timestamp() * 1e9)),
-                        json.dumps(log_data)
-                    ]]
-                }]
-            })
-        
-        # Elasticsearch format
-        elif hasattr(self.log_aggregator, 'index'):
-            self.log_aggregator.index(
-                index=f"grace-logs-{datetime.now():%Y.%m.%d}",
-                body=log_data
-            )
+    def debug(self, message: str, **kwargs: Any):
+        """Log debug message"""
+        if HAS_STRUCTLOG:
+            self.log.debug(message, **kwargs)
+        else:
+            self.log.debug(message, extra=kwargs)
     
     @contextmanager
     def span(self, operation: str, **kwargs: Any):
@@ -205,7 +101,7 @@ class StructuredLogger:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.error(
                 f"Failed {operation}",
-                error=e,
+                error=str(e),
                 span_id=span_id,
                 duration_seconds=duration,
                 **kwargs
@@ -219,52 +115,3 @@ class StructuredLogger:
                 duration_seconds=duration,
                 **kwargs
             )
-    
-    def set_trace_id(self, trace_id: str):
-        """Set custom trace ID"""
-        self.trace_id = trace_id
-    
-    def new_trace(self) -> str:
-        """Generate new trace ID"""
-        self.trace_id = str(uuid.uuid4())
-        return self.trace_id
-
-
-def setup_logging(
-    log_level: str = "INFO",
-    json_output: bool = True,
-    log_file: Optional[str] = None
-) -> None:
-    """Setup global logging configuration"""
-    processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso", utc=True),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-    ]
-    
-    if json_output:
-        processors.append(structlog.processors.JSONRenderer())
-    else:
-        processors.append(structlog.dev.ConsoleRenderer())
-    
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, log_level.upper())
-        ),
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
-    
-    # Setup file handler if specified
-    if log_file:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(
-            logging.Formatter('%(message)s')
-        )
-        logging.root.addHandler(file_handler)
-    
-    logger.info(f"Logging configured: level={log_level}, json={json_output}")

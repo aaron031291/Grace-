@@ -34,6 +34,11 @@ from .gtrace import (
 )
 from .unified_service import create_unified_app
 
+# Lazy import - only import when needed
+def create_unified_app():
+    from .unified_service import create_unified_app as _create
+    return _create()
+
 __all__ = [
     "DecisionSubject",
     "EventType",

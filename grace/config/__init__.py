@@ -1,5 +1,5 @@
 """
-Grace Configuration Management - Centralized settings
+Configuration module for Grace
 """
 
 from .settings import (
@@ -9,8 +9,6 @@ from .settings import (
     AuthSettings,
     EmbeddingSettings,
     VectorStoreSettings,
-    SwarmSettings,
-    ObservabilitySettings
 )
 
 __all__ = [
@@ -20,6 +18,4 @@ __all__ = [
     'AuthSettings',
     'EmbeddingSettings',
     'VectorStoreSettings',
-    'SwarmSettings',
-    'ObservabilitySettings'
 ]

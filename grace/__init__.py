@@ -1,25 +1,19 @@
 """
 Grace AI System - Constitutional AI with Multi-Agent Coordination
-
-A production-ready AI system with:
-- Constitutional governance framework
-- Multi-agent coordination
-- Vector-based semantic search
-- Real-time communication
-- Self-healing capabilities
-- Advanced reasoning (quantum-inspired, scientific discovery)
 """
 
 __version__ = "1.0.0"
 __author__ = "Grace AI Team"
 
-# Core imports for convenience
-from grace.config import get_settings
+# No eager imports - everything is lazy loaded
+__all__ = ['__version__', '__author__']
 
-__all__ = [
-    '__version__',
-    'get_settings',
-]
+# Lazy imports to avoid circular dependencies at module level
+def get_settings():
+    """Get settings (lazy import)"""
+    from grace.config import get_settings as _get_settings
+    return _get_settings()
+
 
 # Core Grace components
 from . import core

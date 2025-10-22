@@ -16,22 +16,16 @@ from grace.schemas.errors import (
     TTLExpiredError,
     DeadLetterError
 )
+from grace.observability.metrics import get_metrics_collector
+from grace.observability.structured_logging import StructuredLogger
+import time
 
 logger = logging.getLogger(__name__)
 
 
 class EventBus:
     """
-    Canonical event bus implementation
-    
-    Features:
-    - Emit events with idempotency
-    - Subscribe to events (sync or async handlers)
-    - Wait for events with predicates
-    - Request/response pattern
-    - TTL expiry handling
-    - Dead letter queue
-    - Backpressure management
+    Canonical event bus implementation with metrics
     """
     
     def __init__(
@@ -39,25 +33,24 @@ class EventBus:
         max_queue_size: int = 10000,
         dlq_max_size: int = 1000,
         enable_ttl_cleanup: bool = True
-    ):
-        self.subscribers: Dict[str, List[Callable]] = {}
-        self.processed_events: Dict[str, GraceEvent] = {}  # idempotency_key -> event
+    ) -> None:
+        self.subscribers: Dict[str, List[Callable[[GraceEvent], Any]]] = {}
+        self.processed_events: Dict[str, GraceEvent] = {}
         self.pending_queue: deque = deque(maxlen=max_queue_size)
         self.dead_letter_queue: deque = deque(maxlen=dlq_max_size)
         
         self._waiters: Dict[str, asyncio.Future] = {}
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock = asyncio.Lock()
         
         self.max_queue_size = max_queue_size
         self.dlq_max_size = dlq_max_size
         self.enable_ttl_cleanup = enable_ttl_cleanup
         
         # Metrics
-        self.events_published = 0
-        self.events_processed = 0
-        self.events_failed = 0
-        self.events_expired = 0
-        self.events_deduplicated = 0
+        self.metrics = get_metrics_collector()
+        
+        # Structured logging
+        self.logger = StructuredLogger("event_bus")
         
         # Background cleanup task
         self._cleanup_task: Optional[asyncio.Task] = None
@@ -72,24 +65,38 @@ class EventBus:
         """
         Emit an event with idempotency checks
         
+        Args:
+            event: GraceEvent to emit (NOT a dict!)
+            skip_idempotency: Whether to skip idempotency check
+        
         Returns:
             True if event was emitted, False if duplicate
         
         Raises:
+            TypeError: If event is not a GraceEvent
             BackpressureError: If queue is full
             TTLExpiredError: If event already expired
         """
+        start_time = time.time()
+        
         # Type check
         if not isinstance(event, GraceEvent):
-            raise TypeError("EventBus.emit expects GraceEvent")
+            raise TypeError(f"EventBus.emit expects GraceEvent, got {type(event)}")
+        
+        # Log with correlation ID
+        logger = self.logger.with_correlation_id(event.correlation_id or event.event_id)
+        logger.debug("Event emit started", event_type=event.event_type, source=event.source)
         
         # Check TTL expiry
         if event.is_expired():
             self.events_expired += 1
+            await self.metrics.record_event_expired()
+            logger.warning("Event expired", event_id=event.event_id, ttl_seconds=event.ttl_seconds)
             raise TTLExpiredError(event.event_id, event.ttl_seconds or 0)
         
         # Backpressure check
         if len(self.pending_queue) >= self.max_queue_size:
+            logger.error("Backpressure triggered", queue_size=len(self.pending_queue))
             raise BackpressureError(len(self.pending_queue), self.max_queue_size)
         
         # Idempotency check
@@ -97,10 +104,10 @@ class EventBus:
             async with self._lock:
                 if event.idempotency_key in self.processed_events:
                     self.events_deduplicated += 1
-                    logger.debug(f"Duplicate event rejected: {event.idempotency_key}")
+                    await self.metrics.record_event_deduplicated()
+                    logger.debug("Duplicate event blocked", idempotency_key=event.idempotency_key)
                     return False
                 
-                # Mark as processed
                 self.processed_events[event.idempotency_key] = event
         
         # Mark as processing
@@ -110,8 +117,22 @@ class EventBus:
         self.pending_queue.append(event)
         self.events_published += 1
         
+        # Record metrics
+        await self.metrics.record_event_published()
+        await self.metrics.increment_event_count(event.event_type)
+        await self.metrics.set_gauge("pending_queue_size", len(self.pending_queue))
+        
         # Dispatch to subscribers
         await self._dispatch(event)
+        
+        # Record latency
+        latency_ms = (time.time() - start_time) * 1000
+        await self.metrics.record_latency("event_emit", latency_ms)
+        
+        logger.info("Event emitted", 
+                   event_id=event.event_id,
+                   event_type=event.event_type,
+                   latency_ms=latency_ms)
         
         return True
     
@@ -146,20 +167,37 @@ class EventBus:
                     fut.set_result(event)
     
     async def _safe_async_handler(self, handler: Callable, event: GraceEvent):
-        """Safe async handler execution"""
+        """Safe async handler execution with metrics"""
+        start_time = time.time()
+        logger = self.logger.with_correlation_id(event.correlation_id or event.event_id)
+        
         try:
             await handler(event)
             self.events_processed += 1
             event.mark_as_completed()
+            
+            await self.metrics.record_event_processed()
+            
+            latency_ms = (time.time() - start_time) * 1000
+            await self.metrics.record_latency("event_processing", latency_ms)
+            
+            logger.debug("Event processed", event_id=event.event_id, latency_ms=latency_ms)
         
         except Exception as e:
-            logger.exception(f"Async handler error: {e}")
+            logger.error("Handler error", 
+                        event_id=event.event_id,
+                        error=str(e),
+                        error_type=type(e).__name__)
+            
             self.events_failed += 1
             event.mark_as_failed(str(e))
+            
+            await self.metrics.record_event_failed()
             
             # Retry or send to DLQ
             if event.can_retry():
                 event.increment_retry()
+                logger.info("Retrying event", event_id=event.event_id, retry_count=event.retry_count)
                 await self.emit(event, skip_idempotency=True)
             else:
                 await self._send_to_dlq(event, f"Handler failed: {e}")
@@ -184,18 +222,35 @@ class EventBus:
                 asyncio.create_task(self._send_to_dlq(event, f"Handler failed: {e}"))
     
     async def _send_to_dlq(self, event: GraceEvent, reason: str):
-        """Send event to dead letter queue"""
+        """Send event to dead letter queue with metrics"""
         event.mark_as_dead_letter(reason)
         
         if len(self.dead_letter_queue) >= self.dlq_max_size:
-            logger.error(f"DLQ full, dropping event: {event.event_id}")
+            self.logger.error("DLQ full, dropping event", event_id=event.event_id)
             return
         
         self.dead_letter_queue.append(event)
-        logger.warning(f"Event sent to DLQ: {event.event_id}, reason: {reason}")
+        
+        await self.metrics.record_dlq_event()
+        await self.metrics.set_gauge("dlq_size", len(self.dead_letter_queue))
+        
+        self.logger.warning("Event sent to DLQ", 
+                           event_id=event.event_id,
+                           reason=reason,
+                           dlq_size=len(self.dead_letter_queue))
     
-    def subscribe(self, event_type: str, handler: Callable):
-        """Subscribe to event type"""
+    def subscribe(
+        self,
+        event_type: str,
+        handler: Callable[[GraceEvent], Any]
+    ) -> None:
+        """
+        Subscribe to event type
+        
+        Args:
+            event_type: Event type to subscribe to
+            handler: Callback function (sync or async)
+        """
         self.subscribers.setdefault(event_type, []).append(handler)
         logger.debug(f"Subscribed handler to {event_type}")
     
@@ -209,12 +264,22 @@ class EventBus:
         event_type: str,
         payload: Dict[str, Any],
         timeout: float = 5.0,
-        **kwargs
+        **kwargs: Any
     ) -> Optional[GraceEvent]:
         """
         Request/response pattern
         
-        Emits an event and waits for response with matching correlation_id
+        Args:
+            event_type: Event type
+            payload: Event payload
+            timeout: Timeout in seconds
+            **kwargs: Additional event parameters
+        
+        Returns:
+            Response event or None if timeout
+        
+        Raises:
+            TimeoutError: If request times out
         """
         correlation_id = f"req_{datetime.now(timezone.utc).timestamp()}"
         
@@ -250,6 +315,14 @@ class EventBus:
     ) -> Optional[GraceEvent]:
         """
         Wait for event matching predicate
+        
+        Args:
+            event_type: Event type to wait for
+            predicate: Function to test if event matches
+            timeout: Timeout in seconds
+        
+        Returns:
+            Matching event or None if timeout
         """
         fut = asyncio.get_event_loop().create_future()
         

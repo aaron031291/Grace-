@@ -2,9 +2,10 @@ name: Quick Check
 
 on:
   pull_request:
-  
+    types: [opened, synchronize, reopened]
+
 jobs:
-  quick:
+  quick-validation:
     name: Quick Validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -16,31 +17,28 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-    
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-quick-${{ hashFiles('setup.py') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-quick-
-          ${{ runner.os }}-pip-
+        cache: 'pip'
     
     - name: Install minimal dependencies
       run: |
-        pip install --upgrade pip
-        pip install -e . --no-deps || true
-        pip install pydantic pydantic-settings fastapi || true
+        python -m pip install --upgrade pip
+        pip install -e . --no-deps
     
-    - name: Quick import test
+    - name: Quick import check
       env:
         AUTH_SECRET_KEY: quick-test-secret-key-min-32-chars
       run: |
-        python -c "import grace; print('✅ Grace imports')" || exit 1
-        python -c "from grace.config import get_settings; print('✅ Config works')" || exit 1
-        python -c "from grace.events.schema import GraceEvent; print('✅ Events work')" || exit 1
-        
-    - name: Check for obvious errors
-      run: |
-        python -m py_compile grace/**/*.py || echo "::warning::Some files have syntax errors"
+        python -c "import grace; print('✅ Grace imports successfully')"
+        python -c "from grace.config import get_config; print('✅ Config loads')"
+        python -c "from grace.events.schema import GraceEvent; print('✅ Events import')"
+        python -c "from grace.governance.engine import GovernanceEngine; print('✅ Governance imports')"
+        python -c "from grace.trust.core import TrustCoreKernel; print('✅ Trust imports')"
+    
+    - name: Verify critical gaps script
+      run: python scripts/fix_critical_gaps.py || true
       continue-on-error: true
+    
+    - name: Check for common issues
+      run: |
+        echo "Checking for dict-based event publishing..."
+        python scripts/fix_dict_publishes.py || echo "⚠️  Issues found"

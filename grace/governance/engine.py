@@ -39,21 +39,22 @@ class GovernanceEngine:
     All methods are truly async
     """
     
-    def __init__(self):
+    def __init__(self, trigger_mesh=None):
         self.policies: Dict[str, Any] = {}
         self.violations: List[Dict[str, Any]] = []
-        
+        self.trigger_mesh = trigger_mesh
+    
     async def validate(
         self,
         event: GraceEvent,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        request_mldl_consensus: bool = True
     ) -> ValidationResult:
         """
         Async validate event against constitutional constraints
         
-        Required by specification
+        Can request MLDL consensus for complex decisions
         """
-        # Use asyncio.sleep to make it truly async
         await asyncio.sleep(0)
         
         violations: List[str] = []
@@ -92,6 +93,40 @@ class GovernanceEngine:
         policy_violations = await self._check_policies(event, context)
         violations.extend(policy_violations)
         
+        # Request MLDL consensus for complex decisions
+        mldl_consensus = None
+        if request_mldl_consensus and len(violations) > 0 and self.trigger_mesh:
+            logger.info(f"Requesting MLDL consensus for event {event.event_id}")
+            
+            try:
+                mldl_consensus = await self._request_mldl_consensus(
+                    event=event,
+                    violations=violations,
+                    context=context or {}
+                )
+                
+                if mldl_consensus:
+                    logger.info(f"MLDL consensus received", extra={
+                        "event_id": event.event_id,
+                        "recommendation": mldl_consensus.get("recommendation"),
+                        "confidence": mldl_consensus.get("confidence")
+                    })
+                    
+                    # Override decision based on consensus
+                    recommendation = mldl_consensus.get("recommendation")
+                    confidence = mldl_consensus.get("confidence", 0.5)
+                    
+                    if recommendation == "approve" and confidence > 0.7:
+                        logger.info(f"MLDL consensus overrides violations (approve)")
+                        violations = []  # Clear violations
+                    elif recommendation == "reject" and confidence > 0.8:
+                        violations.append("MLDL consensus: reject with high confidence")
+            
+            except asyncio.TimeoutError:
+                logger.warning(f"MLDL consensus request timed out for {event.event_id}")
+            except Exception as e:
+                logger.error(f"MLDL consensus request failed: {e}")
+        
         passed = len(violations) == 0
         confidence = 1.0 if passed else 0.5
         
@@ -100,7 +135,11 @@ class GovernanceEngine:
             violations=violations,
             amendments=amendments,
             confidence=confidence,
-            decision={"event_id": event.event_id, "validated": passed}
+            decision={
+                "event_id": event.event_id,
+                "validated": passed,
+                "mldl_consensus": mldl_consensus
+            }
         )
         
         # Log validation
@@ -109,10 +148,68 @@ class GovernanceEngine:
             self.violations.append({
                 "event_id": event.event_id,
                 "violations": violations,
-                "timestamp": event.timestamp
+                "timestamp": event.timestamp,
+                "mldl_consensus": mldl_consensus
             })
         
         return result
+    
+    async def _request_mldl_consensus(
+        self,
+        event: GraceEvent,
+        violations: List[str],
+        context: Dict[str, Any],
+        timeout: float = 5.0
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Request consensus from MLDL kernel using emit and wait_for
+        
+        Args:
+            event: Event being validated
+            violations: Current violations
+            context: Decision context
+            timeout: Timeout for waiting
+        
+        Returns:
+            Consensus result or None if timeout/error
+        """
+        if not self.trigger_mesh:
+            logger.warning("TriggerMesh not available, cannot request consensus")
+            return None
+        
+        # Build decision context
+        decision_context = {
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+            "source": event.source,
+            "trust_score": event.trust_score,
+            "priority": event.priority.value if hasattr(event.priority, 'value') else event.priority,
+            "violations": violations,
+            "context": context
+        }
+        
+        try:
+            # Use request_response pattern
+            response = await self.trigger_mesh.request_response(
+                event_type="mldl.consensus.request",
+                payload={
+                    "decision_context": decision_context,
+                    "options": ["approve", "review", "reject"]
+                },
+                timeout=timeout,
+                source="governance_engine",
+                priority="high"
+            )
+            
+            if response:
+                consensus = response.payload.get("consensus")
+                return consensus
+            
+            return None
+        
+        except Exception as e:
+            logger.error(f"Failed to get MLDL consensus: {e}")
+            return None
     
     async def escalate(
         self,

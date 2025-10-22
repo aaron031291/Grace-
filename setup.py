@@ -33,6 +33,8 @@ setup(
         "torch>=2.1.0",
         "faiss-cpu>=1.7.4",
         "numpy>=1.24.0",
+        "typer>=0.9.0",
+        "rich>=13.0.0",
     ],
     extras_require={
         "dev": [
@@ -49,7 +51,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "grace=main:main",
+            "grace=grace.cli.commands:main",
         ],
     },
 )

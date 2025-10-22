@@ -19,6 +19,7 @@ from grace.memory.async_lightning import AsyncLightningMemory
 from grace.memory.async_fusion import AsyncFusionMemory
 from grace.memory.immutable_logs_async import AsyncImmutableLogs
 from grace.trigger_mesh import TriggerMesh
+from grace.observability.structured_logging import setup_structured_logging
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,11 @@ class UnifiedService:
         self._start_time = datetime.utcnow()
         
         try:
+            # 0. Setup structured logging
+            logger.info("0. Setting up structured logging...")
+            setup_structured_logging(log_level=self.config.log_level)
+            logger.info("   Structured JSON logging enabled")
+            
             # 1. Install watchdog
             logger.info("1. Installing watchdog...")
             self.watchdog = install_watchdog()
@@ -176,6 +182,12 @@ class UnifiedService:
                 event_factory=GraceEventFactory()
             )
             logger.info("   MemoryCore initialized")
+            
+            # X. Include metrics router
+            logger.info("X. Configuring metrics endpoints...")
+            from grace.api.v1.metrics import router as metrics_router
+            self.app.include_router(metrics_router, prefix=settings.api_prefix)
+            logger.info("   Metrics endpoints: /api/v1/metrics/, /api/v1/metrics/prometheus")
             
             self._initialized = True
             

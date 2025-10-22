@@ -2,116 +2,91 @@
 Structured logging for Grace system
 """
 
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
-from dataclasses import dataclass, field, asdict
-from contextlib import contextmanager
-import uuid
+import json
 import logging
-
-# Try to import structlog, fall back to standard logging
-try:
-    import structlog
-    HAS_STRUCTLOG = True
-except ImportError:
-    HAS_STRUCTLOG = False
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class LogContext:
-    """Context information for structured logs"""
-    timestamp: str
-    component: str
-    trace_id: str
-    user_id: Optional[str] = None
-    decision_id: Optional[str] = None
-    session_id: Optional[str] = None
-    severity: str = "INFO"
-    message: str = ""
-    metadata: Optional[Dict[str, Any]] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        data = asdict(self)
-        if data['metadata'] is None:
-            data['metadata'] = {}
-        return data
+from typing import Dict, Any, Optional
+from datetime import datetime
+import uuid
 
 
 class StructuredLogger:
-    """Structured logger for Grace system"""
+    """Structured logger with correlation IDs"""
     
     def __init__(
         self,
         component: str,
-        immutable_logs: Optional[Any] = None,
-        log_aggregator: Optional[Any] = None
+        correlation_id: Optional[str] = None
     ):
         self.component = component
-        self.immutable_logs = immutable_logs
-        self.log_aggregator = log_aggregator
-        self.trace_id = str(uuid.uuid4())
+        self.correlation_id = correlation_id or str(uuid.uuid4())
+        self.logger = logging.getLogger(component)
+    
+    def _format_log(
+        self,
+        level: str,
+        message: str,
+        **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Format log as structured JSON"""
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "level": level,
+            "component": self.component,
+            "correlation_id": self.correlation_id,
+            "message": message,
+        }
         
-        if HAS_STRUCTLOG:
-            self.log = structlog.get_logger(component)
-        else:
-            self.log = logging.getLogger(component)
+        # Add extra fields
+        if kwargs:
+            log_entry["extra"] = kwargs
+        
+        return log_entry
     
-    def info(self, message: str, **kwargs: Any):
-        """Log info message"""
-        if HAS_STRUCTLOG:
-            self.log.info(message, **kwargs)
-        else:
-            self.log.info(message, extra=kwargs)
-    
-    def warning(self, message: str, **kwargs: Any):
-        """Log warning message"""
-        if HAS_STRUCTLOG:
-            self.log.warning(message, **kwargs)
-        else:
-            self.log.warning(message, extra=kwargs)
-    
-    def error(self, message: str, **kwargs: Any):
-        """Log error message"""
-        if HAS_STRUCTLOG:
-            self.log.error(message, **kwargs)
-        else:
-            self.log.error(message, extra=kwargs)
+    def _log(self, level: str, message: str, **kwargs: Any):
+        """Log structured message"""
+        log_entry = self._format_log(level, message, **kwargs)
+        log_line = json.dumps(log_entry)
+        
+        # Log at appropriate level
+        log_level = getattr(logging, level.upper())
+        self.logger.log(log_level, log_line)
     
     def debug(self, message: str, **kwargs: Any):
         """Log debug message"""
-        if HAS_STRUCTLOG:
-            self.log.debug(message, **kwargs)
-        else:
-            self.log.debug(message, extra=kwargs)
+        self._log("debug", message, **kwargs)
     
-    @contextmanager
-    def span(self, operation: str, **kwargs: Any):
-        """Create a logging span for tracing operations"""
-        span_id = str(uuid.uuid4())
-        start_time = datetime.now(timezone.utc)
-        
-        self.info(f"Starting {operation}", span_id=span_id, **kwargs)
-        
-        try:
-            yield span_id
-        except Exception as e:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-            self.error(
-                f"Failed {operation}",
-                error=str(e),
-                span_id=span_id,
-                duration_seconds=duration,
-                **kwargs
-            )
-            raise
-        else:
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-            self.info(
-                f"Completed {operation}",
-                span_id=span_id,
-                duration_seconds=duration,
-                **kwargs
-            )
+    def info(self, message: str, **kwargs: Any):
+        """Log info message"""
+        self._log("info", message, **kwargs)
+    
+    def warning(self, message: str, **kwargs: Any):
+        """Log warning message"""
+        self._log("warning", message, **kwargs)
+    
+    def error(self, message: str, **kwargs: Any):
+        """Log error message"""
+        self._log("error", message, **kwargs)
+    
+    def critical(self, message: str, **kwargs: Any):
+        """Log critical message"""
+        self._log("critical", message, **kwargs)
+    
+    def with_correlation_id(self, correlation_id: str) -> "StructuredLogger":
+        """Create new logger with different correlation ID"""
+        return StructuredLogger(self.component, correlation_id)
+
+
+def setup_structured_logging(log_level: str = "INFO"):
+    """Setup structured JSON logging globally"""
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, log_level.upper()))
+    
+    # Remove existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Add JSON formatter
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    root_logger.addHandler(handler)

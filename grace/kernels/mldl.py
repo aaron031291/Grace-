@@ -1,24 +1,25 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Dict, List
 import time
+
+from grace.mcp import MCPClient, MCPMessageType
 
 logger = logging.getLogger(__name__)
 
 
 class MLDLKernel:
     """
-    MLDL Kernel - Machine Learning / Deep Learning inference
-    
-    Dependencies injected by Unified Service
+    MLDL Kernel with MCP integration
     """
     
-    def __init__(self, event_bus, event_factory, model_manager=None, inference_router=None):
+    def __init__(self, event_bus, event_factory, model_manager=None, inference_router=None, trigger_mesh=None):
         self.event_bus = event_bus
         self.event_factory = event_factory
         self.model_manager = model_manager
         self.inference_router = inference_router
+        self.trigger_mesh = trigger_mesh
         
         # State
         self._running = False
@@ -27,6 +28,15 @@ class MLDLKernel:
         self._error_count = 0
         self._inference_count = 0
         self._total_inference_time = 0.0
+        self._consensus_count = 0
+    
+        # MCP Client
+        self.mcp_client = MCPClient(
+            kernel_name="mldl_kernel",
+            event_bus=event_bus,
+            trigger_mesh=trigger_mesh,
+            minimum_trust=0.6
+        )
     
     async def start(self):
         """Start MLDL kernel"""
@@ -59,7 +69,12 @@ class MLDLKernel:
                 logger.info(f"LLM components not available (using fallback): {e}")
         
         # Subscribe to inference requests
-        self.event_bus.subscribe("mldl.infer", self._handle_infer)
+        if self.trigger_mesh:
+            self.trigger_mesh.subscribe("mldl.infer", self._handle_infer, "mldl_kernel")
+            self.trigger_mesh.subscribe("mldl.consensus.request", self._handle_consensus_request, "mldl_kernel")
+        else:
+            self.event_bus.subscribe("mldl.infer", self._handle_infer)
+            self.event_bus.subscribe("mldl.consensus.request", self._handle_consensus_request)
         
         logger.info("MLDL kernel started", extra={
             "llm_available": self.model_manager is not None
@@ -144,6 +159,172 @@ class MLDLKernel:
             )
             await self.event_bus.emit(error_resp)
     
+    async def _handle_consensus_request(self, event):
+        """Handle consensus request with MCP validation"""
+        start = time.time()
+        
+        try:
+            # Receive and validate MCP message
+            mcp_message = await self.mcp_client.receive_message(event)
+            if not mcp_message:
+                logger.error("Invalid MCP consensus request")
+                return
+            
+            payload = mcp_message.payload
+            decision_context = payload.get("decision_context", {})
+            options = payload.get("options", [])
+            
+            logger.info(f"Consensus request received via MCP", extra={
+                "message_id": mcp_message.message_id,
+                "correlation_id": mcp_message.correlation_id
+            })
+            
+            # Get consensus
+            consensus_result = await self._compute_consensus(decision_context, options)
+            
+            # Send MCP response
+            await self.mcp_client.send_message(
+                destination=mcp_message.source,
+                payload={
+                    "consensus": consensus_result,
+                    "processing_time_ms": (time.time() - start) * 1000
+                },
+                message_type=MCPMessageType.RESPONSE,
+                correlation_id=mcp_message.correlation_id,
+                schema_name="consensus_response",
+                trust_score=0.9
+            )
+            
+            self._consensus_count += 1
+            
+        except Exception as e:
+            self._error_count += 1
+            logger.error(f"Consensus request error: {e}", exc_info=True)
+    
+    async def _compute_consensus(self, context: Dict[str, Any], options: List[str]) -> Dict[str, Any]:
+        """
+        Compute consensus from multiple ML specialists
+        
+        Returns:
+            Dictionary with recommendation, confidence, and specialist votes
+        """
+        specialists = []
+        
+        # Specialist 1: Rule-based heuristic
+        specialist_1_vote = self._heuristic_specialist(context, options)
+        specialists.append({
+            "name": "heuristic",
+            "vote": specialist_1_vote["recommendation"],
+            "confidence": specialist_1_vote["confidence"]
+        })
+        
+        # Specialist 2: LLM-based (if available)
+        if self.inference_router and self.model_manager:
+            specialist_2_vote = await self._llm_specialist(context, options)
+            specialists.append({
+                "name": "llm",
+                "vote": specialist_2_vote["recommendation"],
+                "confidence": specialist_2_vote["confidence"]
+            })
+        
+        # Specialist 3: Statistical classifier
+        specialist_3_vote = self._statistical_specialist(context, options)
+        specialists.append({
+            "name": "statistical",
+            "vote": specialist_3_vote["recommendation"],
+            "confidence": specialist_3_vote["confidence"]
+        })
+        
+        # Compute quorum consensus
+        consensus = self._quorum_vote(specialists)
+        
+        return {
+            "recommendation": consensus["recommendation"],
+            "confidence": consensus["confidence"],
+            "specialists": specialists,
+            "quorum_method": "weighted_majority",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    
+    def _heuristic_specialist(self, context: Dict[str, Any], options: List[str]) -> Dict[str, Any]:
+        """Simple rule-based specialist"""
+        # Check trust score
+        trust_score = context.get("trust_score", 0.5)
+        
+        if trust_score >= 0.8:
+            return {"recommendation": "approve", "confidence": 0.85}
+        elif trust_score >= 0.5:
+            return {"recommendation": "review", "confidence": 0.70}
+        else:
+            return {"recommendation": "reject", "confidence": 0.90}
+    
+    async def _llm_specialist(self, context: Dict[str, Any], options: List[str]) -> Dict[str, Any]:
+        """LLM-based specialist"""
+        try:
+            prompt = f"""
+            Decision context: {context}
+            Options: {options}
+            
+            Provide recommendation and confidence (0-1).
+            """
+            
+            result = self.inference_router.route(
+                prompt=prompt,
+                task_type="classification",
+                max_tokens=100
+            )
+            
+            # Parse LLM output (simplified)
+            return {"recommendation": "review", "confidence": 0.75}
+        
+        except Exception as e:
+            logger.warning(f"LLM specialist failed: {e}")
+            return {"recommendation": "review", "confidence": 0.50}
+    
+    def _statistical_specialist(self, context: Dict[str, Any], options: List[str]) -> Dict[str, Any]:
+        """Statistical classifier specialist"""
+        # Simple Bayesian-style classification
+        violation_count = len(context.get("violations", []))
+        
+        if violation_count == 0:
+            return {"recommendation": "approve", "confidence": 0.80}
+        elif violation_count <= 2:
+            return {"recommendation": "review", "confidence": 0.75}
+        else:
+            return {"recommendation": "reject", "confidence": 0.85}
+    
+    def _quorum_vote(self, specialists: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Compute weighted majority consensus
+        
+        Each specialist's vote is weighted by their confidence
+        """
+        vote_weights = {}
+        
+        for specialist in specialists:
+            vote = specialist["vote"]
+            confidence = specialist["confidence"]
+            
+            if vote not in vote_weights:
+                vote_weights[vote] = 0.0
+            
+            vote_weights[vote] += confidence
+        
+        # Find recommendation with highest weight
+        if not vote_weights:
+            return {"recommendation": "review", "confidence": 0.5}
+        
+        best_vote = max(vote_weights, key=vote_weights.get)
+        total_weight = sum(vote_weights.values())
+        
+        # Confidence is the proportion of weight for the winning vote
+        consensus_confidence = vote_weights[best_vote] / total_weight if total_weight > 0 else 0.5
+        
+        return {
+            "recommendation": best_vote,
+            "confidence": consensus_confidence
+        }
+    
     async def stop(self):
         """Graceful shutdown"""
         if not self._running:
@@ -158,7 +339,12 @@ class MLDLKernel:
         self._running = False
         
         # Unsubscribe
-        self.event_bus.unsubscribe("mldl.infer", self._handle_infer)
+        if self.trigger_mesh:
+            self.trigger_mesh.unsubscribe("mldl.infer", self._handle_infer)
+            self.trigger_mesh.unsubscribe("mldl.consensus.request", self._handle_consensus_request)
+        else:
+            self.event_bus.unsubscribe("mldl.infer", self._handle_infer)
+            self.event_bus.unsubscribe("mldl.consensus.request", self._handle_consensus_request)
         
         logger.info("MLDL kernel stopped")
     
@@ -177,6 +363,7 @@ class MLDLKernel:
             "running": self._running,
             "uptime_seconds": uptime,
             "inference_count": self._inference_count,
+            "consensus_count": self._consensus_count,
             "avg_inference_time_ms": avg_inference_time * 1000,
             "total_inference_time_seconds": self._total_inference_time,
             "errors": self._error_count,

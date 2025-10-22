@@ -152,3 +152,14 @@ def create_mcp(domain: str, manifest_path: str = None) -> BaseMCP:
         CustomMCP.manifest_path = manifest_path
     
     return CustomMCP()
+
+
+"""
+Message Control Protocol (MCP) - Schema validation and routing
+"""
+
+from .client import MCPClient
+from .schema import MCPMessage, MCPSchema
+from .validator import MCPValidator
+
+__all__ = ['MCPClient', 'MCPMessage', 'MCPSchema', 'MCPValidator']

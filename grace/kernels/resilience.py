@@ -3,20 +3,25 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from grace.mcp import MCPClient
+
 logger = logging.getLogger(__name__)
 
 
 class ResilienceKernel:
     """
-    Resilience Kernel - Self-healing and governance enforcement
-    
-    Dependencies injected by Unified Service
+    Resilience Kernel with MCP integration
     """
     
-    def __init__(self, event_bus, event_factory, governance_engine):
+    def __init__(self, event_bus, event_factory, governance_engine, trigger_mesh=None):
         self.event_bus = event_bus
         self.event_factory = event_factory
         self.governance = governance_engine
+        self.trigger_mesh = trigger_mesh
+        
+        # Inject trigger_mesh into governance for consensus
+        if self.governance and trigger_mesh:
+            self.governance.trigger_mesh = trigger_mesh
         
         # State
         self._running = False
@@ -26,6 +31,14 @@ class ResilienceKernel:
         self._escalations = 0
         self._validations_passed = 0
         self._validations_failed = 0
+        
+        # MCP Client
+        self.mcp_client = MCPClient(
+            kernel_name="resilience_kernel",
+            event_bus=event_bus,
+            trigger_mesh=trigger_mesh,
+            minimum_trust=0.7
+        )
     
     async def start(self):
         """Start resilience kernel"""
@@ -57,8 +70,12 @@ class ResilienceKernel:
                 "trust_score": event.trust_score
             })
             
-            # Validate event
-            result = await self.governance.validate(event)
+            # Validate event (will request MLDL consensus if needed)
+            result = await self.governance.validate(
+                event,
+                context={"error_severity": "high"},
+                request_mldl_consensus=True  # Enable consensus for errors
+            )
             
             if result.passed:
                 self._validations_passed += 1
@@ -66,7 +83,8 @@ class ResilienceKernel:
             else:
                 self._validations_failed += 1
                 logger.warning(f"Validation failed for {event.event_id}", extra={
-                    "violations": result.violations
+                    "violations": result.violations,
+                    "mldl_consensus": result.decision.get("mldl_consensus") if result.decision else None
                 })
                 
                 # Escalate if failed

@@ -3,12 +3,14 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from grace.mcp import MCPClient, MCPMessageType, MCPPriority
+
 logger = logging.getLogger(__name__)
 
 
 class MultiOSKernel:
     """
-    Multi-OS Kernel - Orchestrates cross-kernel coordination
+    Multi-OS Kernel with MCP integration
     
     Dependencies injected by Unified Service
     """
@@ -26,27 +28,30 @@ class MultiOSKernel:
         self._warning_count = 0
         self._heartbeat_task: Optional[asyncio.Task] = None
     
+        # MCP Client
+        self.mcp_client = MCPClient(
+            kernel_name="multi_os_kernel",
+            event_bus=event_bus,
+            trigger_mesh=trigger_mesh,
+            minimum_trust=0.5
+        )
+    
     async def _heartbeat_loop(self):
-        """Heartbeat loop with real error handling"""
+        """Heartbeat loop with MCP"""
         while self._running:
             try:
-                event = self.event_factory.create_event(
-                    event_type="kernel.heartbeat",
+                # Send MCP-validated heartbeat
+                await self.mcp_client.send_message(
+                    destination="health_monitor",
                     payload={
-                        "timestamp": datetime.utcnow().isoformat(),
                         "kernel": "multi_os",
-                        "events_processed": self._events_processed,
-                        "uptime_seconds": (datetime.utcnow() - self._start_time).total_seconds() if self._start_time else 0
+                        "uptime_seconds": (datetime.utcnow() - self._start_time).total_seconds() if self._start_time else 0,
+                        "events_processed": self._events_processed
                     },
-                    source="multi_os_kernel",
-                    targets=[]
+                    message_type=MCPMessageType.HEARTBEAT,
+                    schema_name="heartbeat",
+                    trust_score=0.95
                 )
-                
-                # Use TriggerMesh if available for routing, otherwise EventBus
-                if self.trigger_mesh:
-                    await self.trigger_mesh.emit(event)
-                else:
-                    await self.event_bus.emit(event)
                 
                 self._events_processed += 1
                 logger.debug(f"Heartbeat emitted: {event.event_id}")
@@ -135,12 +140,12 @@ class MultiOSKernel:
         logger.info("Multi-OS kernel stopped")
     
     def get_health(self) -> dict:
-        """Health check with actual metrics"""
+        """Health check with MCP stats"""
         uptime = 0.0
         if self._running and self._start_time:
             uptime = (datetime.utcnow() - self._start_time).total_seconds()
         
-        return {
+        health = {
             "status": "healthy" if self._running else "stopped",
             "running": self._running,
             "uptime_seconds": uptime,
@@ -149,8 +154,11 @@ class MultiOSKernel:
             "errors": self._error_count,
             "warnings": self._warning_count,
             "heartbeat_task_alive": self._heartbeat_task is not None and not self._heartbeat_task.done() if self._heartbeat_task else False,
-            "trigger_mesh_enabled": self.trigger_mesh is not None
+            "trigger_mesh_enabled": self.trigger_mesh is not None,
+            "mcp_stats": self.mcp_client.get_stats()
         }
+        
+        return health
 
 
 # Global instance for backwards compatibility

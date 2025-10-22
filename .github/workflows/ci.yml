@@ -156,6 +156,17 @@ jobs:
         python scripts/apply_migrations.py || echo "::warning::Migrations skipped"
       continue-on-error: true
 
+    - name: Run kernel management tests
+      env:
+        DATABASE_URL: postgresql://grace_test:grace_test_pass@localhost:5432/grace_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-testing-only-min-32-chars
+      run: |
+        pytest tests/test_kernel_management.py -v --tb=short -x
+        pytest tests/test_complete_system.py::TestDemoModules -v --tb=short
+      continue-on-error: false  # Fail CI if tests fail
+
   build:
     name: Build Package
     runs-on: ubuntu-latest

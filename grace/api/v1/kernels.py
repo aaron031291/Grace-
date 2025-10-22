@@ -155,3 +155,28 @@ async def get_kernel_health(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get health: {str(e)}")
+
+
+@router.get("/{kernel_name}/metrics")
+async def get_kernel_metrics(
+    kernel_name: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get detailed metrics for a kernel (via HTTP)"""
+    if kernel_name not in _KERNEL_MODULES:
+        raise HTTPException(status_code=404, detail=f"Kernel '{kernel_name}' not found")
+    
+    try:
+        from importlib import import_module
+        
+        mod = import_module(_KERNEL_MODULES[kernel_name])
+        
+        # Get health (which includes metrics)
+        if hasattr(mod, "get_health"):
+            health = mod.get_health()
+            return health
+        
+        raise HTTPException(status_code=400, detail="Kernel does not expose health/metrics")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")

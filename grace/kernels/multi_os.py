@@ -13,9 +13,10 @@ class MultiOSKernel:
     Dependencies injected by Unified Service
     """
     
-    def __init__(self, event_bus, event_factory):
+    def __init__(self, event_bus, event_factory, trigger_mesh=None):
         self.event_bus = event_bus
         self.event_factory = event_factory
+        self.trigger_mesh = trigger_mesh  # Use TriggerMesh if available
         
         # State
         self._running = False
@@ -41,7 +42,12 @@ class MultiOSKernel:
                     targets=[]
                 )
                 
-                await self.event_bus.emit(event)
+                # Use TriggerMesh if available for routing, otherwise EventBus
+                if self.trigger_mesh:
+                    await self.trigger_mesh.emit(event)
+                else:
+                    await self.event_bus.emit(event)
+                
                 self._events_processed += 1
                 logger.debug(f"Heartbeat emitted: {event.event_id}")
             
@@ -62,12 +68,17 @@ class MultiOSKernel:
         
         logger.info("Multi-OS kernel starting", extra={
             "kernel": "multi_os",
-            "start_time": self._start_time.isoformat()
+            "start_time": self._start_time.isoformat(),
+            "trigger_mesh_enabled": self.trigger_mesh is not None
         })
         
-        # Register event subscriptions
-        self.event_bus.subscribe("kernel.heartbeat", self._on_heartbeat)
-        self.event_bus.subscribe("kernel.command", self._on_command)
+        # Register event subscriptions via TriggerMesh or EventBus
+        if self.trigger_mesh:
+            self.trigger_mesh.subscribe("kernel.heartbeat", self._on_heartbeat, "multi_os_kernel")
+            self.trigger_mesh.subscribe("kernel.command", self._on_command, "multi_os_kernel")
+        else:
+            self.event_bus.subscribe("kernel.heartbeat", self._on_heartbeat)
+            self.event_bus.subscribe("kernel.command", self._on_command)
         
         # Start heartbeat loop
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -90,7 +101,11 @@ class MultiOSKernel:
             correlation_id=event.correlation_id,
             source="multi_os_kernel"
         )
-        await self.event_bus.emit(response)
+        
+        if self.trigger_mesh:
+            await self.trigger_mesh.emit(response)
+        else:
+            await self.event_bus.emit(response)
     
     async def stop(self):
         """Graceful shutdown with cleanup"""
@@ -133,7 +148,8 @@ class MultiOSKernel:
             "events_processed": self._events_processed,
             "errors": self._error_count,
             "warnings": self._warning_count,
-            "heartbeat_task_alive": self._heartbeat_task is not None and not self._heartbeat_task.done() if self._heartbeat_task else False
+            "heartbeat_task_alive": self._heartbeat_task is not None and not self._heartbeat_task.done() if self._heartbeat_task else False,
+            "trigger_mesh_enabled": self.trigger_mesh is not None
         }
 
 

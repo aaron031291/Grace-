@@ -18,6 +18,7 @@ from grace.memory.core import MemoryCore
 from grace.memory.async_lightning import AsyncLightningMemory
 from grace.memory.async_fusion import AsyncFusionMemory
 from grace.memory.immutable_logs_async import AsyncImmutableLogs
+from grace.trigger_mesh import TriggerMesh
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,8 @@ class UnifiedService:
         self.fusion = None
         self.immutable_logs = None
         
+        self.trigger_mesh = None
+        
         self._kernel_tasks: List[asyncio.Task] = []
         self._initialized = False
         self._start_time: Optional[datetime] = None
@@ -82,6 +85,13 @@ class UnifiedService:
             logger.info("2. Initializing EventBus...")
             self.event_bus = get_event_bus()
             logger.info(f"   EventBus initialized (max_queue={self.config.event_bus_max_queue})")
+            
+            # 2.5. Initialize TriggerMesh (after EventBus)
+            logger.info("2.5. Initializing TriggerMesh...")
+            self.trigger_mesh = TriggerMesh(self.event_bus)
+            self.trigger_mesh.load_config()
+            self.trigger_mesh.bind_subscriptions()
+            logger.info(f"   TriggerMesh initialized ({len(self.trigger_mesh.routes)} routes)")
             
             # 3. Initialize Governance
             if self.config.governance_enabled:
@@ -209,7 +219,11 @@ class UnifiedService:
             
             try:
                 if kernel_name == "multi_os":
-                    kernel = MultiOSKernel(self.event_bus, factory)
+                    kernel = MultiOSKernel(
+                        self.event_bus,
+                        factory,
+                        trigger_mesh=self.trigger_mesh  # Pass TriggerMesh
+                    )
                     await kernel.start()
                     kernel_instances["multi_os"] = kernel
                     logger.info("   ✓ Started kernel: multi_os")
@@ -225,7 +239,13 @@ class UnifiedService:
                     except:
                         pass
                     
-                    kernel = MLDLKernel(self.event_bus, factory, model_manager, inference_router)
+                    kernel = MLDLKernel(
+                        self.event_bus,
+                        factory,
+                        model_manager,
+                        inference_router,
+                        trigger_mesh=self.trigger_mesh  # Pass TriggerMesh
+                    )
                     await kernel.start()
                     kernel_instances["mldl"] = kernel
                     logger.info("   ✓ Started kernel: mldl")
@@ -235,7 +255,12 @@ class UnifiedService:
                         logger.warning("   ✗ Resilience kernel requires governance (disabled)")
                         continue
                     
-                    kernel = ResilienceKernel(self.event_bus, factory, self.governance)
+                    kernel = ResilienceKernel(
+                        self.event_bus,
+                        factory,
+                        self.governance,
+                        trigger_mesh=self.trigger_mesh  # Pass TriggerMesh
+                    )
                     await kernel.start()
                     kernel_instances["resilience"] = kernel
                     logger.info("   ✓ Started kernel: resilience")

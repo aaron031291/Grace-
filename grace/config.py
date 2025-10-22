@@ -74,6 +74,10 @@ class GraceConfig:
         self.watchdog_enabled = os.getenv("WATCHDOG_ENABLED", "true").lower() == "true"
         self.watchdog_restart_on_failure = os.getenv("WATCHDOG_RESTART", "false").lower() == "true"
         
+        # TriggerMesh
+        self.trigger_mesh_config = os.getenv("TRIGGER_MESH_CONFIG", "config/trigger_mesh.yaml")
+        self.trigger_mesh_enabled = os.getenv("TRIGGER_MESH_ENABLED", "true").lower() == "true"
+        
         # Validate critical config
         self._validate()
     

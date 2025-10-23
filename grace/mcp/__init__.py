@@ -167,7 +167,9 @@ __all__ = ['MCPClient', 'MCPMessage', 'MCPSchema', 'MCPValidator']
 
 """
 Grace AI MCP (Model Context Protocol) Module
-Provides integration with external tools, services, and specialized models
+Sits on top of TriggerMesh as peer to MetaLearningKernel
+Provides external tool integration and capability expansion
+All tool executions are recorded in the Core Truth Layer
 """
 from grace.mcp.protocol import MCPRegistry, Tool, ToolType, ToolRequest, ToolResponse
 from grace.mcp.vector_store import VectorStore, vector_store_handler

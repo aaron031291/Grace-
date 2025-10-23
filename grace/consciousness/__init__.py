@@ -1,9 +1,9 @@
 """
-Grace AI Consciousness Subsystem
-Self-awareness, strategic reasoning, and self-reflection
+Grace AI Consciousness Module - Self-awareness and strategic reasoning
+Core self-reflection loop and decision engine
 """
-from grace.consciousness.consciousness import Consciousness
-from grace.consciousness.cognitive_cortex import CognitiveCortex
+from grace.consciousness import Consciousness
+from grace.kernels.cognitive_cortex import CognitiveCortex
 
 __all__ = [
     "Consciousness",

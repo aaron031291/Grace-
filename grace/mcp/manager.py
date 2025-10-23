@@ -1,5 +1,7 @@
 """
 Grace AI MCP Manager - Central orchestration of Model Context Protocol
+Sits on top of TriggerMesh as peer to MetaLearningKernel
+Provides external tool integration and capability expansion
 """
 import logging
 from typing import Dict, Any, Optional
@@ -13,12 +15,18 @@ from grace.mcp.code_generation import code_generation_handler
 logger = logging.getLogger(__name__)
 
 class MCPManager:
-    """Central manager for the Model Context Protocol."""
+    """
+    Central manager for the Model Context Protocol.
+    Sits on top of TriggerMesh, coordinates external tools and capabilities.
+    All tool executions are recorded in the Core Truth Layer.
+    """
     
-    def __init__(self, event_bus=None, llm_service=None):
+    def __init__(self, event_bus=None, llm_service=None, truth_layer=None, trigger_mesh=None):
         self.registry = MCPRegistry()
         self.event_bus = event_bus
         self.llm_service = llm_service
+        self.truth_layer = truth_layer
+        self.trigger_mesh = trigger_mesh
         self._register_default_tools()
     
     def _register_default_tools(self):
@@ -71,6 +79,19 @@ class MCPManager:
         
         logger.info(f"MCP: Executing tool {tool_id} (request_id: {request_id})")
         response = await self.registry.execute_tool(request)
+        
+        # Record in truth layer if available
+        if self.truth_layer:
+            await self.truth_layer.immutable_log.record_event(
+                event_type="mcp.tool_executed",
+                component="mcp_manager",
+                data={
+                    "tool_id": tool_id,
+                    "request_id": request_id,
+                    "success": response.success
+                },
+                correlation_id=correlation_id
+            )
         
         # Publish event if event_bus is available
         if self.event_bus:

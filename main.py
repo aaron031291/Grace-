@@ -16,17 +16,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Grace-AI")
 
-from grace.core import EventBus, ImmutableLogger, KPITrustMonitor, ComponentRegistry
+from grace.core import EventBus, ImmutableLogger, KPITrustMonitor, ComponentRegistry, CoreTruthLayer
 from grace.services.task_manager import TaskManager
 from grace.services.notification_service import NotificationService
 from grace.services.communication_channel import CommunicationChannel
 from grace.services.llm_service import LLMService
 from grace.agents.remote_agent import RemoteAgent
-from grace.consciousness import Consciousness
-from grace.kernels.cognitive_cortex import CognitiveCortex
-from grace.kernels.sentinel_kernel import SentinelKernel
-from grace.kernels.resilience_kernel import ResilienceKernel
-from grace.kernels.swarm_kernel import SwarmKernel
+from grace.consciousness import Consciousness, CognitiveCortex
+from grace.kernels import SentinelKernel, ResilienceKernel, SwarmKernel, MetaLearningKernel
+from grace.orchestration import TriggerMesh
 from grace.mcp.manager import MCPManager
 from grace.immune_system import ImmuneSystem, ThreatDetector
 from grace.services.observability import ObservabilityService
@@ -145,10 +143,11 @@ async def main():
     logger.info("="*60)
     
     try:
-        # Initialize system
+        # Initialize system in correct order
         components = await initialize_system()
         consciousness = components["consciousness"]
         sentinel_kernel = components["sentinel_kernel"]
+        meta_learning_kernel = components["meta_learning_kernel"]
         
         # Create Flask app with components
         flask_app = create_app(components)
@@ -171,6 +170,16 @@ async def main():
         sentinel_thread = Thread(target=run_sentinel_loop, args=(sentinel_kernel,), daemon=True)
         sentinel_thread.start()
         logger.info("Sentinel Kernel started in background thread")
+        
+        # Start MetaLearning monitoring in a separate thread
+        async def run_meta_learning():
+            while True:
+                await asyncio.sleep(30)  # Run analysis every 30 seconds
+                await meta_learning_kernel.analyze_kernel_patterns()
+        
+        meta_thread = Thread(target=lambda: asyncio.run(run_meta_learning()), daemon=True)
+        meta_thread.start()
+        logger.info("MetaLearning Kernel started in background thread")
         
         # Start Consciousness loop
         logger.info("Starting Consciousness loop...")

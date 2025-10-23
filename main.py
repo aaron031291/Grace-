@@ -23,11 +23,10 @@ from grace.services.communication_channel import CommunicationChannel
 from grace.services.llm_service import LLMService
 from grace.agents.remote_agent import RemoteAgent
 from grace.consciousness import Consciousness, CognitiveCortex
-from grace.kernels import SentinelKernel, ResilienceKernel, SwarmKernel, MetaLearningKernel
+from grace.kernels import SentinelKernel, SwarmKernel, MetaLearningKernel
 from grace.orchestration import TriggerMesh
 from grace.mcp.manager import MCPManager
 from grace.immune_system import ImmuneSystem, ThreatDetector
-from grace.services.observability import ObservabilityService
 from grace.services.policy_engine import PolicyEngine
 from grace.services.trust_ledger import TrustLedger
 from grace.services.websocket_service import WebSocketService

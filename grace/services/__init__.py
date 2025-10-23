@@ -7,7 +7,6 @@ from grace.services.communication_channel import CommunicationChannel
 from grace.services.notification_service import NotificationService
 from grace.services.llm_service import LLMService
 from grace.services.websocket_service import WebSocketService, WebSocketConnection
-from grace.services.observability import ObservabilityService
 from grace.services.policy_engine import PolicyEngine, Policy, PolicyType
 from grace.services.trust_ledger import TrustLedger, TrustAction, TrustLedgerEntry
 
@@ -20,7 +19,6 @@ __all__ = [
     "LLMService",
     "WebSocketService",
     "WebSocketConnection",
-    "ObservabilityService",
     "PolicyEngine",
     "Policy",
     "PolicyType",

@@ -5,14 +5,12 @@ All actions flow through the TriggerMesh for orchestration
 """
 from grace.kernels.cognitive_cortex import CognitiveCortex
 from grace.kernels.sentinel_kernel import SentinelKernel
-from grace.kernels.resilience_kernel import ResilienceKernel
 from grace.kernels.swarm_kernel import SwarmKernel
 from grace.kernels.meta_learning_kernel import MetaLearningKernel, KernelInsight
 
 __all__ = [
     "CognitiveCortex",
     "SentinelKernel",
-    "ResilienceKernel",
     "SwarmKernel",
     "MetaLearningKernel",
     "KernelInsight",

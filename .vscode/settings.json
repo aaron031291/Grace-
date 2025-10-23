@@ -1,0 +1,84 @@
+{
+  // ---------- Terminal & Git ----------
+  "terminal.integrated.commandsToSkipShell": [""], // no bypasses
+  "terminal.integrated.sendKeybindingsToShell": true,
+  "terminal.integrated.enableMultiLinePasteWarning": "never",
+  "git.autofetch": true,
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.ignoreRebaseWarning": true,
+  "makefile.configureOnOpen": true,
+
+  // ---------- UI / Editor ----------
+  "workbench.colorTheme": "Default Dark Modern",
+  "keyboard.layout": "com.apple.keylayout.British",
+  "chat.editor.fontSize": 14,
+
+  // ---------- Chat / Agent core ----------
+  "chat.agent.maxRequests": 50000,        // high ceiling; reduce if you see throttling
+  "chat.agent.thinkingStyle": "expanded", // verbose / reasoned output
+  "chat.agentSessionsViewLocation": "view",
+  "chat.checkpoints.showFileChanges": true,
+  "chat.edits2.enabled": true,
+  "inlineChat.enableV2": true,
+  "inlineChat.notebookAgent": true,       // inline widget behaves like a mini-agent
+  "inlineChat.finishOnType": true,        // fast flow; set false if you get accidental inserts
+  "chat.editing.autoAcceptDelay": 15,     // try 7 if feels sluggish on iPad
+  "chat.renderRelatedFiles": true,        // show attached files for auditability
+
+  // ---------- Implicit Context (Grace awareness) ----------
+  "chat.implicitContext.enabled": {
+    "https://drive.google.com/drive/folders/1N-AcO0Z4mDRA-49JyCz1hWemh3xTzyP3": "always"
+},
+
+  // ---------- Instruction Sources (Drive + repo packs) ----------
+  "chat.instructionsFilesLocations": {
+    "https://drive.google.com/drive/folders/1N-AcO0Z4mDRA-49JyCz1hWemh3xTzyP3": true,
+    "${workspaceFolder}/.grace/.agent": true
+  },
+
+  // ---------- MCP (Model Context Protocol) ----------
+  // Nugget: small auto-context facts injected into chat
+  "chat.mcp.assisted.nugget.enabled": true,  // canonical spelling
+  "chat.mcp.assisted.nuget.enabled": true,   // keep until you verify which key your client uses
+  // Discovery sources (workspace + cloud)
+  "chat.mcp.discovery.enabled": {
+    "claude-desktop": true,
+    "windsurf": true,
+    "cursor-global": true,
+    "cursor-workspace": true
+  },
+  "chat.mcp.gallery.enabled": true,
+  // Recommended autostart behavior so context refreshes when stale
+  "chat.mcp.autostart": "new-and-outdated",  // ("only-new" or "never" are stricter alternatives)
+
+  // ---------- Terminal automation (guarded) ----------
+  "chat.tools.terminal.autoReplyToPrompts": true, // y/n prompts auto-answered when matched
+  "chat.tools.terminal.autoApprove": {
+    "pytest -q": true,
+    "ruff check": true,
+    "mypy .": true,
+    "docker-compose restart backend": { "approve": true, "matchCommandLine": true }
+    // Avoid broad approvals like bare "python3" unless you really need it
+  },
+
+  // ---------- To-Do list (Grace governance-lite) ----------
+  "chat.agent.todoList": {
+    "position": "default"
+    // Optional: "showCompleted": true, "autoCollapse": false, "persistAcrossSessions": true
+  },
+  "chat.todoListTool.writeOnly": true, // agent can append tasks but not read them back (privacy)
+
+  // ---------- Prompt file surfacing ----------
+  "chat.promptFilesRecommendations": {
+    "governance-check": true,
+    "trust-audit": "resource.path.includes('/grace/')",
+    "loop-verify": "resource.language == 'python'"
+  },
+
+  // ---------- Cloud / Misc ----------
+  "chat.useCloudButtonV2": true,
+"chat.useNestedAgentsMdFiles": true,
+"chat.emptyState.history.enabled": true,
+"inlineChat.lineEmptyHint": true
+}

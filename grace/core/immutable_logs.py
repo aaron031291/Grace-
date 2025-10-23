@@ -1,6 +1,5 @@
 """
-Immutable Logs - Tamper-evident logging system for audit trails.
-Part of Phase 2: Core Spine Boot implementation.
+Grace AI Immutable Logger - Cryptographically secure audit trail
 """
 
 import asyncio
@@ -12,6 +11,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import IntEnum
+from pathlib import Path
 
 from ..config.environment import get_grace_config
 
@@ -43,16 +43,13 @@ class LogEntry:
     retention_until: Optional[datetime] = None
 
 
-class ImmutableLogs:
-    """
-    Tamper-evident logging system that provides immutable audit trails.
-    Implements hash chaining for integrity verification.
-    """
+class ImmutableLogger:
+    """Immutable, cryptographically secure logging system."""
 
-    def __init__(self, storage_backend: Optional[Any] = None):
-        self.config = get_grace_config()
-        self.storage_backend = storage_backend
-        self.running = False
+    def __init__(self, storage_dir: str = "logs"):
+        self.storage_dir = Path(storage_dir)
+        self.storage_dir.mkdir(exist_ok=True)
+        self.entries: List[LogEntry] = []
 
         # Hash chain tracking
         self.last_hash = "0" * 64  # Genesis hash
@@ -67,18 +64,14 @@ class ImmutableLogs:
         self.batch_interval = 30  # seconds
 
         # Retention configuration
+        self.config = get_grace_config()
         self.retention_config = self.config["audit_config"]["transparency_levels"]
 
-        logger.info("ImmutableLogs initialized")
+        logger.info("ImmutableLogger initialized")
 
     async def start(self):
         """Start the immutable logging system."""
-        if self.running:
-            logger.warning("ImmutableLogs already running")
-            return
-
-        self.running = True
-        logger.info("Starting ImmutableLogs...")
+        logger.info("Starting ImmutableLogger...")
 
         # Start background processing tasks
         asyncio.create_task(self._batch_processor())
@@ -87,29 +80,25 @@ class ImmutableLogs:
         # Log system start
         await self.log_event(
             event_type="system_start",
-            component_id="immutable_logs",
-            event_data={"system": "immutable_logs", "version": "1.0.0"},
+            component_id="immutable_logger",
+            event_data={"system": "immutable_logger", "version": "1.0.0"},
             transparency_level=TransparencyLevel.AUDIT_ONLY,
         )
 
     async def stop(self):
         """Stop the immutable logging system."""
-        if not self.running:
-            return
-
         # Log system stop
         await self.log_event(
             event_type="system_stop",
-            component_id="immutable_logs",
-            event_data={"system": "immutable_logs", "final_count": self.log_count},
+            component_id="immutable_logger",
+            event_data={"system": "immutable_logger", "final_count": self.log_count},
             transparency_level=TransparencyLevel.AUDIT_ONLY,
         )
 
         # Flush remaining logs
         await self._flush_batch()
 
-        self.running = False
-        logger.info("Stopped ImmutableLogs")
+        logger.info("Stopped ImmutableLogger")
 
     async def log_event(
         self,
@@ -154,79 +143,17 @@ class ImmutableLogs:
         if len(self.log_buffer) > self.buffer_limit:
             self.log_buffer = self.log_buffer[-self.buffer_limit :]
 
-        logger.debug(f"Logged event {event_type} from {component_id} (ID: {log_id})")
+        # Write to file
+        log_file = self.storage_dir / f"immutable_log_{datetime.now().strftime('%Y%m%d')}.jsonl"
+        with open(log_file, 'a') as f:
+            f.write(json.dumps(entry) + "\n")
+
+        logger.info(f"Logged event: {event_type} with correlation_id: {correlation_id}")
         return log_id
 
-    async def log_governance_decision(
-        self,
-        decision_id: str,
-        component_id: str,
-        decision_data: Dict[str, Any],
-        correlation_id: Optional[str] = None,
-    ) -> str:
-        """Log a governance decision with appropriate transparency."""
-        return await self.log_event(
-            event_type="governance_decision",
-            component_id=component_id,
-            event_data={
-                "decision_id": decision_id,
-                "decision_data": decision_data,
-                "timestamp": datetime.now().isoformat(),
-            },
-            correlation_id=correlation_id,
-            transparency_level=TransparencyLevel.DEMOCRATIC_OVERSIGHT,
-        )
-
-    async def log_constitutional_violation(
-        self,
-        violation_data: Dict[str, Any],
-        component_id: str,
-        correlation_id: Optional[str] = None,
-    ) -> str:
-        """Log a constitutional violation with high transparency."""
-        return await self.log_event(
-            event_type="constitutional_violation",
-            component_id=component_id,
-            event_data=violation_data,
-            correlation_id=correlation_id,
-            transparency_level=TransparencyLevel.PUBLIC,
-        )
-
-    async def log_security_event(
-        self,
-        security_data: Dict[str, Any],
-        component_id: str,
-        correlation_id: Optional[str] = None,
-    ) -> str:
-        """Log a security event with restricted access."""
-        return await self.log_event(
-            event_type="security_event",
-            component_id=component_id,
-            event_data=security_data,
-            correlation_id=correlation_id,
-            transparency_level=TransparencyLevel.SECURITY_SENSITIVE,
-        )
-
-    async def log_system_performance(
-        self,
-        metric_name: str,
-        metric_value: float,
-        component_id: str,
-        tags: Optional[Dict[str, str]] = None,
-        correlation_id: Optional[str] = None,
-    ) -> str:
-        """Log system performance metrics."""
-        return await self.log_event(
-            event_type="system_performance",
-            component_id=component_id,
-            event_data={
-                "metric_name": metric_name,
-                "metric_value": metric_value,
-                "tags": tags or {},
-            },
-            correlation_id=correlation_id,
-            transparency_level=TransparencyLevel.GOVERNANCE_INTERNAL,
-        )
+    def get_entries_by_correlation_id(self, correlation_id: str):
+        """Retrieve all entries for a specific correlation_id."""
+        return [e for e in self.entries if e["correlation_id"] == correlation_id]
 
     def get_logs_by_correlation(
         self, correlation_id: str, access_level: int = 0
@@ -372,7 +299,7 @@ class ImmutableLogs:
 
     async def _batch_processor(self):
         """Process log batches for persistent storage."""
-        while self.running:
+        while True:
             try:
                 await asyncio.sleep(self.batch_interval)
                 await self._flush_batch()
@@ -395,7 +322,7 @@ class ImmutableLogs:
 
     async def _retention_cleanup(self):
         """Clean up expired log entries based on retention policy."""
-        while self.running:
+        while True:
             try:
                 now = datetime.now()
                 initial_count = len(self.log_buffer)

@@ -68,3 +68,19 @@ __all__ = [
     "trace_operation",
     "create_unified_app",
 ]
+
+"""
+Grace AI Core Module - Fundamental infrastructure components
+"""
+from grace.core.event_bus import EventBus
+from grace.core.immutable_logs import ImmutableLogger, TransparencyLevel
+from grace.core.kpi_trust_monitor import KPITrustMonitor
+from grace.core.component_registry import ComponentRegistry
+
+__all__ = [
+    "EventBus",
+    "ImmutableLogger",
+    "TransparencyLevel",
+    "KPITrustMonitor",
+    "ComponentRegistry",
+]

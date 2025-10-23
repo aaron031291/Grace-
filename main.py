@@ -1,137 +1,133 @@
 """
-Main entry point for Grace
+Grace AI - Main Entry Point
+This script initializes and starts the entire Grace AI system.
 """
 
-import argparse
 import asyncio
-import sys
 import logging
+import sys
+from threading import Thread
 
-# Configure logging early
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("Grace-AI")
 
+from grace.core import EventBus, ImmutableLogger, KPITrustMonitor, ComponentRegistry
+from grace.services.task_manager import TaskManager
+from grace.services.notification_service import NotificationService
+from grace.services.communication_channel import CommunicationChannel
+from grace.services.llm_service import LLMService
+from grace.agents.remote_agent import RemoteAgent
+from grace.consciousness import Consciousness
+from grace.kernels.cognitive_cortex import CognitiveCortex
+from grace.kernels.sentinel_kernel import SentinelKernel
 
-def run_service():
-    """
-    Run Grace in service mode
+async def initialize_system():
+    """Initialize all Grace system components."""
+    logger.info("Initializing Grace AI System...")
     
-    Fails fast if initialization fails
-    """
+    # Core infrastructure
+    event_bus = EventBus()
+    immutable_logger = ImmutableLogger()
+    kpi_monitor = KPITrustMonitor()
+    component_registry = ComponentRegistry()
+    
+    # Services
+    task_manager = TaskManager()
+    notification_service = NotificationService()
+    communication_channel = CommunicationChannel()
+    llm_service = LLMService()
+    remote_agent = RemoteAgent()
+    
+    # Kernels
+    cognitive_cortex = CognitiveCortex(
+        event_bus=event_bus,
+        task_manager=task_manager,
+        communication_channel=communication_channel,
+        sandbox_manager=None,  # Will be set later
+        llm_service=llm_service
+    )
+    
+    sentinel_kernel = SentinelKernel(
+        event_bus=event_bus,
+        llm_service=llm_service
+    )
+    
+    # Consciousness loop
+    consciousness = Consciousness(
+        cognitive_cortex=cognitive_cortex,
+        task_manager=task_manager,
+        kpi_monitor=kpi_monitor,
+        component_registry=component_registry,
+        event_bus=event_bus,
+        immutable_logger=immutable_logger
+    )
+    
+    # Register components
+    component_registry.register("event_bus", event_bus)
+    component_registry.register("immutable_logger", immutable_logger)
+    component_registry.register("kpi_monitor", kpi_monitor)
+    component_registry.register("task_manager", task_manager)
+    component_registry.register("communication_channel", communication_channel)
+    component_registry.register("llm_service", llm_service)
+    component_registry.register("cognitive_cortex", cognitive_cortex)
+    component_registry.register("sentinel_kernel", sentinel_kernel)
+    component_registry.register("consciousness", consciousness)
+    
+    logger.info("All components initialized successfully")
+    
+    return {
+        "event_bus": event_bus,
+        "immutable_logger": immutable_logger,
+        "kpi_monitor": kpi_monitor,
+        "task_manager": task_manager,
+        "notification_service": notification_service,
+        "communication_channel": communication_channel,
+        "llm_service": llm_service,
+        "remote_agent": remote_agent,
+        "cognitive_cortex": cognitive_cortex,
+        "sentinel_kernel": sentinel_kernel,
+        "consciousness": consciousness,
+        "component_registry": component_registry
+    }
+
+async def run_consciousness_loop(consciousness):
+    """Run the main consciousness loop."""
+    await consciousness.run(tick_interval=2.0)
+
+def run_sentinel_loop(sentinel_kernel):
+    """Run the sentinel monitoring loop in a separate thread."""
+    asyncio.run(sentinel_kernel.monitor(check_interval=10.0))
+
+async def main():
+    """Main entry point."""
+    logger.info("="*60)
+    logger.info("Starting Grace AI System")
+    logger.info("="*60)
+    
     try:
-        # Import here to catch import errors
-        from grace.core.unified_service import create_unified_app
-        from grace.config import get_config
-        import uvicorn
+        # Initialize system
+        components = await initialize_system()
+        consciousness = components["consciousness"]
+        sentinel_kernel = components["sentinel_kernel"]
         
-        logger.info("Starting Grace Unified Service...")
+        # Start Sentinel in a separate thread
+        sentinel_thread = Thread(target=run_sentinel_loop, args=(sentinel_kernel,), daemon=True)
+        sentinel_thread.start()
+        logger.info("Sentinel Kernel started in background thread")
         
-        # Create app (will fail fast if initialization fails)
-        app = create_unified_app()
+        # Start Consciousness loop
+        logger.info("Starting Consciousness loop...")
+        await run_consciousness_loop(consciousness)
         
-        # Get configuration
-        config = get_config()
-        
-        # Run server
-        uvicorn.run(
-            app,
-            host=config.service_host,
-            port=config.service_port,
-            log_level=config.log_level.lower()
-        )
-    
-    except ImportError as e:
-        logger.critical(f"Failed to import required modules: {e}")
-        logger.critical("Ensure all dependencies are installed: pip install -e .")
-        sys.exit(1)
-    
-    except RuntimeError as e:
-        logger.critical(f"Service initialization failed: {e}")
-        sys.exit(1)
-    
-    except Exception as e:
-        logger.critical(f"Unexpected error during service startup: {e}", exc_info=True)
-        sys.exit(1)
-
-
-async def run_demo(demo_name: str):
-    """Run a specific demo (coroutine)"""
-    try:
-        # Map demo names to kernel start functions
-        demos = {
-            "multi_os": "grace.kernels.multi_os:start",
-            "mldl": "grace.kernels.mldl:start",
-            "resilience": "grace.kernels.resilience:start",
-        }
-        
-        if demo_name not in demos:
-            logger.error(f"Unknown demo: {demo_name}")
-            logger.info(f"Available demos: {', '.join(demos.keys())}")
-            sys.exit(1)
-        
-        module_path, func = demos[demo_name].rsplit(":", 1)
-        module = __import__(module_path, fromlist=[func])
-        start_coro = getattr(module, func)
-        
-        logger.info(f"Starting demo: {demo_name}")
-        await start_coro()
-        
-        # Keep running
-        logger.info("Demo running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-    
     except KeyboardInterrupt:
-        logger.info("Demo stopped by user")
-    
+        logger.info("Shutdown signal received")
     except Exception as e:
-        logger.critical(f"Demo failed: {e}", exc_info=True)
+        logger.error(f"Fatal error: {str(e)}", exc_info=True)
         sys.exit(1)
-
-
-def main(argv=None):
-    """Main entry point"""
-    parser = argparse.ArgumentParser(
-        prog="grace",
-        description="Grace AI System - Constitutional AI with Multi-Agent Coordination"
-    )
-    parser.add_argument(
-        "mode",
-        nargs="?",
-        default="service",
-        choices=["service", "demo"],
-        help="Run mode: service (default) or demo"
-    )
-    parser.add_argument(
-        "--demo",
-        default="multi_os",
-        choices=["multi_os", "mldl", "resilience"],
-        help="Demo to run when mode=demo"
-    )
-    parser.add_argument(
-        "--config",
-        help="Path to configuration file (optional)"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug mode"
-    )
-    
-    args = parser.parse_args(argv)
-    
-    # Set debug if requested
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-    
-    # Run selected mode
-    if args.mode == "service":
-        run_service()
-    elif args.mode == "demo":
-        asyncio.run(run_demo(args.demo))
-
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

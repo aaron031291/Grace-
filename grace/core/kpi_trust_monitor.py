@@ -1,6 +1,5 @@
 """
-KPI Trust Monitor - Monitors system health, performance, and trust metrics.
-Part of Phase 2: Core Spine Boot implementation.
+Grace AI KPI and Trust Monitor - Tracks system health and reliability
 """
 
 import asyncio
@@ -9,6 +8,7 @@ from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 import statistics
+from pathlib import Path
 
 from ..config.environment import get_grace_config
 
@@ -43,15 +43,14 @@ class TrustScore:
 
 
 class KPITrustMonitor:
-    """
-    Monitors KPI metrics and trust scores across Grace components.
-    Provides real-time health monitoring and anomaly detection.
-    """
+    """Monitors KPIs and trust scores for the system."""
 
-    def __init__(self, event_publisher: Optional[Callable] = None):
+    def __init__(self, event_publisher: Optional[Callable] = None, storage_dir: str = "metrics"):
         self.config = get_grace_config()
         self.event_publisher = event_publisher
         self.running = False
+        self.storage_dir = Path(storage_dir)
+        self.storage_dir.mkdir(exist_ok=True)
 
         # Metric storage
         self.metrics: Dict[str, List[KPIMetric]] = {}
@@ -67,6 +66,17 @@ class KPITrustMonitor:
 
         # Alert callbacks
         self.alert_callbacks: List[Callable] = []
+
+        # Default KPIs
+        self.kpis: Dict[str, float] = {
+            "stability": 99.9,
+            "performance": 98.5,
+            "availability": 99.99,
+            "security": 98.0,
+            "reliability": 99.5
+        }
+
+        self.metrics_history = []
 
         logger.info("KPITrustMonitor initialized")
 
@@ -114,8 +124,9 @@ class KPITrustMonitor:
         threshold_warning: Optional[float] = None,
         threshold_critical: Optional[float] = None,
         tags: Optional[Dict[str, str]] = None,
+        correlation_id: str = None
     ):
-        """Record a KPI metric."""
+        """Record a metric."""
         metric = KPIMetric(
             name=name,
             value=value,
@@ -137,6 +148,10 @@ class KPITrustMonitor:
         if len(self.metrics[name]) > self.metric_history_limit:
             self.metrics[name] = self.metrics[name][-self.metric_history_limit :]
 
+        # Update KPI if it matches
+        if name in self.kpis:
+            self.kpis[name] = value
+
         # Check for anomalies
         await self._check_metric_anomalies(metric)
 
@@ -144,7 +159,7 @@ class KPITrustMonitor:
         if self.event_publisher:
             await self.event_publisher("kpi_metric_recorded", asdict(metric))
 
-        logger.debug(f"Recorded metric {name}={value} for {component_id}")
+        logger.info(f"Recorded metric: {name} = {value}")
 
     async def update_trust_score(
         self, component_id: str, performance_score: float, confidence: float = 1.0
@@ -199,6 +214,14 @@ class KPITrustMonitor:
         key = f"{instance_id}:{component_id}"
         return self.trust_scores.get(key)
 
+    def get_kpi(self, kpi_name: str) -> Optional[float]:
+        """Get a specific KPI value."""
+        return self.kpis.get(kpi_name)
+
+    def get_all_kpis(self) -> Dict[str, float]:
+        """Get all KPI values."""
+        return self.kpis.copy()
+
     def get_system_health(self) -> Dict[str, Any]:
         """Get comprehensive system health metrics."""
         now = datetime.now()
@@ -250,6 +273,17 @@ class KPITrustMonitor:
             )
 
         return health_data
+
+    async def set_trust_score(self, component: str, score: float):
+        """Set the trust score for a component."""
+        self.trust_scores[component] = min(100.0, max(0.0, score))
+        logger.info(f"Trust score for {component}: {score}")
+
+    def get_overall_trust(self) -> float:
+        """Get the overall trust score."""
+        if not self.trust_scores:
+            return 50.0
+        return sum(self.trust_scores.values()) / len(self.trust_scores)
 
     def register_alert_callback(self, callback: Callable):
         """Register a callback for alert notifications."""

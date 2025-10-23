@@ -2,11 +2,12 @@
 Grace AI - Main Entry Point
 This script initializes and starts the entire Grace AI system.
 """
-
 import asyncio
 import logging
 import sys
+import os
 from threading import Thread
+from flask import Flask
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +25,7 @@ from grace.agents.remote_agent import RemoteAgent
 from grace.consciousness import Consciousness
 from grace.kernels.cognitive_cortex import CognitiveCortex
 from grace.kernels.sentinel_kernel import SentinelKernel
+from grace.api import create_app
 
 async def initialize_system():
     """Initialize all Grace system components."""
@@ -47,7 +49,7 @@ async def initialize_system():
         event_bus=event_bus,
         task_manager=task_manager,
         communication_channel=communication_channel,
-        sandbox_manager=None,  # Will be set later
+        sandbox_manager=None,
         llm_service=llm_service
     )
     
@@ -102,6 +104,10 @@ def run_sentinel_loop(sentinel_kernel):
     """Run the sentinel monitoring loop in a separate thread."""
     asyncio.run(sentinel_kernel.monitor(check_interval=10.0))
 
+def run_flask_api(app):
+    """Run the Flask API server."""
+    app.run(host='0.0.0.0', port=5000, debug=False)
+
 async def main():
     """Main entry point."""
     logger.info("="*60)
@@ -113,6 +119,23 @@ async def main():
         components = await initialize_system()
         consciousness = components["consciousness"]
         sentinel_kernel = components["sentinel_kernel"]
+        
+        # Create Flask app with components
+        flask_app = create_app(components)
+        
+        # Serve static files
+        @flask_app.route('/')
+        def index():
+            return flask_app.send_static_file('index.html')
+        
+        @flask_app.route('/static/<path:path>')
+        def send_static(path):
+            return flask_app.send_from_directory('frontend', path)
+        
+        # Start Flask API in a separate thread
+        logger.info("Starting Flask API on http://0.0.0.0:5000")
+        flask_thread = Thread(target=run_flask_api, args=(flask_app,), daemon=True)
+        flask_thread.start()
         
         # Start Sentinel in a separate thread
         sentinel_thread = Thread(target=run_sentinel_loop, args=(sentinel_kernel,), daemon=True)

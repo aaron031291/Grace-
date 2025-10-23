@@ -87,3 +87,9 @@ llama-cpp-python>=0.2.0        # llama.cpp Python bindings
 # Optional backends:
 # onnxruntime>=1.16.0           # ONNX runtime
 # optimum>=1.14.0               # HuggingFace optimization
+
+# Flask & Additional Dependencies
+Flask==2.3.0
+flask-cors==4.0.0
+requests==2.31.0
+Qdrant-client==2.6.0

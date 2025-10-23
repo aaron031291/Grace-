@@ -28,13 +28,20 @@
 
   // ---------- Implicit Context (Grace awareness) ----------
   "chat.implicitContext.enabled": {
-    "https://drive.google.com/drive/folders/1N-AcO0Z4mDRA-49JyCz1hWemh3xTzyP3": "always"
-},
+    "editor/selection": "always",
+    "diff/pr view": "always",
+    "notebook/terminal": "always",
+    "workspace/repo/root": "always"
+  },
 
   // ---------- Instruction Sources (Drive + repo packs) ----------
   "chat.instructionsFilesLocations": {
-    "https://drive.google.com/drive/folders/1N-AcO0Z4mDRA-49JyCz1hWemh3xTzyP3": true,
-    "${workspaceFolder}/.grace/.agent": true
+    // 1️⃣ Local sovereign packs — main source of truth
+    "${workspaceFolder}/.grace/.agent": true,
+    // 2️⃣ Optional: direct single file reference (e.g. Playbook Zero)
+    "${workspaceFolder}/.grace/.agent/playbook_zero.md": true,
+    // 3️⃣ Optional: synced Drive folder (mirror backup or shared context)
+    "https://drive.google.com/drive/folders/1N-AcO0Z4mDRA-49JyCz1hWemh3xTzyP3": true
   },
 
   // ---------- MCP (Model Context Protocol) ----------
@@ -50,7 +57,7 @@
   },
   "chat.mcp.gallery.enabled": true,
   // Recommended autostart behavior so context refreshes when stale
-  "chat.mcp.autostart": "new-and-outdated",  // ("only-new" or "never" are stricter alternatives)
+  "chat.mcp.autostart": "newAndOutdated",  // ("only-new" or "never" are stricter alternatives)
 
   // ---------- Terminal automation (guarded) ----------
   "chat.tools.terminal.autoReplyToPrompts": true, // y/n prompts auto-answered when matched
@@ -72,13 +79,15 @@
   // ---------- Prompt file surfacing ----------
   "chat.promptFilesRecommendations": {
     "governance-check": true,
+    "clarity-verify": true,
+    "capability-scan": true,
     "trust-audit": "resource.path.includes('/grace/')",
     "loop-verify": "resource.language == 'python'"
   },
 
   // ---------- Cloud / Misc ----------
   "chat.useCloudButtonV2": true,
-"chat.useNestedAgentsMdFiles": true,
-"chat.emptyState.history.enabled": true,
-"inlineChat.lineEmptyHint": true
+  "chat.useNestedAgentsMdFiles": true,
+  "chat.emptyState.history.enabled": true,
+  "inlineChat.lineEmptyHint": true
 }

@@ -17,6 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger("Grace-AI")
 
 from grace.core import EventBus, ImmutableLogger, KPITrustMonitor, ComponentRegistry, CoreTruthLayer
+from grace.core.service_registry import ServiceRegistry, get_global_registry, initialize_global_registry
 from grace.services.task_manager import TaskManager
 from grace.services.notification_service import NotificationService
 from grace.services.communication_channel import CommunicationChannel

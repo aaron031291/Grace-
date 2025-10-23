@@ -1,13 +1,30 @@
 """
-Grace Memory Systems
+Grace AI Memory Module - Unified Memory System
+Single cohesive memory architecture combining:
+- MTL (Multi-Task Learning): Immutable core truth
+- Lightning: Fast access cache layer
+- Fusion: Knowledge integration
+- Vector: Semantic embeddings
+- Librarian: Organization & retrieval
+- Database: Persistent storage schemas
 """
 
-from .async_lightning import AsyncLightningMemory
-from .async_fusion import AsyncFusionMemory
-from .immutable_logs_async import AsyncImmutableLogs
+from .unified_memory_system import (
+    MTLImmutableLedger,
+    LightningMemory,
+    FusionMemory,
+    VectorMemory,
+    LibrarianMemory,
+    UnifiedMemorySystem,
+    DatabaseSchema
+)
 
 __all__ = [
-    'AsyncLightningMemory',
-    'AsyncFusionMemory',
-    'AsyncImmutableLogs'
+    'MTLImmutableLedger',
+    'LightningMemory',
+    'FusionMemory',
+    'VectorMemory',
+    'LibrarianMemory',
+    'UnifiedMemorySystem',
+    'DatabaseSchema',
 ]

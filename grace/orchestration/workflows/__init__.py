@@ -1,8 +1,5 @@
 """
-TriggerMesh Workflow Definitions
-
-This directory contains YAML workflow definitions that map events to kernel actions.
-All workflows are version-controlled and can be hot-reloaded without system restart.
+Orchestration Workflows Directory
 """
 
 # Workflow files in this directory:

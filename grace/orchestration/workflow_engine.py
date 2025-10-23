@@ -1,18 +1,18 @@
-"""
-Workflow Engine - Executes TriggerMesh workflows by routing actions to kernels.
+ """
+Workflow Engine for TriggerMesh Orchestration Layer.
 
-Handles parameter substitution, parallel execution, error handling, and logging.
+Executes the actions defined in a workflow.
 """
+from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Dict, List, Any, Optional
-from datetime import datetime
 import re
-import json
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
 from grace.core.event_bus import EventBus
-from grace.core.immutable_logs import ImmutableLogs, TransparencyLevel
+from grace.core.immutable_logs import ImmutableLogger, TransparencyLevel
 from grace.core.kpi_trust_monitor import KPITrustMonitor
 
 logger = logging.getLogger(__name__)
@@ -81,24 +81,21 @@ class ParameterSubstitutor:
 
 
 class WorkflowEngine:
-    """
-    Executes workflows by routing actions to appropriate kernels.
-    Handles parallel execution, error handling, and result logging.
-    """
+    """Executes workflow actions by calling registered kernel handlers."""
 
     def __init__(
         self,
         event_bus: EventBus,
-        immutable_logs: ImmutableLogs,
+        immutable_logger: ImmutableLogger,
         kpi_monitor: Optional[KPITrustMonitor] = None,
+        config: Optional[Dict[str, Any]] = None,
     ):
         self.event_bus = event_bus
-        self.immutable_logs = immutable_logs
+        self.logger = immutable_logger
         self.kpi_monitor = kpi_monitor
+        self.config = config or {}
+        self.kernel_handlers: Dict[str, Callable] = {}
         self.parameter_substitutor = ParameterSubstitutor()
-
-        # Kernel registry (maps kernel names to handlers)
-        self.kernel_handlers: Dict[str, Any] = {}
 
         # Statistics
         self.stats = {
@@ -108,31 +105,29 @@ class WorkflowEngine:
             "actions_failed": 0,
         }
 
-    def register_kernel(self, kernel_name: str, handler: Any):
-        """Register a kernel handler for workflow actions."""
-        self.kernel_handlers[kernel_name] = handler
-        logger.info(f"Registered kernel: {kernel_name}")
+    def register_kernel_handler(self, name: str, handler: Callable):
+        """Register a function from a kernel that can be called as a workflow action."""
+        if name in self.kernel_handlers:
+            logger.warning(f"Overwriting kernel handler for action: {name}")
+        self.kernel_handlers[name] = handler
+        logger.info(f"Registered kernel handler for action: {name}")
 
-    async def execute_workflow(self, workflow, event: Dict[str, Any]):
-        """Execute a complete workflow."""
+    async def execute_workflow(self, workflow: Dict[str, Any], trigger_payload: Dict[str, Any]):
+        """Execute all actions for a given workflow."""
         start_time = datetime.now()
-        workflow_name = workflow.name
-        correlation_id = event.get("correlation_id")
+        workflow_name = workflow["name"]
+        correlation_id = trigger_payload.get("correlation_id")
 
         logger.info(f"Executing workflow: {workflow_name}")
+        await self.event_bus.publish(
+            "workflow.started", {"workflow_name": workflow_name, "trigger_payload": trigger_payload}
+        )
 
-        # Build execution context
-        context = {
-            "event": event,
-            "payload": event.get("payload", {}),
-            "workflow": {"name": workflow_name, "version": workflow.version},
-        }
-
-        # Execute all actions
+        actions = workflow.get("actions", [])
         results = []
-        for action in workflow.actions:
+        for action in actions:
             try:
-                result = await self._execute_action(action, context)
+                result = await self._execute_action(workflow_name, action, trigger_payload)
                 results.append(result)
 
                 if result["status"] == "SUCCESS":
@@ -141,10 +136,10 @@ class WorkflowEngine:
                     self.stats["actions_failed"] += 1
 
             except Exception as e:
-                logger.error(f"Action {action.name} failed: {e}")
+                logger.error(f"Action {action['name']} failed: {e}")
                 results.append(
                     {
-                        "action": action.name,
+                        "action": action["name"],
                         "status": "FAILED",
                         "error": str(e),
                         "latency_ms": 0,
@@ -167,7 +162,7 @@ class WorkflowEngine:
             status = "FAILED"
 
         # Log workflow completion
-        await self.immutable_logs.log_event(
+        await self.logger.log_event(
             event_type="workflow.completed",
             component_id="trigger_mesh",
             event_data={
@@ -202,147 +197,55 @@ class WorkflowEngine:
         return {"status": status, "results": results}
 
     async def _execute_action(
-        self, action, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Execute a single workflow action."""
-        start_time = datetime.now()
-        action_name = action.name
-        target_kernel = action.target_kernel
-
-        logger.debug(f"Executing action: {action_name} → {target_kernel}")
-
-        # Substitute parameters
-        parameters = self.parameter_substitutor.substitute(
-            action.parameters, context
-        )
-
-        # Get kernel handler
-        if target_kernel not in self.kernel_handlers:
-            # If kernel not registered, publish event to event bus
-            logger.warning(
-                f"Kernel {target_kernel} not registered, publishing event instead"
-            )
-            result = await self._publish_kernel_event(
-                target_kernel, action.action, parameters
-            )
-        else:
-            # Call kernel handler directly
-            handler = self.kernel_handlers[target_kernel]
-            result = await self._call_kernel_handler(
-                handler, action.action, parameters, action.timeout_ms
-            )
-
-        end_time = datetime.now()
-        latency_ms = (end_time - start_time).total_seconds() * 1000
-
-        # Build result
-        action_result = {
-            "action": action_name,
-            "target_kernel": target_kernel,
-            "status": result.get("status", "SUCCESS"),
-            "latency_ms": latency_ms,
-        }
-
-        if "error" in result:
-            action_result["error"] = result["error"]
-
-        # Log action execution
-        await self.immutable_logs.log_event(
-            event_type="workflow.action_executed",
-            component_id="trigger_mesh",
-            event_data={
-                "workflow_name": context["workflow"]["name"],
-                "action_name": action_name,
-                "target_kernel": target_kernel,
-                "result": action_result["status"],
-                "latency_ms": latency_ms,
-            },
-            correlation_id=context["event"].get("correlation_id"),
-            transparency_level=TransparencyLevel.GOVERNANCE_INTERNAL,
-        )
-
-        # Handle on_success / on_failure events
-        if action_result["status"] == "SUCCESS" and hasattr(action, "on_success"):
-            await self._handle_action_events(action.on_success, context, action_result)
-        elif action_result["status"] != "SUCCESS" and hasattr(action, "on_failure"):
-            await self._handle_action_events(action.on_failure, context, action_result)
-
-        self.stats["actions_executed"] += 1
-
-        return action_result
-
-    async def _call_kernel_handler(
-        self, handler: Any, action: str, parameters: Dict[str, Any], timeout_ms: int
-    ) -> Dict[str, Any]:
-        """Call a registered kernel handler."""
-        try:
-            # Get the action method from handler
-            if hasattr(handler, action):
-                method = getattr(handler, action)
-
-                # Call with timeout
-                if asyncio.iscoroutinefunction(method):
-                    result = await asyncio.wait_for(
-                        method(**parameters), timeout=timeout_ms / 1000
-                    )
-                else:
-                    result = method(**parameters)
-
-                return {"status": "SUCCESS", "result": result}
-            else:
-                return {
-                    "status": "FAILED",
-                    "error": f"Action {action} not found on kernel",
-                }
-
-        except asyncio.TimeoutError:
-            return {"status": "TIMEOUT", "error": f"Action timed out after {timeout_ms}ms"}
-        except Exception as e:
-            logger.error(f"Kernel handler error: {e}")
-            return {"status": "FAILED", "error": str(e)}
-
-    async def _publish_kernel_event(
-        self, kernel: str, action: str, parameters: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Publish event to event bus for unregistered kernel."""
-        try:
-            event_type = f"kernel.{kernel}.{action}"
-            await self.event_bus.publish(event_type, parameters)
-
-            return {"status": "SUCCESS", "result": "event_published"}
-
-        except Exception as e:
-            logger.error(f"Failed to publish kernel event: {e}")
-            return {"status": "FAILED", "error": str(e)}
-
-    async def _handle_action_events(
-        self, event_configs: List[Dict], context: Dict[str, Any], action_result: Dict
+        self, workflow_name: str, action: Dict[str, Any], trigger_payload: Dict[str, Any]
     ):
-        """Handle on_success / on_failure event publishing."""
-        for event_config in event_configs:
-            try:
-                event_type = event_config["event"]
+        """Execute a single action from a workflow."""
+        start_time = datetime.now()
+        action_name = action.get("name")
+        target = action.get("target")
+        params = self.parameter_substitutor.substitute(action.get("params", {}), trigger_payload)
+        timeout = action.get("timeout_seconds", 10)
 
-                # Build event context with action result
-                event_context = {
-                    **context,
-                    "action": action_result,
-                }
+        handler = self.kernel_handlers.get(target)
+        if not handler:
+            logger.error(f"No kernel handler found for target: {target} in workflow: {workflow_name}")
+            return
 
-                # Substitute payload parameters
-                payload = self.parameter_substitutor.substitute(
-                    event_config["payload"], event_context
-                )
+        logger.debug(f"Executing action '{action_name}' with target '{target}' and params: {params}")
 
-                # Publish event
-                await self.event_bus.publish(
-                    event_type, payload, correlation_id=context["event"].get("correlation_id")
-                )
+        try:
+            await asyncio.wait_for(handler(**params), timeout=timeout)
+            await self.event_bus.publish(
+                "workflow.action_executed",
+                {"workflow_name": workflow_name, "action_name": action_name, "status": "SUCCESS"},
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Action '{action_name}' in workflow '{workflow_name}' timed out.")
+            await self.event_bus.publish(
+                "workflow.action_executed",
+                {"workflow_name": workflow_name, "action_name": action_name, "status": "TIMEOUT"},
+            )
+        except Exception as e:
+            logger.exception(f"Action '{action_name}' in workflow '{workflow_name}' failed.")
+            await self.event_bus.publish(
+                "workflow.action_executed",
+                {"workflow_name": workflow_name, "action_name": action_name, "status": "FAILURE", "error": str(e)},
+            )
 
-                logger.debug(f"Published action event: {event_type}")
-
-            except Exception as e:
-                logger.error(f"Failed to publish action event: {e}")
+    def _resolve_params(self, params: Dict[str, Any], trigger_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve template variables in parameters from the trigger payload."""
+        resolved_params = {}
+        for key, value in params.items():
+            if isinstance(value, str) and value.startswith("{{") and value.endswith("}}"):
+                # Simple template substitution, e.g., {{ payload.component_id }}
+                parts = value[2:-2].strip().split(".")
+                if len(parts) == 2 and parts[0] == "payload":
+                    resolved_params[key] = trigger_payload.get(parts[1])
+                else:
+                    resolved_params[key] = None
+            else:
+                resolved_params[key] = value
+        return resolved_params
 
     def get_stats(self) -> Dict[str, Any]:
         """Get engine statistics."""

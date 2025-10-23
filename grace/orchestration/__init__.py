@@ -77,3 +77,14 @@ __all__ = [
     "SchedulerMetrics",
     "scheduler_metrics",
 ]
+
+"""
+Grace AI Orchestration Module - Workflow and event-driven execution
+"""
+from grace.orchestration.trigger_mesh import TriggerMesh, WorkflowRule, EventPattern
+
+__all__ = [
+    "TriggerMesh",
+    "WorkflowRule",
+    "EventPattern",
+]

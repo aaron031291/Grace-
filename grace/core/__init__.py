@@ -71,11 +71,19 @@ __all__ = [
 
 """
 Grace AI Core Module - Fundamental infrastructure components
+The Core Truth Layer is the canonical source of truth for all system data
 """
 from grace.core.event_bus import EventBus
 from grace.core.immutable_logs import ImmutableLogger, TransparencyLevel
 from grace.core.kpi_trust_monitor import KPITrustMonitor
 from grace.core.component_registry import ComponentRegistry
+from grace.core.truth_layer import (
+    CoreTruthLayer,
+    MTLKernelCore,
+    ImmutableTruthLog,
+    SystemMetrics,
+    DataIntegrity
+)
 
 __all__ = [
     "EventBus",
@@ -83,4 +91,9 @@ __all__ = [
     "TransparencyLevel",
     "KPITrustMonitor",
     "ComponentRegistry",
+    "CoreTruthLayer",
+    "MTLKernelCore",
+    "ImmutableTruthLog",
+    "SystemMetrics",
+    "DataIntegrity",
 ]

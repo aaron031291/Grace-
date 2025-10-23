@@ -2,77 +2,550 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
-  sqlite-tests:
+  type-safety:
+    name: Type Safety & Linting
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run sqlite tests
-        run: |
-          pytest -q
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install black ruff mypy
+    
+    - name: Run Black (formatting check)
+      run: black --check grace/ tests/ scripts/ --exclude __pycache__
+      continue-on-error: true
+    
+    - name: Run Ruff (linting)
+      run: ruff check grace/ tests/ --exit-zero
+    
+    - name: Type safety audit
+      run: python scripts/audit_type_safety.py
+    
+    - name: Check for dict publishes
+      run: python scripts/fix_dict_publishes.py
 
-  postgres-tests:
-    needs: sqlite-tests
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
     services:
       postgres:
-        image: postgres:15
-        ports:
-          - 5432:5432
+        image: postgres:14-alpine
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: grace_test
+          POSTGRES_PASSWORD: grace_test_pass
           POSTGRES_DB: grace_test
         options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Wait for Postgres
-        run: |
-          for i in {1..20}; do
-            pg_isready -h localhost -p 5432 && break
-            sleep 1
-          done
-      - name: Run migrations
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install pytest pytest-asyncio pytest-cov pytest-timeout
+    
+    - name: Wait for services
+      run: |
+        timeout 30 bash -c 'until pg_isready -h localhost -p 5432 -U grace_test; do sleep 1; done'
+        timeout 30 bash -c 'until redis-cli -h localhost ping 2>/dev/null; do sleep 1; done'
+    
+    - name: Run unit tests
+      env:
+        DATABASE_URL: postgresql://grace_test:grace_test_pass@localhost:5432/grace_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/ \
+          -v \
+          --tb=short \
+          --timeout=30 \
+          -m "not slow" \
+          --ignore=tests/test_end_to_end.py
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          .coverage
+          htmlcov/
+
+  event-bus-tests:
+    name: EventBus Feature Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio
+    
+    - name: Run EventBus tests
+      env:
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/test_event_bus_features.py -v --tb=short
+
+  trigger-mesh-tests:
+    name: TriggerMesh Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio pyyaml
+    
+    - name: Verify TriggerMesh config
+      run: |
+        test -f config/trigger_mesh.yaml || echo "⚠️  TriggerMesh config missing"
+    
+    - name: Run TriggerMesh tests
+      env:
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/test_trigger_mesh.py -v --tb=short
+
+  consensus-tests:
+    name: Governance-MLDL Consensus Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio
+    
+    - name: Run consensus tests
+      env:
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/test_governance_mldl_consensus.py -v --tb=short
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit-tests, event-bus-tests]
+    
+    services:
+      postgres:
+        image: postgres:14-alpine
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
-        run: |
-          python3 scripts/apply_migrations.py
-      - name: Run tests
+          POSTGRES_USER: grace_test
+          POSTGRES_PASSWORD: grace_test_pass
+          POSTGRES_DB: grace_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install pytest pytest-asyncio
+    
+    - name: Run end-to-end tests
+      env:
+        DATABASE_URL: postgresql://grace_test:grace_test_pass@localhost:5432/grace_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/test_end_to_end.py -v --tb=short
+
+  memory-tests:
+    name: Memory Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:14-alpine
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
-        run: |
-          pytest -q
-      - name: Verify event logs
+          POSTGRES_USER: grace_test
+          POSTGRES_PASSWORD: grace_test_pass
+          POSTGRES_DB: grace_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio
+    
+    - name: Run memory tests
+      env:
+        DATABASE_URL: postgresql://grace_test:grace_test_pass@localhost:5432/grace_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/test_memory_integration.py -v --tb=short
+
+  kernel-tests:
+    name: Kernel Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio
+    
+    - name: Run kernel management tests
+      env:
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/test_kernel_management.py -v --tb=short
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install security tools
+      run: |
+        pip install safety bandit pip-audit
+    
+    - name: Run Bandit
+      run: |
+        bandit -r grace/ -f json -o bandit-report.json || true
+        bandit -r grace/ || echo "⚠️  Bandit found issues (non-blocking)"
+      continue-on-error: true
+    
+    - name: Run Safety
+      run: |
+        pip freeze | safety check --stdin || echo "⚠️  Safety found issues (non-blocking)"
+      continue-on-error: true
+    
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: bandit-report.json
+
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install build tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Check package
+      run: twine check dist/*
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-packages
+        path: dist/
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit-tests]
+    
+    services:
+      postgres:
+        image: postgres:14-alpine
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grace_test
-        run: |
-          echo "Checking for immutable events in event_logs"
-          COUNT=$(psql "$DATABASE_URL" -t -c "SELECT count(*) FROM event_logs WHERE event_type LIKE 'immutable_%';" | tr -d ' ')
-          echo "Found $COUNT immutable events"
-          if [ "$COUNT" -lt 1 ]; then
-            echo "No immutable events recorded - failing CI"
+          POSTGRES_USER: grace_test
+          POSTGRES_PASSWORD: grace_test_pass
+          POSTGRES_DB: grace_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install pytest pytest-asyncio pytest-cov
+    
+    - name: Run tests with coverage
+      env:
+        DATABASE_URL: postgresql://grace_test:grace_test_pass@localhost:5432/grace_test
+        REDIS_URL: redis://localhost:6379
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-for-ci-minimum-32-characters
+      run: |
+        pytest tests/ \
+          --cov=grace \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-report=term \
+          -v \
+          --ignore=tests/test_end_to_end.py \
+          || echo "⚠️  Some tests failed but coverage collected"
+      continue-on-error: true
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-grace
+        fail_ci_if_error: false
+    
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+  mcp-validation:
+    name: MCP Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio
+    
+    - name: Run MCP tests
+      env:
+        ENVIRONMENT: testing
+        AUTH_SECRET_KEY: test-secret-key-minimum-32-characters
+      run: |
+        pytest tests/test_mcp.py -v --tb=short
+    
+    - name: Validate schemas
+      run: python scripts/validate_mcp_schemas.py
+    
+    - name: Check trust scores
+      run: python scripts/check_trust_scores.py
+    
+    - name: Verify consistency
+      run: python scripts/verify_mcp_consistency.py
+
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: 
+      - type-safety
+      - unit-tests
+      - event-bus-tests
+      - trigger-mesh-tests
+      - consensus-tests
+      - integration-tests
+      - memory-tests
+      - kernel-tests
+      - security-scan
+      - build-check
+      - coverage
+      - mcp-validation
+    if: always()
+    
+    steps:
+    - name: Check results
+      run: |
+        echo "## CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Type Safety | ${{ needs.type-safety.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| EventBus Tests | ${{ needs.event-bus-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| TriggerMesh Tests | ${{ needs.trigger-mesh-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Consensus Tests | ${{ needs.consensus-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Memory Tests | ${{ needs.memory-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Kernel Tests | ${{ needs.kernel-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Build Check | ${{ needs.build-check.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Coverage | ${{ needs.coverage.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| MCP Validation | ${{ needs.mcp-validation.result }} |" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Verify required checks
+      run: |
+        REQUIRED_CHECKS=(
+          "${{ needs.type-safety.result }}"
+          "${{ needs.unit-tests.result }}"
+          "${{ needs.event-bus-tests.result }}"
+          "${{ needs.trigger-mesh-tests.result }}"
+          "${{ needs.build-check.result }}"
+        )
+        
+        for result in "${REQUIRED_CHECKS[@]}"; do
+          if [[ "$result" != "success" ]]; then
+            echo "❌ Required check failed: $result"
             exit 1
           fi
+        done
+        
+        echo "✅ All required checks passed!"

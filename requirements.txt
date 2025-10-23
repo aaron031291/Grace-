@@ -1,70 +1,95 @@
-# ===============================
-# Grace Governance Kernel Dependencies
-# ===============================
+# Grace AI System - Complete Dependencies (Open Source Only)
 
-# --- Core runtime (standard library, no install needed) ---
-# asyncio
-# sqlite3
-# json
-# hashlib
-# datetime
-# logging
-# statistics
-
-# --- API & Server ---
+# Core Framework
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
-pydantic>=2.5.0
+pydantic>=2.4.0
 pydantic-settings>=2.0.0
-websockets>=12.0
+python-multipart>=0.0.6
 
-# --- Database Layer ---
+# Database
 sqlalchemy>=2.0.0
-alembic>=1.13.0
-asyncpg>=0.29.0
-psycopg2-binary>=2.9.0  # Sync driver for migrations/tools
+psycopg2-binary>=2.9.9
+alembic>=1.12.0
 
-# --- Redis & Background Workers ---
-redis>=5.0.0
-celery[redis]>=5.3.0
-arq>=0.25.0  # Optional lightweight async task runner
+# Async Database Support
+asyncpg>=0.29.0              # Async Postgres
+aioredis>=2.0.1              # Async Redis (already listed)
+redis>=5.0.0                 # Redis (already listed)
 
-# --- Memory & Vector Store ---
-# chromadb>=0.4.0
-# qdrant-client>=1.6.0  # Optional: switchable vector DB backend
-# sentence-transformers>=2.2.0
-
-# --- Authentication & RBAC ---
+# Authentication & Security
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.6
-pyjwt>=2.8.0  # Optional JWT handling if needed
+bcrypt>=4.0.1
+python-dotenv>=1.0.0
 
-# --- Document Processing ---
-pypdf>=3.0.0
-python-docx>=1.1.0
-beautifulsoup4>=4.12.0
-pyyaml>=6.0.0  # Policy / config files
+# Redis (optional, for rate limiting)
+redis>=5.0.0
+aioredis>=2.0.1
 
-# --- AI/LLM Integrations (Optional) ---
-# openai>=1.0.0  # External LLM calls if used
-
-# --- Development / Testing (Optional) ---
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
-
-# --- MLDL Kernel ---
+# Embeddings & Vector Search (Open Source Only)
+sentence-transformers>=2.2.2  # Primary embedding solution
+transformers>=4.35.0          # Alternative local embeddings
+torch>=2.1.0                  # Required for transformers
+faiss-cpu>=1.7.4
 numpy>=1.24.0
-scikit-learn>=1.3.0
-joblib>=1.3.0
 
-# --- Cloud / Infra (Optional) ---
-# boto3>=1.26.0  # AWS SDK for S3 / Secrets Manager / etc.
-# prometheus_client>=0.17.0  # Metrics export (Prometheus/Grafana)
+# Vector Database
+pgvector>=0.2.3
 
-# --- Optional System Monitoring ---
-# psutil>=5.9.0
+# WebSocket
+websockets>=12.0
 
-# --- Development / Testing (Optional) ---
-pytest>=7.0.0
+# Monitoring & Logging
+prometheus-client>=0.19.0
+structlog>=23.0.0
+python-json-logger>=2.0.7
+
+# HTTP Client
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# Data Processing
+pandas>=2.1.0
+scipy>=1.11.0
+
+# Testing
+pytest>=7.4.0
 pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2023.3
+rich>=13.7.0
+
+# CLI & Utilities
+typer>=0.9.0
+
+# [REMOVED] Proprietary API dependencies:
+# - openai - replaced with sentence-transformers and local models
+# - anthropic - not used in Grace system
+
+# Optional: gRPC for swarm (production)
+# grpcio>=1.59.0
+# grpcio-tools>=1.59.0
+
+# Optional: Kafka for swarm (production)
+# aiokafka>=0.8.1
+
+# Optional: Loki/ELK for logging (production)
+# python-logging-loki>=0.3.1
+# elasticsearch>=8.11.0
+
+# Private LLM Support (Open Source)
+llama-cpp-python>=0.2.0        # llama.cpp Python bindings
+# vllm>=0.2.0                   # Production-grade inference (optional)
+# Optional backends:
+# onnxruntime>=1.16.0           # ONNX runtime
+# optimum>=1.14.0               # HuggingFace optimization
+
+# Flask & Additional Dependencies
+Flask==2.3.0
+flask-cors==4.0.0
+requests==2.31.0
+Qdrant-client==2.6.0

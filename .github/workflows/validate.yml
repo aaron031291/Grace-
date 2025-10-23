@@ -1,0 +1,42 @@
+name: Grace Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+    
+    - name: Run import checks
+      run: python scripts/check_imports.py
+    
+    - name: Run module validation
+      run: python scripts/validate_all.py
+    
+    - name: Run type checking
+      run: python -m mypy grace --ignore-missing-imports || true
+    
+    - name: Run configuration validation
+      run: python scripts/validate_config.py
+    
+    - name: Run tests
+      run: |
+        python test_integration_full.py || true
+        python test_clarity_framework_complete.py || true

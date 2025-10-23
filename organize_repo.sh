@@ -47,10 +47,15 @@ mv init_db database/ 2>/dev/null || true
 
 # Move test files
 echo "🧪 Moving test files..."
+mkdir -p tests
+# Don't move test_complete_system.py if it's new
 mv test_*.py tests/ 2>/dev/null || true
 mv test_run_log.txt tests/ 2>/dev/null || true
 mv test_reports tests/ 2>/dev/null || true
-mv conftest.py tests/ 2>/dev/null || true
+# Keep conftest.py in tests/
+if [ -f "conftest.py" ]; then
+    mv conftest.py tests/
+fi
 
 # Move configuration files
 echo "⚙️  Moving configuration files..."
@@ -64,6 +69,7 @@ mv .env.template config/ 2>/dev/null || true
 
 # Move migration files
 echo "🔄 Moving migration files..."
+mkdir -p database/migrations
 mv migrations database/migrations 2>/dev/null || true
 
 # Move utility scripts
@@ -78,9 +84,40 @@ mv *_server.py scripts/ 2>/dev/null || true
 
 # Move contract/policy files
 echo "📜 Moving contract and policy files..."
+mkdir -p scripts/contracts scripts/policies
 mv contracts scripts/contracts 2>/dev/null || true
 mv policies scripts/policies 2>/dev/null || true
 mv grace_build_policy_contract.yaml scripts/ 2>/dev/null || true
+
+# Create index files for better organization
+echo "📝 Creating index files..."
+cat > scripts/README.md << 'EOF'
+# Scripts Directory
+
+Utility scripts and tools for Grace system.
+
+## Available Scripts
+
+- `run_full_diagnostics.py` - Run complete Pylance diagnostics
+- `fix_all_pylance_issues.py` - Automatically fix common Pylance issues
+- `fix_all_imports.py` - Fix import issues
+- `master_validation.py` - Run complete system validation
+- `validate_config.py` - Validate configuration
+- `check_imports.py` - Check for missing imports
+
+## Usage
+
+```bash
+# Run diagnostics
+python scripts/run_full_diagnostics.py
+
+# Fix issues
+python scripts/fix_all_pylance_issues.py
+
+# Validate
+python scripts/master_validation.py
+```
+EOF
 
 # Clean up Python cache
 echo "🗑️  Cleaning up Python cache..."
@@ -100,7 +137,7 @@ echo "  tests/          - All test files"
 echo "  grace/          - Core application code"
 echo ""
 echo "⚠️  Next steps:"
-echo "  1. Update import paths in affected files"
-echo "  2. Update docker-compose paths"
-echo "  3. Update documentation references"
-echo "  4. Test the application"
+echo "  1. Run validation: python scripts/validate_all_components.py"
+echo "  2. Run tests: python scripts/run_all_tests.py"
+echo "  3. Run with coverage: python scripts/run_all_tests.py --coverage"
+echo "  4. Start service: uvicorn grace.api:app --reload"

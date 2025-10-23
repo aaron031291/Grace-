@@ -1,18 +1,30 @@
-"""Grace Memory subsystem - Enhanced memory infrastructure with vector databases and quantum-safe storage."""
+"""
+Grace AI Memory Module - Unified Memory System
+Single cohesive memory architecture combining:
+- MTL (Multi-Task Learning): Immutable core truth
+- Lightning: Fast access cache layer
+- Fusion: Knowledge integration
+- Vector: Semantic embeddings
+- Librarian: Organization & retrieval
+- Database: Persistent storage schemas
+"""
 
-# Enhanced memory components
-from . import vector_db
-from . import quantum_safe_storage
-from . import enhanced_memory_bridge
+from .unified_memory_system import (
+    MTLImmutableLedger,
+    LightningMemory,
+    FusionMemory,
+    VectorMemory,
+    LibrarianMemory,
+    UnifiedMemorySystem,
+    DatabaseSchema
+)
 
-# Legacy components
-try:
-    from . import api
-    from . import fusion
-    from . import lightning
-    from . import librarian
-except ImportError:
-    # Gracefully handle missing legacy components
-    pass
-
-__all__ = ["vector_db", "quantum_safe_storage", "enhanced_memory_bridge"]
+__all__ = [
+    'MTLImmutableLedger',
+    'LightningMemory',
+    'FusionMemory',
+    'VectorMemory',
+    'LibrarianMemory',
+    'UnifiedMemorySystem',
+    'DatabaseSchema',
+]

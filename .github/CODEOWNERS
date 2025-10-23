@@ -1,0 +1,33 @@
+# Code owners for Grace repository
+# These users/teams will be automatically requested for review
+
+# Core system
+/grace/core/ @grace-team
+/grace/config.py @grace-team
+
+# Event system
+/grace/events/ @grace-team @event-team
+/grace/integration/event_bus.py @grace-team @event-team
+/grace/trigger_mesh.py @grace-team @event-team
+/grace/schemas/events.py @grace-team @event-team
+
+# Kernels
+/grace/kernels/ @kernel-team
+
+# Governance & Trust
+/grace/governance/ @governance-team
+/grace/trust/ @trust-team
+
+# Memory
+/grace/memory/ @memory-team
+
+# CI/CD
+/.github/workflows/ @devops-team
+/scripts/ @devops-team
+
+# Documentation
+/documentation/ @docs-team
+*.md @docs-team
+
+# Configuration
+/config/ @config-team

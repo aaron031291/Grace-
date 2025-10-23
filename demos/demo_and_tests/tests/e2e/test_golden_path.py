@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 # Grace components
 from grace.comms import GraceMessageEnvelope, MessageKind, Priority, create_envelope
-from grace.immune.controller import GraceImmuneController
+from grace.immune_system.controller import GraceImmuneController
 from grace.resilience.controllers.circuit import CircuitBreakerController
 from grace.resilience.controllers.degradation import DegradationController
 from grace.resilience.snapshots.manager import ResilienceSnapshotManager

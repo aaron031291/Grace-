@@ -1,8 +1,19 @@
 """
-Grace - A multi-kernel AI governance system with enhanced memory infrastructure and ML/DL specialists.
+Grace AI System - Constitutional AI with Multi-Agent Coordination
 """
 
-__version__ = "0.2.0"
+__version__ = "1.0.0"
+__author__ = "Grace AI Team"
+
+# No eager imports - everything is lazy loaded
+__all__ = ['__version__', '__author__']
+
+# Lazy imports to avoid circular dependencies at module level
+def get_settings():
+    """Get settings (lazy import)"""
+    from grace.config import get_settings as _get_settings
+    return _get_settings()
+
 
 # Core Grace components
 from . import core

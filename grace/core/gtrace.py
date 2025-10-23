@@ -42,7 +42,7 @@ from .contracts import (
 )
 from .event_bus import EventBus
 from .memory_core import MemoryCore
-from .immutable_logs import ImmutableLogs, TransparencyLevel
+from .immutable_logs import ImmutableLogger, TransparencyLevel
 from .kpi_trust_monitor import KPITrustMonitor
 
 logger = logging.getLogger(__name__)
@@ -230,7 +230,7 @@ class GraceTracer:
         self,
         event_bus: Optional[EventBus] = None,
         memory_core: Optional[MemoryCore] = None,
-        immutable_logs: Optional[ImmutableLogs] = None,
+        immutable_logs: Optional[ImmutableLogger] = None,
         kpi_monitor: Optional[KPITrustMonitor] = None,
     ):
         # Core integration components
@@ -918,7 +918,7 @@ class GraceTracer:
 async def create_grace_tracer(
     event_bus: Optional[EventBus] = None,
     memory_core: Optional[MemoryCore] = None,
-    immutable_logs: Optional[ImmutableLogs] = None,
+    immutable_logs: Optional[ImmutableLogger] = None,
     kpi_monitor: Optional[KPITrustMonitor] = None,
 ) -> GraceTracer:
     """Factory function to create a fully integrated Grace tracer."""

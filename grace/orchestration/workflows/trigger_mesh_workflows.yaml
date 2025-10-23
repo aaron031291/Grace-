@@ -1,17 +1,18 @@
-# TriggerMesh Workflow Definitions
-# Maps events → kernels for automated orchestration
-# Version: 1.0.0
+# TriggerMesh Production Workflows
+# Defines event-driven workflows for KPI monitoring, trust management, and self-healing.
 
-version: "1.0.0"
-
-# ============================================================================
-# KPI-Triggered Workflows
-# ============================================================================
+# Global configuration for all workflows in this file
+configuration:
+  max_parallel_workflows: 10
+  default_timeout_ms: 15000
+  rate_limiting:
+    enabled: true
+    max_events_per_minute: 100
 
 workflows:
   # Critical KPI Degradation → AVN Core Healing
   - name: "kpi_critical_healing"
-    description: "Escalate critical KPI breaches to AVN Core for emergency healing"
+    description: "Escalates to AVN Core when a critical KPI threshold is breached."
     enabled: true
     
     trigger:
@@ -22,9 +23,8 @@ workflows:
         min_delta_percent: 20
       
     actions:
-      - name: "escalate_to_avn"
-        target_kernel: "avn_core"
-        action: "escalate_healing"
+      - name: "Escalate to AVN Core"
+        target: "avn_core.escalate_healing"
         priority: "CRITICAL"
         timeout_ms: 10000
         
@@ -64,7 +64,7 @@ workflows:
 
   # Warning KPI → Learning Kernel Adaptation
   - name: "kpi_warning_adaptation"
-    description: "Trigger adaptive learning for KPI warnings"
+    description: "Notifies the Learning Kernel about a KPI warning for potential adaptation."
     enabled: true
     
     trigger:
@@ -73,37 +73,19 @@ workflows:
         severity: "WARNING"
       
     actions:
-      - name: "trigger_adaptive_learning"
-        target_kernel: "learning_kernel"
-        action: "trigger_adaptive_learning"
+      - name: "Notify Learning Kernel"
+        target: "learning_kernel.log_adaptation_opportunity"
         priority: "HIGH"
         timeout_ms: 15000
         
         parameters:
           component_id: "{{ payload.component_id }}"
-          focus_areas:
-            - "error_pattern_analysis"
-            - "coverage_improvement"
-            - "performance_optimization"
-          current_metrics:
-            metric_name: "{{ payload.metric_name }}"
-            value: "{{ payload.value }}"
-            threshold: "{{ payload.threshold }}"
-          
-        on_success:
-          - event: "healing.action_taken"
-            payload:
-              component_id: "{{ payload.component_id }}"
-              action_type: "adaptive_learning"
-              result: "SUCCESS"
-
-# ============================================================================
-# Trust Score Workflows
-# ============================================================================
+          metric_name: "{{ payload.metric_name }}"
+          metric_value: "{{ payload.value }}"
 
   # Trust Degradation → Governance Review
   - name: "trust_degradation_review"
-    description: "Trigger governance review for trust score degradation"
+    description: "Triggers a governance review when a component's trust score degrades significantly."
     enabled: true
     
     trigger:
@@ -114,36 +96,19 @@ workflows:
         min_degradation_rate: 0.05  # 5% drop per time unit
     
     actions:
-      - name: "request_governance_review"
-        target_kernel: "governance_kernel"
-        action: "initiate_trust_review"
+      - name: "Request Governance Review"
+        target: "governance.request_review"
         priority: "HIGH"
         timeout_ms: 20000
         
         parameters:
           component_id: "{{ payload.component_id }}"
-          current_score: "{{ payload.current_score }}"
-          degradation_rate: "{{ payload.degradation_rate }}"
-          affected_metrics: "{{ payload.affected_metrics }}"
-          review_type: "TRUST_DEGRADATION"
-      
-      - name: "pause_component_updates"
-        target_kernel: "orchestration_kernel"
-        action: "pause_deployments"
-        priority: "HIGH"
-        
-        parameters:
-          component_id: "{{ payload.component_id }}"
-          reason: "trust_degradation"
-          duration_minutes: 30
-
-# ============================================================================
-# Test Quality Workflows
-# ============================================================================
+          reason: "Trust score degradation"
+          details: "{{ payload.details }}"
 
   # Critical Test Quality → AVN Escalation
   - name: "test_quality_critical_healing"
-    description: "Escalate critical test quality to AVN Core"
+    description: "Engages AVN Core for immediate healing if test quality becomes critical."
     enabled: true
     
     trigger:
@@ -153,23 +118,19 @@ workflows:
         status: "CRITICAL"  # < 50% quality
     
     actions:
-      - name: "escalate_to_avn"
-        target_kernel: "avn_core"
-        action: "escalate_healing"
+      - name: "Escalate Test Quality to AVN"
+        target: "avn_core.escalate_healing"
         priority: "CRITICAL"
         timeout_ms: 10000
         
         parameters:
           component_id: "{{ payload.component_id }}"
-          issue_type: "test_quality_critical"
-          current_score: "{{ payload.score }}"
-          threshold: 50.0
-          recommended_actions: "{{ payload.recommended_actions }}"
-          error_patterns: "{{ payload.error_patterns }}"
+          reason: "Critical test quality failure"
+          score: "{{ payload.score }}"
 
   # Degraded Test Quality → Learning Kernel
   - name: "test_quality_degraded_learning"
-    description: "Trigger adaptive learning for degraded test quality"
+    description: "Informs the Learning Kernel about degraded test quality."
     enabled: true
     
     trigger:
@@ -179,24 +140,19 @@ workflows:
         status: "DEGRADED"  # 50-70% quality
     
     actions:
-      - name: "trigger_test_improvement"
-        target_kernel: "learning_kernel"
-        action: "trigger_adaptive_learning"
+      - name: "Log Test Quality Degradation"
+        target: "learning_kernel.log_adaptation_opportunity"
         priority: "HIGH"
         timeout_ms: 15000
         
         parameters:
           component_id: "{{ payload.component_id }}"
-          focus_areas:
-            - "test_coverage_analysis"
-            - "error_pattern_detection"
-            - "test_stability_improvement"
-          current_score: "{{ payload.score }}"
-          target_score: 90.0
+          reason: "Degraded test quality"
+          score: "{{ payload.score }}"
 
   # Quality Improvement Suggestions → Monitoring
   - name: "test_quality_improvement_tracking"
-    description: "Track quality improvement suggestions"
+    description: "Tracks suggested test quality improvements in the memory core."
     enabled: true
     
     trigger:
@@ -206,26 +162,18 @@ workflows:
         min_gap: 0.0
     
     actions:
-      - name: "log_improvement_opportunity"
-        target_kernel: "monitoring_kernel"
-        action: "track_improvement_opportunity"
+      - name: "Store Improvement Suggestion"
+        target: "memory_core.store_suggestion"
         priority: "NORMAL"
         timeout_ms: 5000
         
         parameters:
-          component_id: "{{ payload.component_id }}"
-          current_score: "{{ payload.current_score }}"
-          target_score: "{{ payload.target_score }}"
-          gap: "{{ payload.gap }}"
-          suggestions: "{{ payload.suggestions }}"
-
-# ============================================================================
-# Self-Healing Coordination
-# ============================================================================
+          suggestion_type: "test_quality"
+          suggestion_data: "{{ payload }}"
 
   # Healing Recovery → Update Metrics
   - name: "healing_recovery_metrics"
-    description: "Update metrics when healing completes successfully"
+    description: "Updates KPIs and trust scores after a successful self-healing action."
     enabled: true
     
     trigger:
@@ -234,35 +182,24 @@ workflows:
         new_status: ["PASSING", "EXCELLENT", "ACCEPTABLE"]
     
     actions:
-      - name: "update_trust_score"
-        target_kernel: "kpi_trust_monitor"
-        action: "record_recovery"
+      - name: "Update KPI Monitor"
+        target: "kpi_monitor.record_recovery"
         priority: "NORMAL"
         timeout_ms: 5000
         
         parameters:
           component_id: "{{ payload.component_id }}"
-          recovery_type: "self_healing"
-          previous_status: "{{ payload.previous_status }}"
-          new_status: "{{ payload.new_status }}"
-          recovery_time: "{{ payload.recovery_time_seconds }}"
       
-      - name: "resume_component"
-        target_kernel: "orchestration_kernel"
-        action: "resume_deployments"
+      - name: "Update Trust Score"
+        target: "trust_monitor.boost_score_after_recovery"
         priority: "NORMAL"
         
         parameters:
           component_id: "{{ payload.component_id }}"
-          reason: "healing_complete"
-
-# ============================================================================
-# Database Event Workflows
-# ============================================================================
 
   # Critical DB Changes → Governance Audit
   - name: "db_critical_audit"
-    description: "Audit critical database changes"
+    description: "Logs a high-priority audit event for critical database table updates."
     enabled: true
     
     trigger:
@@ -275,26 +212,18 @@ workflows:
           - "constitutional_rules"
     
     actions:
-      - name: "log_to_immutable_audit"
-        target_kernel: "governance_kernel"
-        action: "log_critical_change"
+      - name: "Log Critical DB Change"
+        target: "immutable_logs.log_critical_event"
         priority: "HIGH"
         timeout_ms: 5000
         
         parameters:
-          table_name: "{{ payload.table_name }}"
-          operation: "{{ payload.operation }}"
-          record_id: "{{ payload.record_id }}"
-          delta: "{{ payload.delta }}"
-          source_event: "{{ event }}"
-
-# ============================================================================
-# System Health Workflows
-# ============================================================================
+          event_name: "CriticalDatabaseChange"
+          event_data: "{{ payload }}"
 
   # Kernel Crash → AVN Emergency Response
   - name: "kernel_crash_response"
-    description: "Emergency response for kernel crashes"
+    description: "Initiates an emergency response when a core kernel crashes."
     enabled: true
     
     trigger:
@@ -306,53 +235,19 @@ workflows:
           - "RESOURCE_EXHAUSTION"
     
     actions:
-      - name: "emergency_restart"
-        target_kernel: "avn_core"
-        action: "emergency_kernel_restart"
-        priority: "CRITICAL"
-        timeout_ms: 30000
-        
-        parameters:
-          failed_kernel: "{{ payload.component_id }}"
-          error_type: "{{ payload.error_type }}"
-          error_message: "{{ payload.error_message }}"
-          context: "{{ payload.context }}"
-      
-      - name: "alert_operations"
-        target_kernel: "alert_manager"
-        action: "send_critical_alert"
+      - name: "Trigger Emergency Alert"
+        target: "governance.trigger_emergency_alert"
         priority: "CRITICAL"
         timeout_ms: 2000
         
         parameters:
-          alert_type: "KERNEL_CRASH"
-          component: "{{ payload.component_id }}"
-          message: "Critical kernel failure: {{ payload.error_message }}"
-
-# ============================================================================
-# Workflow Configuration
-# ============================================================================
-
-configuration:
-  # Global settings
-  max_parallel_workflows: 10
-  default_timeout_ms: 10000
-  retry_policy:
-    max_retries: 3
-    backoff_ms: [1000, 2000, 5000]
-  
-  # Event filtering
-  rate_limiting:
-    enabled: true
-    max_events_per_minute: 100
-    burst_size: 20
-  
-  deduplication:
-    enabled: true
-    window_seconds: 60
-  
-  # Logging
-  log_level: "INFO"
-  log_all_events: false
-  log_workflow_execution: true
-  log_action_results: true
+          source: "{{ payload.source }}"
+          error_message: "{{ payload.error }}"
+      
+      - name: "Attempt Kernel Restart"
+        target: "system_manager.restart_kernel"
+        priority: "CRITICAL"
+        timeout_ms: 30000
+        
+        parameters:
+          kernel_name: "{{ payload.source }}"

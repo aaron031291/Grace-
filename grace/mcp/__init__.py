@@ -152,3 +152,42 @@ def create_mcp(domain: str, manifest_path: str = None) -> BaseMCP:
         CustomMCP.manifest_path = manifest_path
     
     return CustomMCP()
+
+
+"""
+Message Control Protocol (MCP) - Schema validation and routing
+"""
+
+from .client import MCPClient
+from .schema import MCPMessage, MCPSchema
+from .validator import MCPValidator
+
+__all__ = ['MCPClient', 'MCPMessage', 'MCPSchema', 'MCPValidator']
+
+
+"""
+Grace AI MCP (Model Context Protocol) Module
+Sits on top of TriggerMesh as peer to MetaLearningKernel
+Provides external tool integration and capability expansion
+All tool executions are recorded in the Core Truth Layer
+"""
+from grace.mcp.protocol import MCPRegistry, Tool, ToolType, ToolRequest, ToolResponse
+from grace.mcp.vector_store import VectorStore, vector_store_handler
+from grace.mcp.search_tool import SearchTool, search_handler
+from grace.mcp.code_generation import CodeGenerationTool, code_generation_handler
+from grace.mcp.manager import MCPManager
+
+__all__ = [
+    "MCPRegistry",
+    "Tool",
+    "ToolType",
+    "ToolRequest",
+    "ToolResponse",
+    "VectorStore",
+    "vector_store_handler",
+    "SearchTool",
+    "search_handler",
+    "CodeGenerationTool",
+    "code_generation_handler",
+    "MCPManager",
+]

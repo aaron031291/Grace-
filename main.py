@@ -25,6 +25,7 @@ from grace.agents.remote_agent import RemoteAgent
 from grace.consciousness import Consciousness
 from grace.kernels.cognitive_cortex import CognitiveCortex
 from grace.kernels.sentinel_kernel import SentinelKernel
+from grace.mcp.manager import MCPManager
 from grace.api import create_app
 
 async def initialize_system():
@@ -43,6 +44,7 @@ async def initialize_system():
     communication_channel = CommunicationChannel()
     llm_service = LLMService()
     remote_agent = RemoteAgent()
+    mcp_manager = MCPManager(event_bus=event_bus, llm_service=llm_service)
     
     # Kernels
     cognitive_cortex = CognitiveCortex(
@@ -75,6 +77,7 @@ async def initialize_system():
     component_registry.register("task_manager", task_manager)
     component_registry.register("communication_channel", communication_channel)
     component_registry.register("llm_service", llm_service)
+    component_registry.register("mcp_manager", mcp_manager)
     component_registry.register("cognitive_cortex", cognitive_cortex)
     component_registry.register("sentinel_kernel", sentinel_kernel)
     component_registry.register("consciousness", consciousness)
@@ -90,6 +93,7 @@ async def initialize_system():
         "communication_channel": communication_channel,
         "llm_service": llm_service,
         "remote_agent": remote_agent,
+        "mcp_manager": mcp_manager,
         "cognitive_cortex": cognitive_cortex,
         "sentinel_kernel": sentinel_kernel,
         "consciousness": consciousness,

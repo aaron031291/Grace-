@@ -98,4 +98,45 @@ def create_app(components: Dict[str, Any] = None):
             logger.error(f"Error getting task: {str(e)}")
             return jsonify({"error": str(e)}), 500
     
+    @app.route('/api/mcp/tools', methods=['GET'])
+    def get_mcp_tools():
+        """Get available MCP tools."""
+        try:
+            mcp_manager = app.components.get('mcp_manager')
+            if not mcp_manager:
+                return jsonify({"error": "MCP manager not available"}), 500
+            
+            tools = mcp_manager.get_available_tools()
+            return jsonify(tools), 200
+        except Exception as e:
+            logger.error(f"Error getting MCP tools: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route('/api/mcp/execute', methods=['POST'])
+    def execute_mcp_tool():
+        """Execute an MCP tool."""
+        try:
+            data = request.get_json()
+            mcp_manager = app.components.get('mcp_manager')
+            
+            if not mcp_manager:
+                return jsonify({"error": "MCP manager not available"}), 500
+            
+            tool_id = data.get('tool_id')
+            parameters = data.get('parameters', {})
+            correlation_id = data.get('correlation_id')
+            
+            # Execute tool asynchronously
+            import asyncio
+            loop = asyncio.new_event_loop()
+            response = loop.run_until_complete(
+                mcp_manager.execute_tool(tool_id, parameters, correlation_id)
+            )
+            loop.close()
+            
+            return jsonify(response.to_dict()), 200
+        except Exception as e:
+            logger.error(f"Error executing MCP tool: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+    
     return app

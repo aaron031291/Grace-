@@ -163,3 +163,29 @@ from .schema import MCPMessage, MCPSchema
 from .validator import MCPValidator
 
 __all__ = ['MCPClient', 'MCPMessage', 'MCPSchema', 'MCPValidator']
+
+
+"""
+Grace AI MCP (Model Context Protocol) Module
+Provides integration with external tools, services, and specialized models
+"""
+from grace.mcp.protocol import MCPRegistry, Tool, ToolType, ToolRequest, ToolResponse
+from grace.mcp.vector_store import VectorStore, vector_store_handler
+from grace.mcp.search_tool import SearchTool, search_handler
+from grace.mcp.code_generation import CodeGenerationTool, code_generation_handler
+from grace.mcp.manager import MCPManager
+
+__all__ = [
+    "MCPRegistry",
+    "Tool",
+    "ToolType",
+    "ToolRequest",
+    "ToolResponse",
+    "VectorStore",
+    "vector_store_handler",
+    "SearchTool",
+    "search_handler",
+    "CodeGenerationTool",
+    "code_generation_handler",
+    "MCPManager",
+]

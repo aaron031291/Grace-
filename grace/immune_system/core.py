@@ -1,22 +1,7 @@
 """
-Grace AI Immune System - Unified self-healing, threat detection, and recovery
-Consolidates AVN (Autonomous Healing Network), threat detection, and resilience
+Grace AI Immune System - Core
+Central immune system coordinating threat detection, AVN healing, and recovery
 """
-from grace.immune_system.core import ImmuneSystem, Threat, RemediationStrategy, ThreatLevel
-from grace.immune_system.threat_detector import ThreatDetector, DetectionType
-from grace.immune_system.avn_healer import AVNHealer, HealingAction
-
-__all__ = [
-    "ImmuneSystem",
-    "Threat",
-    "RemediationStrategy",
-    "ThreatLevel",
-    "ThreatDetector",
-    "DetectionType",
-    "AVNHealer",
-    "HealingAction",
-]
-
 import logging
 from typing import Dict, Any, List, Optional
 from enum import Enum

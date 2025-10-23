@@ -25,7 +25,14 @@ from grace.agents.remote_agent import RemoteAgent
 from grace.consciousness import Consciousness
 from grace.kernels.cognitive_cortex import CognitiveCortex
 from grace.kernels.sentinel_kernel import SentinelKernel
+from grace.kernels.resilience_kernel import ResilienceKernel
+from grace.kernels.swarm_kernel import SwarmKernel
 from grace.mcp.manager import MCPManager
+from grace.immune_system import ImmuneSystem, ThreatDetector
+from grace.services.observability import ObservabilityService
+from grace.services.policy_engine import PolicyEngine
+from grace.services.trust_ledger import TrustLedger
+from grace.services.websocket_service import WebSocketService
 from grace.api import create_app
 
 async def initialize_system():
@@ -45,6 +52,14 @@ async def initialize_system():
     llm_service = LLMService()
     remote_agent = RemoteAgent()
     mcp_manager = MCPManager(event_bus=event_bus, llm_service=llm_service)
+    observability_service = ObservabilityService()
+    policy_engine = PolicyEngine()
+    trust_ledger = TrustLedger()
+    websocket_service = WebSocketService()
+    
+    # Immune System
+    immune_system = ImmuneSystem(event_bus=event_bus)
+    threat_detector = ThreatDetector(kpi_monitor=kpi_monitor, immutable_logger=immutable_logger)
     
     # Kernels
     cognitive_cortex = CognitiveCortex(
@@ -59,6 +74,9 @@ async def initialize_system():
         event_bus=event_bus,
         llm_service=llm_service
     )
+    
+    resilience_kernel = ResilienceKernel(event_bus=event_bus)
+    swarm_kernel = SwarmKernel(event_bus=event_bus)
     
     # Consciousness loop
     consciousness = Consciousness(
@@ -94,8 +112,16 @@ async def initialize_system():
         "llm_service": llm_service,
         "remote_agent": remote_agent,
         "mcp_manager": mcp_manager,
+        "observability_service": observability_service,
+        "policy_engine": policy_engine,
+        "trust_ledger": trust_ledger,
+        "websocket_service": websocket_service,
+        "immune_system": immune_system,
+        "threat_detector": threat_detector,
         "cognitive_cortex": cognitive_cortex,
         "sentinel_kernel": sentinel_kernel,
+        "resilience_kernel": resilience_kernel,
+        "swarm_kernel": swarm_kernel,
         "consciousness": consciousness,
         "component_registry": component_registry
     }

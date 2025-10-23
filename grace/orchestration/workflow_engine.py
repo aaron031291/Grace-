@@ -1,4 +1,4 @@
- """
+"""
 Workflow Engine for TriggerMesh Orchestration Layer.
 
 Executes the actions defined in a workflow.
@@ -10,6 +10,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
+import inspect
 
 from grace.core.event_bus import EventBus
 from grace.core.immutable_logs import ImmutableLogger, TransparencyLevel
@@ -27,7 +28,7 @@ class ParameterSubstitutor:
         """
         Recursively substitute template variables.
 
-        Supports: {{ payload.field }}, {{ event.field }}
+        Supports: {{ payload.field }}, {{ event_type }}, {{ correlation_id }}
         """
         if isinstance(template, str):
             return self._substitute_string(template, context)
@@ -40,28 +41,22 @@ class ParameterSubstitutor:
 
     def _substitute_string(self, template: str, context: Dict[str, Any]) -> Any:
         """Substitute variables in a single string."""
-        # Find all {{ variable }} patterns
         pattern = r"\{\{\s*([^}]+)\s*\}\}"
 
-        def replacer(match):
+        # Handle the case where the entire string is a variable, to preserve type
+        match = re.fullmatch(pattern, template.strip())
+        if match:
             path = match.group(1).strip()
-            value = self._resolve_path(path, context)
-
-            # If entire string is just the template, return raw value
-            if match.group(0) == template:
-                return value
-
-            # Otherwise, convert to string for interpolation
-            return str(value) if value is not None else ""
-
-        result = re.sub(pattern, replacer, template)
-
-        # If entire string was a template, return the resolved value type
-        if template.startswith("{{") and template.endswith("}}"):
-            path = template[2:-2].strip()
             return self._resolve_path(path, context)
 
-        return result
+        # For string interpolation
+        def replacer(m):
+            path = m.group(1).strip()
+            value = self._resolve_path(path, context)
+            return str(value) if value is not None else ""
+
+        return re.sub(pattern, replacer, template)
+
 
     def _resolve_path(self, path: str, context: Dict[str, Any]) -> Any:
         """Resolve a dotted path in the context."""
@@ -81,7 +76,10 @@ class ParameterSubstitutor:
 
 
 class WorkflowEngine:
-    """Executes workflow actions by calling registered kernel handlers."""
+    """
+    Orient, Decide, Act: Executes workflow actions by calling registered kernel handlers.
+    This is the core of the OODA loop's execution phase.
+    """
 
     def __init__(
         self,
@@ -103,6 +101,7 @@ class WorkflowEngine:
             "actions_executed": 0,
             "actions_succeeded": 0,
             "actions_failed": 0,
+            "ooda_loops_completed": 0,
         }
 
     def register_kernel_handler(self, name: str, handler: Callable):
@@ -112,22 +111,35 @@ class WorkflowEngine:
         self.kernel_handlers[name] = handler
         logger.info(f"Registered kernel handler for action: {name}")
 
-    async def execute_workflow(self, workflow: Dict[str, Any], trigger_payload: Dict[str, Any]):
-        """Execute all actions for a given workflow."""
+    async def execute_workflow(self, workflow: Dict[str, Any], event_context: Dict[str, Any]):
+        """
+        Execute all actions for a given workflow, completing the OODA loop.
+        """
         start_time = datetime.now()
         workflow_name = workflow["name"]
-        correlation_id = trigger_payload.get("correlation_id")
+        correlation_id = event_context.get("correlation_id")
 
-        logger.info(f"Executing workflow: {workflow_name}")
+        # ORIENT & DECIDE: The selection of this workflow by the router
+        # based on the event is the orientation and decision step.
+        logger.info(
+            f"Executing workflow: {workflow_name}",
+            extra={"correlation_id": correlation_id},
+        )
         await self.event_bus.publish(
-            "workflow.started", {"workflow_name": workflow_name, "trigger_payload": trigger_payload}
+            "workflow.started",
+            {
+                "workflow_name": workflow_name,
+                "trigger_event": event_context["event_type"],
+                "correlation_id": correlation_id,
+            },
         )
 
         actions = workflow.get("actions", [])
         results = []
         for action in actions:
             try:
-                result = await self._execute_action(workflow_name, action, trigger_payload)
+                # ACT: Execute the individual action.
+                result = await self._execute_action(workflow_name, action, event_context)
                 results.append(result)
 
                 if result["status"] == "SUCCESS":
@@ -136,7 +148,10 @@ class WorkflowEngine:
                     self.stats["actions_failed"] += 1
 
             except Exception as e:
-                logger.error(f"Action {action['name']} failed: {e}")
+                logger.error(
+                    f"Action {action['name']} failed: {e}",
+                    extra={"correlation_id": correlation_id},
+                )
                 results.append(
                     {
                         "action": action["name"],
@@ -161,7 +176,7 @@ class WorkflowEngine:
         else:
             status = "FAILED"
 
-        # Log workflow completion
+        # Log workflow completion, ensuring the cryptographic key is central.
         await self.logger.log_event(
             event_type="workflow.completed",
             component_id="trigger_mesh",
@@ -184,68 +199,90 @@ class WorkflowEngine:
                 value=total_latency_ms,
                 component_id="trigger_mesh",
                 tags={"workflow": workflow_name, "status": status},
+                correlation_id=correlation_id,
             )
 
         self.stats["workflows_executed"] += 1
+        self.stats["ooda_loops_completed"] += 1
 
         logger.info(
             f"Workflow {workflow_name} completed: {status} "
             f"({successful_actions}/{total_actions} actions succeeded, "
-            f"{total_latency_ms:.1f}ms)"
+            f"{total_latency_ms:.1f}ms)",
+            extra={"correlation_id": correlation_id},
         )
 
         return {"status": status, "results": results}
 
     async def _execute_action(
-        self, workflow_name: str, action: Dict[str, Any], trigger_payload: Dict[str, Any]
-    ):
+        self, workflow_name: str, action: Dict[str, Any], event_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Execute a single action from a workflow."""
         start_time = datetime.now()
         action_name = action.get("name")
         target = action.get("target")
-        params = self.parameter_substitutor.substitute(action.get("params", {}), trigger_payload)
+        correlation_id = event_context.get("correlation_id")
+
+        # Substitute parameters from the full event context
+        params = self.parameter_substitutor.substitute(action.get("params", {}), event_context)
         timeout = action.get("timeout_seconds", 10)
 
         handler = self.kernel_handlers.get(target)
         if not handler:
-            logger.error(f"No kernel handler found for target: {target} in workflow: {workflow_name}")
-            return
+            error_msg = f"No kernel handler found for target: {target} in workflow: {workflow_name}"
+            logger.error(error_msg, extra={"correlation_id": correlation_id})
+            return {"action": action_name, "status": "FAILED", "error": error_msg, "latency_ms": 0}
 
-        logger.debug(f"Executing action '{action_name}' with target '{target}' and params: {params}")
+        logger.debug(
+            f"Executing action '{action_name}' with target '{target}' and params: {params}",
+            extra={"correlation_id": correlation_id},
+        )
 
+        status = "UNKNOWN"
+        error = None
         try:
+            # Pass correlation_id to kernel handlers that accept it
+            sig = inspect.signature(handler)
+            if "correlation_id" in sig.parameters:
+                params["correlation_id"] = correlation_id
+
             await asyncio.wait_for(handler(**params), timeout=timeout)
-            await self.event_bus.publish(
-                "workflow.action_executed",
-                {"workflow_name": workflow_name, "action_name": action_name, "status": "SUCCESS"},
-            )
-        except asyncio.TimeoutError:
-            logger.error(f"Action '{action_name}' in workflow '{workflow_name}' timed out.")
-            await self.event_bus.publish(
-                "workflow.action_executed",
-                {"workflow_name": workflow_name, "action_name": action_name, "status": "TIMEOUT"},
+            status = "SUCCESS"
+        except asyncio.TimeoutError as e:
+            status = "TIMEOUT"
+            error = str(e)
+            logger.error(
+                f"Action '{action_name}' in workflow '{workflow_name}' timed out.",
+                extra={"correlation_id": correlation_id},
             )
         except Exception as e:
-            logger.exception(f"Action '{action_name}' in workflow '{workflow_name}' failed.")
-            await self.event_bus.publish(
-                "workflow.action_executed",
-                {"workflow_name": workflow_name, "action_name": action_name, "status": "FAILURE", "error": str(e)},
+            status = "FAILURE"
+            error = str(e)
+            logger.exception(
+                f"Action '{action_name}' in workflow '{workflow_name}' failed.",
+                extra={"correlation_id": correlation_id},
             )
 
-    def _resolve_params(self, params: Dict[str, Any], trigger_payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Resolve template variables in parameters from the trigger payload."""
-        resolved_params = {}
-        for key, value in params.items():
-            if isinstance(value, str) and value.startswith("{{") and value.endswith("}}"):
-                # Simple template substitution, e.g., {{ payload.component_id }}
-                parts = value[2:-2].strip().split(".")
-                if len(parts) == 2 and parts[0] == "payload":
-                    resolved_params[key] = trigger_payload.get(parts[1])
-                else:
-                    resolved_params[key] = None
-            else:
-                resolved_params[key] = value
-        return resolved_params
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        self.stats["actions_executed"] += 1
+
+        await self.event_bus.publish(
+            "workflow.action_executed",
+            {
+                "workflow_name": workflow_name,
+                "action_name": action_name,
+                "status": status,
+                "error": error,
+                "correlation_id": correlation_id,
+            },
+        )
+
+        return {
+            "action": action_name,
+            "status": status,
+            "error": error,
+            "latency_ms": latency_ms,
+        }
 
     def get_stats(self) -> Dict[str, Any]:
         """Get engine statistics."""

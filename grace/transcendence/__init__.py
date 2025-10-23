@@ -1,5 +1,5 @@
 """
-Grace Transcendence Layer - Quantum-inspired reasoning and advanced analysis
+Grace Transcendence Subdirectory - for self-evolution.
 """
 
 from .quantum_library import QuantumAlgorithmLibrary, QuantumCircuit, QuantumState

@@ -1,5 +1,5 @@
 """
-Grace Kernels - Runtime components
+Grace Kernels Subdirectory
 """
 
 __all__ = ['multi_os', 'mldl', 'resilience']

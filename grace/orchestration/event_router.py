@@ -6,6 +6,7 @@ Routes events from the EventBus to matching workflows in the WorkflowRegistry.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -27,7 +28,7 @@ class EventRouter:
         workflow_engine: WorkflowEngine,
         event_bus: EventBus,
         immutable_logger: ImmutableLogger,
-        kpi_monitor: KPITrustMonitor,
+        kpi_monitor: Optional[KPITrustMonitor] = None,
         config: Optional[Dict[str, Any]] = None,
     ):
         self.registry = workflow_registry
@@ -55,36 +56,61 @@ class EventRouter:
 
     async def handle_event(self, event_type: str, payload: Dict[str, Any]):
         """
-        Handle an incoming event from the EventBus.
-        Find matching workflows and trigger them.
+        Observe: Handle an incoming event, assign a correlation ID, and route it.
+        This is the start of the OODA loop.
         """
         self._stats["events_received"] += 1
         self._stats["last_event_timestamp"] = datetime.utcnow()
-        logger.debug(f"Event received: {event_type} with payload: {payload}")
+
+        # OBSERVE: Ensure every event has a cryptographic, trackable correlation ID.
+        if "correlation_id" not in payload:
+            payload["correlation_id"] = uuid.uuid4().hex
+        correlation_id = payload["correlation_id"]
+
+        logger.debug(
+            f"Event received: {event_type} [correlation_id={correlation_id}]",
+            extra={"correlation_id": correlation_id},
+        )
 
         matching_workflows = self.registry.get_workflows_for_event(event_type)
 
         if not matching_workflows:
-            logger.debug(f"No workflows found for event type: {event_type}")
+            logger.debug(f"No workflows found for event type: {event_type}", extra={"correlation_id": correlation_id})
             return
+
+        # Create a context object for this event
+        event_context = {
+            "event_type": event_type,
+            "payload": payload,
+            "correlation_id": correlation_id,
+            "timestamp": datetime.utcnow(),
+        }
 
         for workflow in matching_workflows:
             if not workflow.get("enabled", True):
                 continue
 
-            if self._is_rate_limited(workflow, event_type):
+            if self._is_rate_limited(workflow, event_type, correlation_id):
                 self._stats["events_rate_limited"] += 1
-                logger.warning(f"Workflow '{workflow['name']}' rate-limited for event '{event_type}'.")
+                logger.warning(
+                    f"Workflow '{workflow['name']}' rate-limited for event '{event_type}'.",
+                    extra={"correlation_id": correlation_id},
+                )
                 continue
 
             if self._passes_filters(workflow, payload):
-                await self.engine.execute_workflow(workflow, payload)
+                # ORIENT & DECIDE: The router has oriented the event and decided on a workflow.
+                # ACT: Trigger the workflow execution in the engine.
+                await self.engine.execute_workflow(workflow, event_context)
                 self._stats["workflows_triggered"] += 1
             else:
                 self._stats["events_filtered"] += 1
-                logger.debug(f"Event payload did not pass filters for workflow '{workflow['name']}'.")
+                logger.debug(
+                    f"Event payload did not pass filters for workflow '{workflow['name']}'.",
+                    extra={"correlation_id": correlation_id},
+                )
 
-    def _is_rate_limited(self, workflow: Dict[str, Any], event_type: str) -> bool:
+    def _is_rate_limited(self, workflow: Dict[str, Any], event_type: str, correlation_id: str) -> bool:
         """Check if the workflow is currently rate-limited for this event."""
         rate_limit_config = workflow.get("rate_limit")
         if not rate_limit_config:

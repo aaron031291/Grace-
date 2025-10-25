@@ -34,15 +34,25 @@ class EventFilter:
 
 
 class EventRouter:
-    """Routes events to registered workflows based on trigger patterns."""
+    """
+    Routes incoming events to the appropriate workflows.
+    """
 
-    def __init__(self, workflow_registry: WorkflowRegistry, workflow_engine: WorkflowEngine):
+    def __init__(
+        self,
+        *,
+        workflow_registry,
+        workflow_engine: Optional[WorkflowEngine] = None,
+        immutable_logger: Optional[ImmutableLogger] = None,
+        policy_engine = None,
+    ):
         """
         Initialize the EventRouter with workflow registry and engine.
         """
-        self.workflow_registry = workflow_registry
+        self.workflow_registry = workflow_registry  # <-- FIX: hold reference
         self.workflow_engine = workflow_engine
-        self._immutable_logger = None
+        self.immutable_logger = immutable_logger
+        self.policy_engine = policy_engine
         logger.info("Event Router initialized.")
 
         self._stats = {

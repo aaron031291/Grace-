@@ -58,10 +58,35 @@ class TriggerMesh:
             workflow_dir: Directory containing workflow YAML files.
         """
         self.service_registry = service_registry
-        self.workflow_registry = WorkflowRegistry(workflow_dir=workflow_dir)
-        self.workflow_engine = WorkflowEngine(service_registry)
-        self.event_router = EventRouter(self.workflow_registry, self.workflow_engine)
         self.logger = logging.getLogger(__name__)
+        
+        # Ensure a WorkflowRegistry exists and is injected
+        if service_registry and hasattr(service_registry, 'get'):
+            workflow_registry_instance = service_registry.get('workflow_registry')
+            if not workflow_registry_instance:
+                workflow_registry_instance = WorkflowRegistry(workflow_dir=workflow_dir)
+                if hasattr(service_registry, 'register_instance'):
+                    service_registry.register_instance('workflow_registry', workflow_registry_instance)
+                self.logger.info("Workflow Registry initialized and registered.")
+        else:
+            workflow_registry_instance = WorkflowRegistry(workflow_dir=workflow_dir)
+            self.logger.info("Workflow Registry initialized (no service registry).")
+        
+        self.workflow_registry = workflow_registry_instance
+        self.workflow_engine = WorkflowEngine(service_registry)
+        
+        # Get optional services
+        immutable_logger = service_registry.get('immutable_logger') if service_registry else None
+        policy_engine = service_registry.get('policy_engine') if service_registry else None
+        
+        # Wire EventRouter with all dependencies
+        self.event_router = EventRouter(
+            workflow_registry=workflow_registry_instance,
+            workflow_engine=self.workflow_engine,
+            immutable_logger=immutable_logger,
+            policy_engine=policy_engine
+        )
+        
         self.logger.info(f"TriggerMesh initialized with service registry and workflow directory: {workflow_dir}")
 
     async def dispatch_event(self, event_type: str, payload: Dict[str, Any]):

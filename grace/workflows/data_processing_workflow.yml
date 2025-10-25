@@ -1,0 +1,9 @@
+name: ProcessExternalData
+trigger:
+  type: external_data_received
+actions:
+  - action_type: call_kernel
+    target: cognitive_cortex
+    params:
+      type: reason
+      query: "Analyze the implications of the incoming data."

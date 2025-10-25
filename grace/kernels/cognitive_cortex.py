@@ -5,6 +5,7 @@ import logging
 from typing import Dict, Any, Optional
 
 from grace.kernels.base_kernel import BaseKernel
+from grace.core import TransparencyLevel
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,12 @@ class CognitiveCortex(BaseKernel):
         self.task_manager = self.get_service('task_manager')
         self.llm_service = self.get_service('llm_service')
         self.trigger_mesh = self.get_service('trigger_mesh')
+        self.sandbox_manager = self.get_service('sandbox_manager')
+        self.communication_channel = self.get_service('communication_channel')
+        self.immutable_logger = self.get_service('immutable_logger')
+        self.trust_ledger = self.get_service('trust_ledger')
         self.tasks_processed = 0
-        logger.info("Cognitive Cortex initialized and services wired.")
+        self.logger.info("Cognitive Cortex initialized and services wired.")
 
     async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -77,10 +82,27 @@ class CognitiveCortex(BaseKernel):
     async def _reason_about(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Use LLM to reason about a specific query."""
         query = task.get('query', 'No query specified.')
-        logger.info(f"Reasoning about query: {query}")
+        triggering_event = task.get('triggering_event', {})
+        self.logger.info(f"Reasoning about query: {query}")
 
         llm_response = await self.llm_service.query(query)
         conclusion = llm_response.get('response', 'No conclusion reached.')
+
+        # Log the decision to immutable logs and trust ledger
+        if self.immutable_logger:
+            self.immutable_logger.log(
+                actor=self.name,
+                action="reason_about_conclusion",
+                details={"query": query, "conclusion": conclusion, "trigger": triggering_event},
+                level=TransparencyLevel.HIGH
+            )
+        
+        if self.trust_ledger:
+            self.trust_ledger.log_event(
+                actor=self.name,
+                action="reason_about",
+                details={"conclusion": conclusion}
+            )
 
         return {'success': True, 'reasoning_complete': True, 'conclusion': conclusion}
 
@@ -174,6 +196,10 @@ class CognitiveCortex(BaseKernel):
                 'task_manager': 'wired' if self.task_manager else 'missing',
                 'llm_service': 'wired' if self.llm_service else 'missing',
                 'trigger_mesh': 'wired' if self.trigger_mesh else 'missing',
+                'sandbox_manager': 'wired' if self.sandbox_manager else 'missing',
+                'communication_channel': 'wired' if self.communication_channel else 'missing',
+                'immutable_logger': 'wired' if self.immutable_logger else 'missing',
+                'trust_ledger': 'wired' if self.trust_ledger else 'missing',
             },
             'tasks_processed': self.tasks_processed,
         }

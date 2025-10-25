@@ -32,6 +32,7 @@ from grace.services import (
     LLMService, WebSocketService, PolicyEngine, TrustLedger, SandboxManager,
     ResilienceService
 )
+from grace.core.immutable_logs import ImmutableLogger
 from grace.orchestration.trigger_mesh import TriggerMesh
 from grace.core.truth_layer import CoreTruthLayer
 
@@ -115,6 +116,10 @@ class GraceLauncher:
         self.registry.register_factory(
             'immune_system', # Registering the resilience service under 'immune_system'
             lambda reg: ResilienceService(reg)
+        )
+        self.registry.register_factory(
+            'immutable_logger',
+            lambda reg: ImmutableLogger(log_file_path="grace_log.jsonl")
         )
         self.registry.register_factory(
             'trigger_mesh',

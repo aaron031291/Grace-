@@ -1,0 +1,15 @@
+name: SystemIntegrityCheck
+trigger:
+  type: plan
+  filter:
+    goal: "Verify system integrity."
+actions:
+  - action_type: call_kernel
+    target: sentinel_kernel
+    params:
+      type: monitor_event
+      source: "system_integrity_check"
+  - action_type: call_kernel
+    target: resilience_kernel
+    params:
+      type: run_diagnostics

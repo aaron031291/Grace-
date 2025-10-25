@@ -28,66 +28,75 @@ class ServiceRegistry:
     """
     
     def __init__(self):
-        self._services: Dict[str, Any] = {}
         self._factories: Dict[str, Callable] = {}
+        self._instances: Dict[str, Any] = {}
         self._config: Dict[str, ServiceConfig] = {}
-        self._initialized = False
-        logger.info("ServiceRegistry initialized")
+        self._initialized: bool = False
+        logger.info("Service Registry initialized.")
     
-    def register_factory(self, name: str, factory: Callable, config: ServiceConfig = None):
-        """Register a service factory"""
+    def register_factory(self, name: str, factory: Callable, config: ServiceConfig = None, overwrite: bool = False):
+        """
+        Registers a factory function for creating a service.
+        The factory function should take the registry instance as its only argument.
+        """
+        if name in self._factories and not overwrite:
+            logger.warning(f"Service factory for '{name}' is already registered. Skipping.")
+            return
         self._factories[name] = factory
-        self._config[name] = config or ServiceConfig(name=name)
+        if config:
+            self._config[name] = config
         logger.info(f"✓ Registered service factory: {name}")
     
     def register_instance(self, name: str, instance: Any, config: ServiceConfig = None):
         """Register a service instance directly"""
-        self._services[name] = instance
-        self._config[name] = config or ServiceConfig(name=name)
+        self._instances[name] = instance
         logger.info(f"✓ Registered service instance: {name}")
     
-    def get_service(self, name: str) -> Optional[Any]:
-        """Get a service instance, creating if needed"""
-        # Check if already instantiated
-        if name in self._services:
-            return self._services[name]
-        
-        # Check if factory exists
-        if name not in self._factories:
-            logger.warning(f"⚠ Service not found: {name}")
-            return None
-        
-        # Create from factory
-        try:
-            factory = self._factories[name]
-            instance = factory(self)  # Pass registry for DI
-            self._services[name] = instance
-            logger.info(f"✓ Created service instance: {name}")
+    def get(self, name: str) -> Optional[Any]:
+        """
+        Retrieves a service instance by name.
+        If the service has not been created yet, it will be instantiated using
+        its registered factory.
+        """
+        # First, check if an instance already exists.
+        instance = self._instances.get(name)
+        if instance:
+            logger.debug(f"Returning existing instance of service '{name}'.")
             return instance
+
+        # If not, create it using the factory.
+        factory = self._factories.get(name)
+        if not factory:
+            logger.error(f"No factory registered for service '{name}'.")
+            return None
+
+        logger.info(f"Creating new instance of service '{name}'...")
+        try:
+            # Create and store the new instance
+            self._instances[name] = factory(self)  # Pass registry for DI
+            logger.info(f"Service '{name}' created successfully.")
+            return self._instances[name]
         except Exception as e:
-            logger.error(f"✗ Failed to create service {name}: {e}")
+            logger.error(f"Failed to create service '{name}': {e}", exc_info=True)
+            # Remove from instances if creation failed to allow retry
+            if name in self._instances:
+                del self._instances[name]
             return None
     
     def initialize(self):
-        """Initialize all registered services"""
-        logger.info("Initializing all services...")
-        for name, config in self._config.items():
-            if not config.enabled:
-                logger.info(f"⊘ Service disabled: {name}")
-                continue
-            
-            service = self.get_service(name)
-            if service is None:
-                logger.warning(f"⚠ Failed to initialize: {name}")
-        
+        """
+        Marks the registry as initialized. In this lazy-loading implementation,
+        this method doesn't need to pre-load services.
+        """
+        logger.info("Service registry is now marked as initialized.")
         self._initialized = True
-        logger.info("✓ All services initialized")
+        logger.info("✓ All services are ready to be loaded on demand.")
     
     def shutdown(self):
         """Shutdown all services"""
         logger.info("Shutting down services...")
-        for name in list(self._services.keys()):
-            service = self._services[name]
+        for name in list(self._instances.keys()):
+            service = self._instances[name]
             if hasattr(service, 'shutdown'):
                 try:
                     service.shutdown()
@@ -95,7 +104,7 @@ class ServiceRegistry:
                 except Exception as e:
                     logger.error(f"✗ Shutdown error for {name}: {e}")
         
-        self._services.clear()
+        self._instances.clear()
         logger.info("✓ All services shut down")
     
     def is_initialized(self) -> bool:
@@ -104,7 +113,7 @@ class ServiceRegistry:
     
     def get_all_services(self) -> Dict[str, Any]:
         """Get all service instances"""
-        return self._services.copy()
+        return self._instances.copy()
     
     def get_config(self, name: str) -> Optional[ServiceConfig]:
         """Get service configuration"""

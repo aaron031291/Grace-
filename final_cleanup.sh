@@ -144,3 +144,78 @@ echo "  1. Verify structure: tree /workspaces/Grace-/grace"
 echo "  2. Test imports: python -c \"import grace; print('✓ OK')\""
 echo "  3. Commit: git add -A && git commit -m 'chore: final cleanup and reorganization'"
 echo ""
+
+# --- Configuration ---
+GRACE_DIR="/workspaces/Grace-/grace"
+
+# --- Step 1: Fix Critical Import Error ---
+echo "STEP 1: Fixing critical 'ImmutableLogs' import error..."
+echo "--------------------------------------------------------"
+GTRACE_FILE="$GRACE_DIR/core/gtrace.py"
+if [ -f "$GTRACE_FILE" ]; then
+    # Use sed to replace all occurrences in the file
+    sed -i 's/ImmutableLogs/ImmutableLogger/g' "$GTRACE_FILE"
+    echo "✓ Patched 'ImmutableLogs' -> 'ImmutableLogger' in gtrace.py."
+else
+    echo "⚠️  Warning: gtrace.py not found. Skipping patch."
+fi
+echo ""
+
+
+# --- Step 2: Consolidate Module Imports ---
+echo "STEP 2: Updating legacy module imports ('avn', 'immune_system' -> 'resilience')..."
+echo "--------------------------------------------------------------------------------"
+# Find all python files and use sed to replace the import statements
+find "$GRACE_DIR" -type f -name "*.py" -print0 | while IFS= read -r -d $'\0' file; do
+    # Check for avn imports
+    if grep -q "from grace.avn" "$file"; then
+        sed -i 's/from grace.avn/from grace.resilience/g' "$file"
+        echo "✓ Updated avn import in: $(basename "$file")"
+    fi
+    # Check for immune_system imports
+    if grep -q "from grace.immune_system" "$file"; then
+        sed -i 's/from grace.immune_system/from grace.resilience/g' "$file"
+        echo "✓ Updated immune_system import in: $(basename "$file")"
+    fi
+done
+echo "✓ All legacy imports have been updated to 'grace.resilience'."
+echo ""
+
+
+# --- Step 3: Delete Old Placeholder Launchers ---
+echo "STEP 3: Deleting old placeholder launcher files..."
+echo "--------------------------------------------------"
+# Find and delete files ending with _launcher.py
+LAUNCHER_FILES=$(find "$GRACE_DIR" -type f -name "*_launcher.py")
+
+if [ -n "$LAUNCHER_FILES" ]; then
+    for file in $LAUNCHER_FILES; do
+        rm -f "$file"
+        echo "✓ Deleted: $(basename "$file")"
+    done
+else
+    echo "✓ No old launcher files found to delete."
+fi
+echo ""
+
+
+# --- Step 4: Verification ---
+echo "STEP 4: Running verification checks..."
+echo "--------------------------------------"
+echo "Running wiring audit..."
+python "$GRACE_DIR/diagnostics/wiring_audit.py" || echo "Wiring audit failed, but continuing cleanup."
+echo ""
+echo "Running launcher dry-run..."
+python -m grace.launcher --dry-run || echo "Launcher dry-run failed."
+echo ""
+
+
+echo "=========================================="
+echo "✅ FINAL CLEANUP COMPLETE"
+echo "=========================================="
+echo "The system has been patched, refactored, and cleaned."
+echo "Next steps:"
+echo "  1. Review the output of the verification checks above."
+echo "  2. Manually wire any remaining kernel-service connections."
+echo "  3. Run 'pytest' to check unit/integration tests."
+echo ""

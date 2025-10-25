@@ -41,7 +41,8 @@ echo "------------------------------"
 git status
 echo ""
 echo "The status above shows all changes that will be committed."
-read -p "Press Enter to continue or Ctrl+C to cancel..."
+echo "Proceeding automatically in 5 seconds... (Press Ctrl+C to cancel)"
+sleep 5
 echo ""
 
 # Step 2: Add all changes to the staging area

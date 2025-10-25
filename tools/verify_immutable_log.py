@@ -175,23 +175,24 @@ def main():
     parser.add_argument("event_id", nargs="?", help="Event ID to verify")
     parser.add_argument("--all", action="store_true", help="Verify entire log")
     parser.add_argument("--last", type=int, metavar="N", help="Verify last N records")
-    parser.add_argument("--log", help="Path to log file (default: from config)")
+    parser.add_argument("--log", default=None, help="Path to log file")
     
     args = parser.parse_args()
     
-    # Get log path from config or args
+    # Determine log path
     log_path = args.log
     if not log_path:
         try:
-            from grace import config
             log_path = config.IMMUTABLE_LOG_PATH
-        except Exception as e:
+        except Exception:
             log_path = "grace_data/grace_log.jsonl"
             print(f"WARNING: Could not load config, using default path: {log_path}")
     
     if not Path(log_path).exists():
         print(f"ERROR: Log file not found: {log_path}")
-        return 1
+        print(f"       Run a test first to generate the log file:")
+        print(f"       python test_vwx.py")
+        return 2
     
     if args.event_id:
         display_event_flow(args.event_id, args.log)

@@ -41,20 +41,24 @@ class ImmutableLogger:
         from grace import config
         
         self.path = log_file_path or config.IMMUTABLE_LOG_PATH
-        os.makedirs(os.path.dirname(self.path) if os.path.dirname(self.path) else ".", exist_ok=True)
+        
+        # Ensure directory exists
+        dir_path = os.path.dirname(self.path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
         
         # Initialize Ed25519 signing key if crypto is available
         if CRYPTO_AVAILABLE:
             # Priority: 1. Passed parameter, 2. Environment, 3. Saved key file, 4. Generate new
-            key_file = os.path.join(os.path.dirname(self.path), ".grace_signing_key")
+            key_file = os.path.join(os.path.dirname(self.path) or ".", ".grace_signing_key")
             
             if signing_key_hex:
                 # Use provided key
                 self.sk = SigningKey(signing_key_hex, encoder=HexEncoder)
                 logger.info("Using provided Ed25519 signing key")
-            elif config.GRACE_ED25519_SK:
+            elif config.ED25519_SK_HEX:
                 # Use environment key
-                self.sk = SigningKey(config.GRACE_ED25519_SK, encoder=HexEncoder)
+                self.sk = SigningKey(config.ED25519_SK_HEX, encoder=HexEncoder)
                 logger.info("Loaded Ed25519 signing key from environment")
             elif os.path.exists(key_file):
                 # Load from saved key file

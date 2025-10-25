@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import sys
+import argparse
 from pathlib import Path
 
 # Add grace to path
@@ -89,18 +90,9 @@ async def run_e2e_test():
     logger.info("GRACE AI - E2E PHASE VERIFICATION TEST")
     logger.info("=" * 60)
     
-    # Step 1: Initialize Grace
+    # Step 1: Initialize Grace with explicit args
     logger.info("Step 1: Initializing Grace system...")
-    
-    # Create mock args for launcher
-    import argparse
-    args = argparse.Namespace(
-        mode='daemon',
-        config=None,
-        verbose=False
-    )
-    
-    launcher = GraceLauncher(args)
+    launcher = GraceLauncher(argparse.Namespace(debug=False, log_level="INFO"))
     await launcher.initialize()
     logger.info("✓ Grace system initialized")
     

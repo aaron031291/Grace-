@@ -73,8 +73,17 @@ class TrustLedger:
     - Historical tracking and audit trail
     """
     
-    def __init__(self, persistence_path: str = "grace_data/trust_ledger.jsonl"):
-        self.persistence_path = persistence_path
+    def __init__(self, persistence_path: str = None):
+        import os
+        from grace import config
+        
+        self.persistence_path = persistence_path or config.TRUST_LEDGER_PATH
+        
+        # Ensure directory exists
+        dir_path = os.path.dirname(self.persistence_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        
         self.trust_records: Dict[str, TrustRecord] = {}
         self.history: List[Dict[str, Any]] = []
         

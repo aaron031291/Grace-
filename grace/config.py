@@ -2,6 +2,60 @@
 Grace AI - Central Configuration Module
 Manages all system paths, keys, and runtime settings
 """
+import os
+from pathlib import Path
+
+# === Data Roots ===
+_data_dir_path = Path(os.getenv("GRACE_DATA_DIR", "grace_data"))
+_data_dir_path.mkdir(exist_ok=True)
+GRACE_DATA_DIR = str(_data_dir_path)  # Keep as string for os.makedirs compatibility
+
+# === File Paths ===
+IMMUTABLE_LOG_PATH = os.getenv("GRACE_IMMUTABLE_LOG", str(_data_dir_path / "grace_log.jsonl"))
+TRUST_LEDGER_PATH = os.getenv("GRACE_TRUST_LEDGER", str(_data_dir_path / "trust_ledger.jsonl"))
+
+# === Workflow Configuration ===
+WORKFLOW_DIR = os.getenv("GRACE_WORKFLOW_DIR", "grace/workflows")
+
+# === Cryptographic Keys ===
+# Load from environment for production; generate and warn for dev
+ED25519_SK_HEX = os.getenv("GRACE_ED25519_SK", "").strip()  # Required in production
+ED25519_PUB_HEX = os.getenv("GRACE_ED25519_PUB", "").strip()  # Optional (derived from SK)
+
+# === Verification & Checkpointing ===
+CHECKPOINT_EVERY_N = int(os.getenv("GRACE_CHECKPOINT_EVERY_N", "100"))
+
+# === Trust & Governance Thresholds ===
+TRUST_THRESHOLD_MIN = float(os.getenv("GRACE_TRUST_THRESHOLD", "0.3"))
+TRUST_DELTA_SUCCESS = 0.1
+TRUST_DELTA_FAILURE = -0.05
+
+# === Memory & Knowledge Configuration ===
+MEMORY_DIR = str(_data_dir_path / "memory")
+VECTOR_STORE_PATH = str(_data_dir_path / "vectors")
+LIBRARIAN_INDEX_PATH = str(_data_dir_path / "librarian.idx")
+
+# === Logging Level ===
+LOG_LEVEL = os.getenv("GRACE_LOG_LEVEL", "INFO")
+
+# === Feature Flags ===
+ENABLE_CRYPTO_SIGNATURES = True  # Set to False if pynacl unavailable
+ENABLE_TRUST_LEDGER = True
+ENABLE_POLICY_ENGINE = True
+ENABLE_SELF_REFLECTION = True
+
+# === Self-Reflection Schedule ===
+SELF_REFLECTION_INTERVAL_SECONDS = int(os.getenv("GRACE_REFLECTION_INTERVAL", "3600"))
+
+# === API/Integration Settings ===
+EXTERNAL_API_TIMEOUT = int(os.getenv("GRACE_API_TIMEOUT", "30"))
+
+# === Development Mode ===
+DEV_MODE = os.getenv("GRACE_DEV_MODE", "true").lower() == "true"
+
+# === Create Necessary Directories ===
+Path(MEMORY_DIR).mkdir(exist_ok=True)
+Path(VECTOR_STORE_PATH).mkdir(exist_ok=True)
 
 from typing import Optional, Dict, Any
 import os

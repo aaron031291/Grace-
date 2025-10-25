@@ -5,6 +5,7 @@ Tests the Veracity & Continuity Kernel (Epistemic Immune System)
 import asyncio
 import logging
 import sys
+import argparse
 from pathlib import Path
 
 # Add grace to path
@@ -25,18 +26,9 @@ async def test_vwx():
     logger.info("VWX v2 - VERACITY & CONTINUITY KERNEL TEST")
     logger.info("=" * 80)
     
-    # Initialize Grace
+    # Initialize Grace with explicit args (no missing attribute errors)
     logger.info("\nStep 1: Initializing Grace system...")
-    
-    # Create mock args for launcher
-    import argparse
-    args = argparse.Namespace(
-        mode='daemon',
-        config=None,
-        verbose=False
-    )
-    
-    launcher = GraceLauncher(args)
+    launcher = GraceLauncher(argparse.Namespace(debug=False, log_level="INFO"))
     await launcher.initialize()
     logger.info("✓ Grace initialized")
     
@@ -146,6 +138,7 @@ async def test_vwx():
     logger.info("  ✓ Evidence pack generation")
     logger.info("  ✓ Checkpoint commits")
     logger.info("\nCheck grace_data/grace_log.jsonl for cryptographic audit trail")
+    logger.info("Check grace_data/trust_ledger.jsonl for trust scores")
     
     return True
 

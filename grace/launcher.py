@@ -16,6 +16,7 @@ import asyncio
 import logging
 import argparse
 import signal
+import os
 from typing import Optional, List
 
 # Add workspace to path
@@ -35,6 +36,7 @@ from grace.services import (
 from grace.core.immutable_logs import ImmutableLogger
 from grace.orchestration.trigger_mesh import TriggerMesh
 from grace.core.truth_layer import CoreTruthLayer
+from grace import config
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class GraceLauncher:
         self.kernels: List[BaseKernel] = []
         self.running = False
         self._setup_logging()
+        self._ensure_directories()
     
     def _setup_logging(self):
         """Setup logging based on debug flag"""
@@ -57,6 +60,16 @@ class GraceLauncher:
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         logger.info(f"Logging level: {logging.getLevelName(level)}")
+    
+    def _ensure_directories(self):
+        """Ensure all required directories exist."""
+        # Create data directory
+        os.makedirs(config.GRACE_DATA_DIR, exist_ok=True)
+        logger.info(f"Data directory ensured: {config.GRACE_DATA_DIR}")
+        
+        # Create workflow directory
+        os.makedirs(config.WORKFLOW_DIR, exist_ok=True)
+        logger.info(f"Workflow directory ensured: {config.WORKFLOW_DIR}")
     
     async def initialize(self):
         """Initialize all services and registry"""
@@ -107,7 +120,7 @@ class GraceLauncher:
         )
         self.registry.register_factory(
             'trust_ledger',
-            lambda reg: TrustLedger()
+            lambda reg: TrustLedger(persistence_path=str(config.GRACE_DATA_DIR / "trust_ledger.jsonl"))
         )
         self.registry.register_factory(
             'sandbox_manager',
@@ -119,11 +132,14 @@ class GraceLauncher:
         )
         self.registry.register_factory(
             'immutable_logger',
-            lambda reg: ImmutableLogger(log_file_path="grace_log.jsonl")
+            lambda reg: ImmutableLogger(log_file_path=config.IMMUTABLE_LOG_PATH)
         )
         self.registry.register_factory(
             'trigger_mesh',
-            lambda reg: TriggerMesh(reg)
+            lambda reg: TriggerMesh(
+                service_registry=reg,
+                workflow_dir=config.WORKFLOW_DIR
+            )
         )
         self.registry.register_factory(
             'truth_layer',

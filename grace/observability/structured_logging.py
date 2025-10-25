@@ -7,6 +7,14 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 import uuid
+from dataclasses import dataclass, field
+
+@dataclass
+class LogContext:
+    """A dataclass to hold contextual information for logging."""
+    request_id: str = ""
+    user_id: str = ""
+    extra_data: Dict[str, Any] = field(default_factory=dict)
 
 
 class StructuredLogger:

@@ -77,17 +77,13 @@ class ParameterSubstitutor:
 
 class WorkflowEngine:
     """
-    Orient, Decide, Act: Executes workflow actions by calling registered kernel handlers.
-    This is the core of the OODA loop's execution phase.
+    Executes the actions defined in a workflow.
     """
 
     def __init__(
-        self,
-        event_bus: EventBus,
-        immutable_logger: ImmutableLogger,
-        kpi_monitor: Optional[KPITrustMonitor] = None,
-        config: Optional[Dict[str, Any]] = None,
+        self, service_registry, event_bus: EventBus, immutable_logger: ImmutableLogger, kpi_monitor: Optional[KPITrustMonitor] = None, config: Optional[Dict[str, Any]] = None
     ):
+        self.service_registry = service_registry
         self.event_bus = event_bus
         self.logger = immutable_logger
         self.kpi_monitor = kpi_monitor
@@ -103,6 +99,8 @@ class WorkflowEngine:
             "actions_failed": 0,
             "ooda_loops_completed": 0,
         }
+
+        logger.info("Workflow Engine initialized.")
 
     def register_kernel_handler(self, name: str, handler: Callable):
         """Register a function from a kernel that can be called as a workflow action."""

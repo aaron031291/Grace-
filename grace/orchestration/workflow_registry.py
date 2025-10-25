@@ -6,6 +6,7 @@ Loads, validates, and provides access to workflows defined in YAML files.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Set
@@ -13,6 +14,19 @@ from typing import Any, Dict, List, Set
 import yaml
 
 logger = logging.getLogger(__name__)
+
+# This was previously in event_router.py, moving it here as it's a core model
+class EventFilter:
+    """A filter to determine if an event should be processed by a workflow."""
+    def __init__(self, criteria: Dict[str, Any]):
+        self.criteria = criteria
+
+    def match(self, event_data: Dict[str, Any]) -> bool:
+        """Checks if the event data matches the filter criteria."""
+        for key, value in self.criteria.items():
+            if event_data.get(key) != value:
+                return False
+        return True
 
 
 @dataclass
@@ -37,20 +51,18 @@ class Workflow:
 
 
 class WorkflowRegistry:
-    """Loads and manages workflows from YAML files."""
-
+    """
+    Manages the loading and retrieval of workflow definitions.
+    """
     def __init__(self, workflow_dir: str | Path):
         self.workflow_dir = Path(workflow_dir)
-        self.workflows: Dict[str, Dict[str, Any]] = {}
-        self.trigger_event_map: Dict[str, List[str]] = {}
-        self._stats = {"workflows_loaded": 0, "validation_errors": 0}
+        self.workflows: List[Workflow] = []
+        logger.info("Workflow Registry initialized.")
 
     def load_workflows(self):
         """Load all YAML workflow files from the specified directory."""
         logger.info(f"Loading workflows from: {self.workflow_dir}")
-        self.workflows = {}
-        self.trigger_event_map = {}
-        self._stats = {"workflows_loaded": 0, "validation_errors": 0}
+        self.workflows = []
 
         if not self.workflow_dir.is_dir():
             logger.error(f"Workflow directory not found: {self.workflow_dir}")
@@ -59,10 +71,7 @@ class WorkflowRegistry:
         for yaml_file in self.workflow_dir.glob("*.yaml"):
             self._load_workflow_file(yaml_file)
 
-        self._build_trigger_map()
-        logger.info(f"Loaded {self._stats['workflows_loaded']} workflows.")
-        if self._stats["validation_errors"] > 0:
-            logger.error(f"Found {self._stats['validation_errors']} validation errors in workflows.")
+        logger.info(f"Loaded {len(self.workflows)} workflows.")
 
     def _load_workflow_file(self, file_path: Path):
         """Load a single workflow file."""
@@ -73,56 +82,57 @@ class WorkflowRegistry:
                     logger.warning(f"No 'workflows' key found in {file_path}, skipping.")
                     return
 
-                for workflow in data["workflows"]:
-                    if self.validate_workflow(workflow):
-                        if workflow["name"] in self.workflows:
-                            logger.warning(f"Duplicate workflow name '{workflow['name']}', overwriting.")
-                        self.workflows[workflow["name"]] = workflow
-                        self._stats["workflows_loaded"] += 1
-                    else:
-                        self._stats["validation_errors"] += 1
+                for workflow_data in data["workflows"]:
+                    self._register_workflow(workflow_data)
         except yaml.YAMLError as e:
             logger.exception(f"Error parsing YAML file: {file_path}")
-            self._stats["validation_errors"] += 1
         except Exception:
             logger.exception(f"Error loading workflow file: {file_path}")
-            self._stats["validation_errors"] += 1
 
-    def validate_workflow(self, workflow: Dict[str, Any]) -> bool:
-        """Validate the structure of a single workflow definition."""
-        required_keys = ["name", "trigger_event", "actions"]
-        for key in required_keys:
-            if key not in workflow:
-                logger.error(f"Validation failed: Missing required key '{key}' in workflow: {workflow.get('name', 'N/A')}")
-                return False
-        return True
+    def _register_workflow(self, data: Dict[str, Any]):
+        """Parses workflow data and registers it."""
+        try:
+            trigger_data = data['trigger']
+            trigger = WorkflowTrigger(
+                event_type=trigger_data['type'],
+                filter_criteria=trigger_data.get('filter', {})
+            )
+            
+            actions = [WorkflowAction(**a) for a in data['actions']]
+            
+            workflow = Workflow(
+                name=data['name'],
+                trigger=trigger,
+                actions=actions
+            )
+            self.workflows.append(workflow)
+            logger.info(f"Registered workflow: {workflow.name}")
+        except KeyError as e:
+            logger.error(f"Invalid workflow definition. Missing key: {e}")
 
-    def _build_trigger_map(self):
-        """Build a map from trigger event types to workflow names for fast lookups."""
-        self.trigger_event_map = {}
-        for name, workflow in self.workflows.items():
-            event_type = workflow["trigger_event"]
-            if event_type not in self.trigger_event_map:
-                self.trigger_event_map[event_type] = []
-            self.trigger_event_map[event_type].append(name)
+    def find_workflows_for_event(self, event_type: str, payload: Dict[str, Any]) -> List[Workflow]:
+        """
+        Finds all workflows that should be triggered by a given event.
+        """
+        matching = []
+        for wf in self.workflows:
+            if wf.trigger.event_type == event_type:
+                event_filter = EventFilter(wf.trigger.filter_criteria)
+                if event_filter.match(payload):
+                    matching.append(wf)
+        return matching
 
-    def get_all_workflows(self) -> List[Dict[str, Any]]:
+    def get_all_workflows(self) -> List[Workflow]:
         """Return a list of all loaded workflows."""
-        return list(self.workflows.values())
+        return self.workflows
 
-    def get_workflow_by_name(self, name: str) -> Dict[str, Any] | None:
+    def get_workflow_by_name(self, name: str) -> Workflow | None:
         """Return a single workflow by its name."""
-        return self.workflows.get(name)
-
-    def get_workflows_for_event(self, event_type: str) -> List[Dict[str, Any]]:
-        """Get all workflows that are triggered by a specific event type."""
-        workflow_names = self.trigger_event_map.get(event_type, [])
-        return [self.workflows[name] for name in workflow_names]
+        for workflow in self.workflows:
+            if workflow.name == name:
+                return workflow
+        return None
 
     def get_all_trigger_event_types(self) -> Set[str]:
         """Return a set of all unique event types that can trigger workflows."""
-        return set(self.trigger_event_map.keys())
-
-    def get_stats(self) -> Dict[str, int]:
-        """Return loading and validation statistics."""
-        return self._stats
+        return {workflow.trigger.event_type for workflow in self.workflows}

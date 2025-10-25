@@ -184,3 +184,17 @@ class EventRouter:
     def get_stats(self) -> Dict[str, Any]:
         """Return the router's operational statistics."""
         return self._stats
+
+    async def route_event(self, event_type: str, payload: Dict[str, Any]):
+        """
+        Finds and triggers all workflows that match the incoming event.
+        """
+        logger.info(f"Routing event of type: {event_type}")
+        matching_workflows = self.registry.find_workflows_for_event(event_type, payload)
+
+        if not matching_workflows:
+            logger.debug(f"No workflow found for event type: {event_type}")
+            return
+
+        for workflow in matching_workflows:
+            await self.engine.execute_workflow(workflow, payload)

@@ -105,33 +105,139 @@ class WorkflowEngine:
 
     async def execute_workflow(self, workflow, event_context: Dict[str, Any]):
         """
-        Execute a workflow that may be represented as:
-          - a dict: {"name": str, "execute": (async) callable}
-          - an object: has attributes .name and async def execute(event)
+        Execute a workflow with full immutable logging phases:
+        HANDLER_EXECUTED → HANDLER_COMMITTED (or FAILED)
         """
+        # Get immutable logger
+        immutable_logger = self.service_registry.get('immutable_logger') if self.service_registry else None
+        
         # Normalize interface
         if isinstance(workflow, dict):
             workflow_name = workflow.get("name", "UNKNOWN")
+            
+            # Check if this is a YAML workflow with actions
+            if "actions" in workflow:
+                return await self._execute_yaml_workflow(workflow, event_context, immutable_logger)
+            
+            # Otherwise it should have an execute function
             execute_fn = workflow.get("execute")
         else:
             workflow_name = getattr(workflow, "name", workflow.__class__.__name__)
             execute_fn = getattr(workflow, "execute", None)
 
         if execute_fn is None or not callable(execute_fn):
-            logger.error(f"Workflow {workflow_name} missing callable 'execute'; skipping")
+            logger.error(f"Workflow {workflow_name} missing callable 'execute' and has no 'actions'; skipping")
+            if immutable_logger:
+                immutable_logger.append_phase(
+                    event=event_context,
+                    phase="FAILED",
+                    status="error",
+                    metadata={"workflow": workflow_name, "error": "missing callable execute"}
+                )
             raise TypeError(f"Workflow {workflow_name} missing callable 'execute'")
 
         event_id = event_context.get("id", "unknown")
+        
+        # Phase: HANDLER_EXECUTED
         logger.info(f"Executing workflow={workflow_name} event_id={event_id}")
+        if immutable_logger:
+            immutable_logger.append_phase(
+                event=event_context,
+                phase="HANDLER_EXECUTED",
+                status="ok",
+                metadata={"workflow": workflow_name}
+            )
         
         try:
             result = await execute_fn(event_context)
+            
+            # Phase: HANDLER_COMMITTED
             logger.info(f"Workflow {workflow_name} done event_id={event_id}")
+            if immutable_logger:
+                immutable_logger.append_phase(
+                    event=event_context,
+                    phase="HANDLER_COMMITTED",
+                    status="ok",
+                    metadata={"workflow": workflow_name, "result": str(result)[:200]}
+                )
+            
             return result
         except Exception as e:
-            logger.exception(
-                f"Workflow {workflow_name} failed event_id={event_id}: {e}"
+            # Phase: FAILED
+            logger.exception(f"Workflow {workflow_name} failed event_id={event_id}: {e}")
+            if immutable_logger:
+                immutable_logger.append_phase(
+                    event=event_context,
+                    phase="FAILED",
+                    status="error",
+                    metadata={"workflow": workflow_name, "error": str(e)}
+                )
+            raise
+
+    async def _execute_yaml_workflow(self, workflow: Dict[str, Any], event_context: Dict[str, Any], immutable_logger):
+        """
+        Execute a YAML-based workflow with actions and full phase logging.
+        """
+        workflow_name = workflow.get("name", "UNKNOWN")
+        event_id = event_context.get("id", "unknown")
+        actions = workflow.get("actions", [])
+        
+        logger.info(f"Executing YAML workflow={workflow_name} with {len(actions)} actions, event_id={event_id}")
+        
+        # Phase: HANDLER_EXECUTED
+        if immutable_logger:
+            immutable_logger.append_phase(
+                event=event_context,
+                phase="HANDLER_EXECUTED",
+                status="ok",
+                metadata={"workflow": workflow_name, "action_count": len(actions)}
             )
+        
+        results = []
+        try:
+            for action in actions:
+                action_type = action.get("action_type", "unknown")
+                target = action.get("target", "unknown")
+                
+                logger.info(f"  Action: {action_type} -> {target}")
+                
+                if action_type == "call_kernel" and self.service_registry:
+                    kernel = self.service_registry.get(target)
+                    if kernel and hasattr(kernel, 'execute'):
+                        try:
+                            task = {**action.get("params", {}), "triggering_event": event_context}
+                            result = await kernel.execute(task)
+                            results.append({"action": target, "status": "success", "result": result})
+                        except Exception as e:
+                            logger.error(f"    Kernel {target} failed: {e}")
+                            results.append({"action": target, "status": "failed", "error": str(e)})
+                    else:
+                        logger.warning(f"    Kernel {target} not found or not executable")
+                        results.append({"action": target, "status": "skipped", "reason": "kernel not found"})
+            
+            logger.info(f"YAML workflow {workflow_name} completed with {len(results)} action results")
+            
+            # Phase: HANDLER_COMMITTED
+            if immutable_logger:
+                immutable_logger.append_phase(
+                    event=event_context,
+                    phase="HANDLER_COMMITTED",
+                    status="ok",
+                    metadata={"workflow": workflow_name, "actions_completed": len(results)}
+                )
+            
+            return {"status": "completed", "actions": results}
+            
+        except Exception as e:
+            # Phase: FAILED
+            logger.exception(f"YAML workflow {workflow_name} failed: {e}")
+            if immutable_logger:
+                immutable_logger.append_phase(
+                    event=event_context,
+                    phase="FAILED",
+                    status="error",
+                    metadata={"workflow": workflow_name, "error": str(e)}
+                )
             raise
 
         # ORIENT & DECIDE: The selection of this workflow by the router

@@ -68,9 +68,32 @@ class TriggerMesh:
         """
         Receives an event and routes it for processing.
         This is the main entry point for the TriggerMesh.
+        Step 4: Ensure events carry an id and standardized shape.
         """
-        self.logger.info(f"Dispatching event: {event_type}")
-        await self.event_router.route_event(event_type, payload)
+        import uuid
+        import time
+        import json
+        
+        event = {
+            "id": payload.get("event_id") or str(uuid.uuid4()),
+            "type": event_type,
+            "ts": time.time(),
+            "payload": payload,
+        }
+        
+        self.logger.info(f"Dispatching event: {event_type}, id: {event['id']}")
+        
+        # Step 4: Write RECEIVED phase to immutable log
+        immutable_logger = self.service_registry.get('immutable_logger') if self.service_registry else None
+        if immutable_logger:
+            immutable_logger.append_phase(
+                event, 
+                phase="RECEIVED", 
+                status="ok", 
+                metadata={"size": len(json.dumps(payload))}
+            )
+        
+        await self.event_router.route_event(event)
 
     def load_workflows_from_directory(self, directory_path: str):
         """Loads all workflow YAML files from a given directory."""

@@ -40,8 +40,9 @@ class EventRouter:
         """
         Initialize the EventRouter with workflow registry and engine.
         """
-        self.registry = workflow_registry
-        self.engine = workflow_engine
+        self.workflow_registry = workflow_registry
+        self.workflow_engine = workflow_engine
+        self._immutable_logger = None
         logger.info("Event Router initialized.")
 
         self._stats = {
@@ -177,16 +178,47 @@ class EventRouter:
         """Return the router's operational statistics."""
         return self._stats
 
-    async def route_event(self, event_type: str, payload: Dict[str, Any]):
+    async def route_event(self, event: dict):
         """
         Finds and triggers all workflows that match the incoming event.
+        Step 1: Make router logs explicit (match vs miss)
         """
-        logger.info(f"Routing event of type: {event_type}")
-        matching_workflows = self.registry.find_workflows_for_event(event_type, payload)
-
+        event_type = event.get("type")
+        event_id = event.get("id")
+        
+        logger.info(f"Routing event of type: {event_type}, id: {event_id}")
+        
+        # Find matching workflows
+        matching_workflows = self.workflow_registry.find_workflows_for_event(event_type, event.get("payload", {}))
+        
+        # Get immutable logger for phase tracking
+        immutable_logger = getattr(self, '_immutable_logger', None)
+        if not immutable_logger and hasattr(self.workflow_engine, 'service_registry'):
+            immutable_logger = self.workflow_engine.service_registry.get('immutable_logger')
+            self._immutable_logger = immutable_logger
+        
         if not matching_workflows:
-            logger.debug(f"No workflow found for event type: {event_type}")
+            logger.warning(f"NO_MATCH for event_type={event_type}, id={event_id}")
+            if immutable_logger:
+                immutable_logger.append_phase(
+                    event=event, 
+                    phase="NO_MATCH", 
+                    status="warn", 
+                    metadata={}
+                )
             return
+        
+        # Log successful match
+        workflow_names = [wf.name for wf in matching_workflows]
+        logger.info(f"MATCHED workflow={workflow_names} for event_type={event_type}")
+        if immutable_logger:
+            immutable_logger.append_phase(
+                event=event, 
+                phase="MATCHED", 
+                status="ok",
+                metadata={"workflows": workflow_names}
+            )
 
+        # Execute matching workflows
         for workflow in matching_workflows:
-            await self.engine.execute_workflow(workflow, payload)
+            await self.workflow_engine.execute_workflow(workflow, event)

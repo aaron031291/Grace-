@@ -50,18 +50,19 @@ class TriggerMesh:
     It listens for events, matches them against workflow triggers, and executes the
     corresponding actions.
     """
-    def __init__(self, service_registry=None):
+    def __init__(self, service_registry=None, workflow_dir: str = "grace/workflows"):
         """
         Initializes the TriggerMesh.
         Args:
             service_registry: The global service registry.
+            workflow_dir: Directory containing workflow YAML files.
         """
         self.service_registry = service_registry
-        self.workflow_registry = WorkflowRegistry()
+        self.workflow_registry = WorkflowRegistry(workflow_dir=workflow_dir)
         self.workflow_engine = WorkflowEngine(service_registry)
         self.event_router = EventRouter(self.workflow_registry, self.workflow_engine)
         self.logger = logging.getLogger(__name__)
-        self.logger.info("TriggerMesh initialized with service registry.")
+        self.logger.info(f"TriggerMesh initialized with service registry and workflow directory: {workflow_dir}")
 
     async def dispatch_event(self, event_type: str, payload: Dict[str, Any]):
         """

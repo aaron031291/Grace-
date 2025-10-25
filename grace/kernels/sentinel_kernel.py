@@ -6,84 +6,93 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime
 
+from grace.kernels.base_kernel import BaseKernel
+
 logger = logging.getLogger(__name__)
 
-class SentinelKernel:
+class SentinelKernel(BaseKernel):
     """Monitors the external environment for threats and opportunities."""
     
-    def __init__(self, event_bus, llm_service=None):
-        self.event_bus = event_bus
-        self.llm_service = llm_service
-        self.monitored_sources = [
-            "https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json",  # CVE Database
-            "https://raw.githubusercontent.com/python/cpython/main/Misc/HISTORY",  # Python updates
-        ]
-    
-    async def monitor(self, check_interval: float = 60.0):
-        """Continuously monitor external sources for threats and opportunities."""
-        logger.info("Sentinel Kernel monitoring started")
+    def __init__(self, service_registry=None):
+        super().__init__("sentinel_kernel", service_registry)
+        self.comm_channel = self.get_service('communication_channel')
+        self.notifier = self.get_service('notification_service')
+        self.immune_system = self.get_service('immune_system') # Assuming this is registered
+        self.events_monitored = 0
+        self.logger.info("Sentinel Kernel initialized and services wired.")
+
+    async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a monitoring or alerting task.
+
+        Args:
+            task: A dictionary defining the task.
+                  Example: {'type': 'monitor_log', 'source': '/var/log/syslog'}
+                           {'type': 'alert', 'message': 'High CPU usage detected.'}
+        """
+        task_type = task.get('type', 'unknown')
+        self.logger.info(f"Executing sentinel task of type: {task_type}")
+
+        if not all([self.comm_channel, self.notifier, self.immune_system]):
+            error_msg = "One or more required services are not available."
+            self.logger.error(error_msg)
+            return {'success': False, 'error': error_msg}
+
+        try:
+            if task_type == 'monitor_event':
+                result = await self._monitor_event(task)
+            elif task_type == 'send_alert':
+                result = await self._send_alert(task)
+            else:
+                result = {'success': False, 'error': f"Unknown task type: {task_type}"}
+
+            self.events_monitored += 1
+            return result
+        except Exception as e:
+            self.logger.error(f"Error during sentinel execution: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    async def _monitor_event(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Monitor a specific event or data source."""
+        source = task.get('source', 'unknown_source')
+        self.logger.info(f"Monitoring event source: {source}")
+
+        # Simulate monitoring
+        await asyncio.sleep(0.1)
         
-        while True:
-            try:
-                logger.info("Sentinel Kernel: Performing environmental scan...")
-                
-                # Check for security vulnerabilities
-                await self._check_security_feeds()
-                
-                # Check for technology updates
-                await self._check_technology_feeds()
-                
-                # Check for opportunities
-                await self._check_opportunities()
-                
-                await asyncio.sleep(check_interval)
-                
-            except Exception as e:
-                logger.error(f"Error in Sentinel monitoring: {str(e)}")
-                await asyncio.sleep(check_interval)
-    
-    async def _check_security_feeds(self):
-        """Check for security vulnerabilities and CVEs."""
-        logger.info("Sentinel: Checking security feeds...")
-        
-        # Simulated threat detection
-        potential_threat = {
-            "type": "security_vulnerability",
-            "source": "CVE Database",
-            "severity": "medium",
-            "description": "Potential vulnerability in dependency",
-            "timestamp": datetime.now().isoformat()
+        # If a threat is detected, report it to the immune system
+        threat_detected = True # Placeholder for real detection logic
+        if threat_detected:
+            threat_info = {'source': source, 'level': 'medium', 'description': 'Suspicious activity detected.'}
+            await self.immune_system.report_threat(threat_info)
+            self.logger.warning(f"Threat reported to Immune System from source: {source}")
+            return {'success': True, 'monitored': True, 'threat_reported': True, 'source': source}
+
+        return {'success': True, 'monitored': True, 'threat_reported': False, 'source': source}
+
+    async def _send_alert(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Send an alert through the notification and communication services."""
+        message = task.get('message', 'No message provided.')
+        channel = task.get('channel', 'default')
+        self.logger.info(f"Sending alert to channel '{channel}': {message}")
+
+        # Use NotificationService to format and log the alert
+        await self.notifier.send(message, level='alert')
+
+        # Use CommunicationChannel to broadcast the alert
+        await self.comm_channel.broadcast(event='alert', data={'message': message})
+
+        return {'success': True, 'alert_sent': True, 'channel': channel}
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Return the health status of the kernel."""
+        return {
+            'name': self.name,
+            'running': self.is_running,
+            'services': {
+                'comm_channel': 'wired' if self.comm_channel else 'missing',
+                'notifier': 'wired' if self.notifier else 'missing',
+                'immune_system': 'wired' if self.immune_system else 'missing',
+            },
+            'events_monitored': self.events_monitored,
         }
-        
-        logger.info(f"Sentinel: Detected potential threat: {potential_threat}")
-        await self.event_bus.publish("sentinel.threat_detected", potential_threat)
-    
-    async def _check_technology_feeds(self):
-        """Check for new versions and updates of key technologies."""
-        logger.info("Sentinel: Checking technology feeds...")
-        
-        # Simulated update detection
-        potential_update = {
-            "type": "technology_update",
-            "source": "Python Official",
-            "description": "New Python version available",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        logger.info(f"Sentinel: Detected potential update: {potential_update}")
-        await self.event_bus.publish("sentinel.opportunity_identified", potential_update)
-    
-    async def _check_opportunities(self):
-        """Check for opportunities to improve or learn."""
-        logger.info("Sentinel: Checking for improvement opportunities...")
-        
-        # Simulated opportunity detection
-        opportunity = {
-            "type": "learning_opportunity",
-            "source": "Technology Trends",
-            "description": "New architectural pattern becoming popular",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        logger.info(f"Sentinel: Identified opportunity: {opportunity}")
-        await self.event_bus.publish("sentinel.opportunity_identified", opportunity)

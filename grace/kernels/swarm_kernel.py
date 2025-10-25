@@ -2,9 +2,12 @@
 Grace AI Swarm Kernel - Distributed coordination and multi-agent collaboration
 """
 import logging
+import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
+
+from grace.kernels.base_kernel import BaseKernel
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +22,104 @@ class Agent:
         self.created_at = datetime.now().isoformat()
         self.current_task: Optional[str] = None
 
-class SwarmKernel:
-    """Coordinates multiple agents in a swarm for distributed task execution."""
-    
-    def __init__(self, event_bus=None):
-        self.event_bus = event_bus
-        self.agents: Dict[str, Agent] = {}
-        self.tasks: Dict[str, Dict[str, Any]] = {}
-        self.coordination_log: List[Dict[str, Any]] = []
+class SwarmKernel(BaseKernel):
+    """
+    The distributed coordination and communication kernel for Grace.
+    It integrates with CommunicationChannel and TriggerMesh to manage
+    distributed tasks and agent communication.
+    """
+
+    def __init__(self, service_registry=None):
+        super().__init__("swarm_kernel", service_registry)
+        self.comm_channel = self.get_service('communication_channel')
+        self.trigger_mesh = self.get_service('trigger_mesh')
+        self.active_agents = {}
+        self.messages_relayed = 0
+        self.logger.info("Swarm Kernel initialized and services wired.")
+
+    async def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a swarm-related task, like agent coordination or broadcasting.
+
+        Args:
+            task: A dictionary defining the task.
+                  Example: {'type': 'broadcast', 'event': 'new_target', 'data': {...}}
+                           {'type': 'register_agent', 'agent_id': 'agent-123'}
+        """
+        task_type = task.get('type', 'unknown')
+        self.logger.info(f"Executing swarm task of type: {task_type}")
+
+        if not all([self.comm_channel, self.trigger_mesh]):
+            error_msg = "One or more required services are not available."
+            self.logger.error(error_msg)
+            return {'success': False, 'error': error_msg}
+
+        try:
+            if task_type == 'broadcast':
+                result = await self._broadcast_to_swarm(task)
+            elif task_type == 'register_agent':
+                result = self._register_agent(task)
+            elif task_type == 'delegate_to_agent':
+                result = await self._delegate_to_agent(task)
+            else:
+                result = {'success': False, 'error': f"Unknown task type: {task_type}"}
+
+            return result
+        except Exception as e:
+            self.logger.error(f"Error during swarm execution: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    async def _broadcast_to_swarm(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Broadcast a message to all agents in the swarm."""
+        event = task.get('event', 'generic_message')
+        data = task.get('data', {})
+        self.logger.info(f"Broadcasting event '{event}' to swarm.")
+
+        await self.comm_channel.broadcast(event=event, data=data)
+        self.messages_relayed += len(self.active_agents)
+        return {'success': True, 'broadcast_sent': True, 'event': event}
+
+    def _register_agent(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Register a new agent with the swarm."""
+        agent_id = task.get('agent_id')
+        if not agent_id:
+            return {'success': False, 'error': 'agent_id is required.'}
+
+        self.active_agents[agent_id] = {'status': 'active', 'registered_at': asyncio.get_event_loop().time()}
+        self.logger.info(f"Registered new agent: {agent_id}")
+        return {'success': True, 'agent_registered': True, 'agent_id': agent_id}
+
+    async def _delegate_to_agent(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        """Delegate a specific task to a registered agent."""
+        agent_id = task.get('agent_id')
+        agent_task = task.get('agent_task', {})
+        if not agent_id or not agent_task:
+            return {'success': False, 'error': 'agent_id and agent_task are required.'}
+        if agent_id not in self.active_agents:
+            return {'success': False, 'error': f'Agent {agent_id} not registered.'}
+
+        self.logger.info(f"Delegating task to agent {agent_id}.")
+        # In a real system, this would send a direct message.
+        # Here, we'll use the trigger mesh to simulate dispatching a targeted task.
+        await self.trigger_mesh.dispatch_event(
+            event_type='agent_task',
+            payload={'target_agent': agent_id, 'task': agent_task}
+        )
+        self.messages_relayed += 1
+        return {'success': True, 'task_delegated': True, 'agent_id': agent_id}
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Return the health status of the kernel."""
+        return {
+            'name': self.name,
+            'running': self.is_running,
+            'services': {
+                'comm_channel': 'wired' if self.comm_channel else 'missing',
+                'trigger_mesh': 'wired' if self.trigger_mesh else 'missing',
+            },
+            'active_agents': len(self.active_agents),
+            'messages_relayed': self.messages_relayed,
+        }
     
     def register_agent(self, agent_id: str, name: str, role: str) -> Agent:
         """Register a new agent in the swarm."""

@@ -29,7 +29,7 @@ from grace.kernels import (
 from grace.multi_os import MultiOSKernel
 from grace.services import (
     TaskManager, CommunicationChannel, NotificationService,
-    LLMService, WebSocketService, PolicyEngine, TrustLedger
+    LLMService, WebSocketService, PolicyEngine, TrustLedger, SandboxManager
 )
 from grace.orchestration.trigger_mesh import TriggerMesh
 from grace.core.truth_layer import CoreTruthLayer
@@ -106,6 +106,10 @@ class GraceLauncher:
         self.registry.register_factory(
             'trust_ledger',
             lambda reg: TrustLedger()
+        )
+        self.registry.register_factory(
+            'sandbox_manager',
+            lambda reg: SandboxManager()
         )
         self.registry.register_factory(
             'trigger_mesh',

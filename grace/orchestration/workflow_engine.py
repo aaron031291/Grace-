@@ -103,13 +103,36 @@ class WorkflowEngine:
         self.kernel_handlers[name] = handler
         logger.info(f"Registered kernel handler for action: {name}")
 
-    async def execute_workflow(self, workflow: Dict[str, Any], event_context: Dict[str, Any]):
+    async def execute_workflow(self, workflow, event_context: Dict[str, Any]):
         """
-        Execute all actions for a given workflow, completing the OODA loop.
+        Execute a workflow that may be represented as:
+          - a dict: {"name": str, "execute": (async) callable}
+          - an object: has attributes .name and async def execute(event)
         """
-        start_time = datetime.now()
-        workflow_name = workflow["name"]
-        correlation_id = event_context.get("correlation_id")
+        # Normalize interface
+        if isinstance(workflow, dict):
+            workflow_name = workflow.get("name", "UNKNOWN")
+            execute_fn = workflow.get("execute")
+        else:
+            workflow_name = getattr(workflow, "name", workflow.__class__.__name__)
+            execute_fn = getattr(workflow, "execute", None)
+
+        if execute_fn is None or not callable(execute_fn):
+            logger.error(f"Workflow {workflow_name} missing callable 'execute'; skipping")
+            raise TypeError(f"Workflow {workflow_name} missing callable 'execute'")
+
+        event_id = event_context.get("id", "unknown")
+        logger.info(f"Executing workflow={workflow_name} event_id={event_id}")
+        
+        try:
+            result = await execute_fn(event_context)
+            logger.info(f"Workflow {workflow_name} done event_id={event_id}")
+            return result
+        except Exception as e:
+            logger.exception(
+                f"Workflow {workflow_name} failed event_id={event_id}: {e}"
+            )
+            raise
 
         # ORIENT & DECIDE: The selection of this workflow by the router
         # based on the event is the orientation and decision step.

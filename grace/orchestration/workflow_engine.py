@@ -80,16 +80,12 @@ class WorkflowEngine:
     Executes the actions defined in a workflow.
     """
 
-    def __init__(
-        self, service_registry, event_bus: EventBus, immutable_logger: ImmutableLogger, kpi_monitor: Optional[KPITrustMonitor] = None, config: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, service_registry):
+        """
+        Initialize the WorkflowEngine with access to the service registry.
+        """
         self.service_registry = service_registry
-        self.event_bus = event_bus
-        self.logger = immutable_logger
-        self.kpi_monitor = kpi_monitor
-        self.config = config or {}
-        self.kernel_handlers: Dict[str, Callable] = {}
-        self.parameter_substitutor = ParameterSubstitutor()
+        logger.info("Workflow Engine initialized with service registry.")
 
         # Statistics
         self.stats = {
@@ -99,8 +95,6 @@ class WorkflowEngine:
             "actions_failed": 0,
             "ooda_loops_completed": 0,
         }
-
-        logger.info("Workflow Engine initialized.")
 
     def register_kernel_handler(self, name: str, handler: Callable):
         """Register a function from a kernel that can be called as a workflow action."""

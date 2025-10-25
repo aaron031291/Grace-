@@ -98,3 +98,17 @@ def setup_structured_logging(log_level: str = "INFO"):
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(message)s'))
     root_logger.addHandler(handler)
+
+
+def setup_logging(level: str = "INFO"):
+    """
+    Sets up basic logging for the application.
+    """
+    import logging
+    import sys
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        stream=sys.stdout,
+    )
+    logging.info(f"Logging configured with level {level}")

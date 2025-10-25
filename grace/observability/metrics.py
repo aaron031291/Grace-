@@ -19,6 +19,15 @@ class MetricPoint:
     labels: Dict[str, str] = field(default_factory=dict)
 
 
+@dataclass
+class PerformanceMetrics:
+    """A dataclass to hold performance metrics for an operation."""
+    operation_name: str
+    latency_ms: float
+    cpu_usage: float = 0.0
+    memory_usage_mb: float = 0.0
+
+
 class MetricsCollector:
     """
     Collects and aggregates metrics for Grace system

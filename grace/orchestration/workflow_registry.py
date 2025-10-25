@@ -101,10 +101,15 @@ class WorkflowRegistry:
                 if wf is None:
                     self.logger.warning(f"Module {fname} has no `workflow` symbol; skipping")
                     continue
-                # Minimal interface check
-                if not hasattr(wf, "name") or not hasattr(wf, "EVENTS") or not hasattr(wf, "execute"):
-                    self.logger.warning(f"Workflow in {fname} missing required attributes; skipping")
-                    continue
+                # Minimal interface check for dict or object forms
+                if isinstance(wf, dict):
+                    if "name" not in wf or "execute" not in wf:
+                        self.logger.warning(f"Workflow dict in {fname} missing keys; skipping")
+                        continue
+                else:
+                    if not hasattr(wf, "name") or not hasattr(wf, "execute"):
+                        self.logger.warning(f"Workflow object in {fname} missing attributes; skipping")
+                        continue
                 self.workflows.append(wf)
                 loaded += 1
                 self.logger.info(f"Loaded Python workflow: {wf.name} for events: {wf.EVENTS}")

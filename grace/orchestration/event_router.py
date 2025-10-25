@@ -19,6 +19,20 @@ from grace.orchestration.workflow_registry import WorkflowRegistry
 logger = logging.getLogger(__name__)
 
 
+class EventFilter:
+    """A filter to determine if an event should be processed by a workflow."""
+
+    def __init__(self, criteria: Dict[str, Any]):
+        self.criteria = criteria
+
+    def match(self, event_data: Dict[str, Any]) -> bool:
+        """Checks if the event data matches the filter criteria."""
+        for key, value in self.criteria.items():
+            if event_data.get(key) != value:
+                return False
+        return True
+
+
 class EventRouter:
     """Routes events to registered workflows based on trigger patterns."""
 

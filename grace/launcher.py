@@ -29,7 +29,8 @@ from grace.kernels import (
 from grace.multi_os import MultiOSKernel
 from grace.services import (
     TaskManager, CommunicationChannel, NotificationService,
-    LLMService, WebSocketService, PolicyEngine, TrustLedger, SandboxManager
+    LLMService, WebSocketService, PolicyEngine, TrustLedger, SandboxManager,
+    ResilienceService
 )
 from grace.orchestration.trigger_mesh import TriggerMesh
 from grace.core.truth_layer import CoreTruthLayer
@@ -112,8 +113,12 @@ class GraceLauncher:
             lambda reg: SandboxManager()
         )
         self.registry.register_factory(
+            'immune_system', # Registering the resilience service under 'immune_system'
+            lambda reg: ResilienceService(reg)
+        )
+        self.registry.register_factory(
             'trigger_mesh',
-            lambda reg: TriggerMesh()
+            lambda reg: TriggerMesh(reg)
         )
         self.registry.register_factory(
             'truth_layer',

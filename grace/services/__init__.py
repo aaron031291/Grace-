@@ -10,6 +10,7 @@ from grace.services.websocket_service import WebSocketService, WebSocketConnecti
 from grace.services.policy_engine import PolicyEngine, Policy, PolicyType
 from .trust_ledger import TrustLedger
 from .sandbox_manager import SandboxManager
+from .resilience_service import ResilienceService
 
 __all__ = [
     "TaskManager",
@@ -20,4 +21,5 @@ __all__ = [
     "PolicyEngine",
     "TrustLedger",
     "SandboxManager",
+    "ResilienceService",
 ]

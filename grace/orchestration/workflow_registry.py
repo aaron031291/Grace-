@@ -6,12 +6,34 @@ Loads, validates, and provides access to workflows defined in YAML files.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WorkflowTrigger:
+    """Defines what event triggers a workflow."""
+    event_type: str
+    filter_criteria: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class WorkflowAction:
+    """Defines a single action to be executed in a workflow."""
+    action_type: str  # e.g., 'call_kernel', 'dispatch_event'
+    target: str       # e.g., 'learning_kernel'
+    params: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class Workflow:
+    """Represents a complete, event-driven workflow."""
+    name: str
+    trigger: WorkflowTrigger
+    actions: List[WorkflowAction]
 
 
 class WorkflowRegistry:

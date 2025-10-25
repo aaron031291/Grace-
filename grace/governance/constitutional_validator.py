@@ -8,8 +8,11 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from dataclasses import dataclass, asdict
 
-from ..config.environment import get_grace_config
-from ..core.immutable_logs import ImmutableLogs, TransparencyLevel
+import yaml
+
+from ..core import EventBus
+from ..core.immutable_logs import ImmutableLogger, TransparencyLevel
+from .constitution import Constitution, Principle
 
 logger = logging.getLogger(__name__)
 
@@ -51,26 +54,24 @@ class ConstitutionalValidationResult:
 
 class ConstitutionalValidator:
     """
-    Validates actions and decisions against constitutional principles.
-    Integrates with the orchestrator's decision pathway.
+    Validates actions and states against the principles of the constitution.
     """
 
     def __init__(
         self,
-        immutable_logs: Optional[ImmutableLogs] = None,
-        event_publisher: Optional[Any] = None,
+        constitution: Constitution,
+        immutable_logs: ImmutableLogger,
+        event_bus: Optional[EventBus] = None,
     ):
-        self.config = get_grace_config()
+        self.constitution = constitution
         self.immutable_logs = immutable_logs
-        self.event_publisher = event_publisher
+        self.event_bus = event_bus
 
         # Load constitutional principles from configuration
-        self.constitutional_principles = self.config["constitutional_principles"]
+        self.constitutional_principles = self.constitution.get_principles()
 
         # Validation thresholds
-        self.min_compliance_score = self.config["governance_thresholds"][
-            "constitutional_compliance_min"
-        ]
+        self.min_compliance_score = self.constitution.get_min_compliance_score()
 
         logger.info("ConstitutionalValidator initialized")
 
@@ -146,8 +147,8 @@ class ConstitutionalValidator:
             )
 
         # Publish validation event
-        if self.event_publisher:
-            await self.event_publisher("constitutional_validation", asdict(result))
+        if self.event_bus:
+            await self.event_bus.publish("constitutional_validation", asdict(result))
 
         logger.info(
             f"Constitutional validation {validation_id}: {'VALID' if is_valid else 'INVALID'} "
@@ -441,7 +442,5 @@ class ConstitutionalValidator:
         return {
             "principles_count": len(self.constitutional_principles),
             "min_compliance_score": self.min_compliance_score,
-            "enforcement_enabled": self.config["infrastructure_config"][
-                "constitutional_enforcement"
-            ],
+            "enforcement_enabled": self.constitution.get_enforcement_enabled(),
         }

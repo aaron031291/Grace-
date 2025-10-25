@@ -50,8 +50,6 @@ __all__ = [
 """
 Grace Orchestration Layer - Event-driven workflow routing and execution.
 """
-from __future__ import annotations
-
 from .event_router import EventRouter
 from .workflow_engine import WorkflowEngine
 from .workflow_registry import WorkflowRegistry

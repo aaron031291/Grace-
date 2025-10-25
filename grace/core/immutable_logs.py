@@ -33,19 +33,46 @@ class ImmutableLogger:
     """
     Cryptographic, append-only immutable logger with SHA-256 hashing
     and Ed25519 signature verification for every event.
+    
+    Keys are loaded from environment (GRACE_ED25519_SK) or generated once and saved.
     """
-    def __init__(self, log_file_path: str = "grace_data/grace_log.jsonl", signing_key_hex: str = None):
-        self.path = log_file_path
+    def __init__(self, log_file_path: str = None, signing_key_hex: str = None):
+        # Import config here to avoid circular imports
+        from grace import config
+        
+        self.path = log_file_path or config.IMMUTABLE_LOG_PATH
         os.makedirs(os.path.dirname(self.path) if os.path.dirname(self.path) else ".", exist_ok=True)
         
         # Initialize Ed25519 signing key if crypto is available
         if CRYPTO_AVAILABLE:
-            if signing_key_hex is None:
-                # Generate a new key for development (in production, load from secure storage)
-                self.sk = SigningKey.generate()
-                logger.warning("Generated new Ed25519 signing key for ImmutableLogger. This should be persisted securely.")
-            else:
+            # Priority: 1. Passed parameter, 2. Environment, 3. Saved key file, 4. Generate new
+            key_file = os.path.join(os.path.dirname(self.path), ".grace_signing_key")
+            
+            if signing_key_hex:
+                # Use provided key
                 self.sk = SigningKey(signing_key_hex, encoder=HexEncoder)
+                logger.info("Using provided Ed25519 signing key")
+            elif config.GRACE_ED25519_SK:
+                # Use environment key
+                self.sk = SigningKey(config.GRACE_ED25519_SK, encoder=HexEncoder)
+                logger.info("Loaded Ed25519 signing key from environment")
+            elif os.path.exists(key_file):
+                # Load from saved key file
+                with open(key_file, 'r') as f:
+                    saved_key = f.read().strip()
+                self.sk = SigningKey(saved_key, encoder=HexEncoder)
+                logger.info(f"Loaded Ed25519 signing key from {key_file}")
+            else:
+                # Generate new key and save it
+                self.sk = SigningKey.generate()
+                key_hex = self.sk.encode(encoder=HexEncoder).decode()
+                with open(key_file, 'w') as f:
+                    f.write(key_hex)
+                os.chmod(key_file, 0o600)  # Restrict permissions
+                logger.warning(f"Generated NEW Ed25519 signing key and saved to {key_file}")
+                logger.warning(f"PUBLIC KEY: {self.sk.verify_key.encode(encoder=HexEncoder).decode()}")
+                if config.DEV_MODE:
+                    logger.warning(f"PRIVATE KEY (DEV ONLY): {key_hex}")
             
             self.vk = self.sk.verify_key
         else:

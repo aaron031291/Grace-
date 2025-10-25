@@ -1,5 +1,6 @@
 """
-Centralized configuration for Grace system
+Grace AI - Central Configuration Module
+Manages all system paths, keys, and runtime settings
 """
 
 from typing import Optional, Dict, Any
@@ -8,6 +9,54 @@ import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Base paths
+GRACE_ROOT = Path("/workspaces/Grace-")
+GRACE_DATA_DIR = GRACE_ROOT / "grace_data"
+GRACE_DATA_DIR.mkdir(exist_ok=True)
+
+# Workflow configuration
+WORKFLOW_DIR = str(GRACE_ROOT / "grace" / "workflows")
+
+# Immutable logging configuration
+IMMUTABLE_LOG_PATH = str(GRACE_DATA_DIR / "grace_log.jsonl")
+
+# Cryptographic keys
+# Load from environment for production; generate and warn for dev
+GRACE_ED25519_SK = os.getenv("GRACE_ED25519_SK")  # Hex-encoded private key
+GRACE_ED25519_PK = os.getenv("GRACE_ED25519_PK")  # Hex-encoded public key (optional)
+
+# Trust & governance thresholds
+TRUST_THRESHOLD_MIN = float(os.getenv("GRACE_TRUST_THRESHOLD", "0.3"))
+TRUST_DELTA_SUCCESS = 0.1
+TRUST_DELTA_FAILURE = -0.05
+
+# Memory & knowledge configuration
+MEMORY_DIR = str(GRACE_DATA_DIR / "memory")
+VECTOR_STORE_PATH = str(GRACE_DATA_DIR / "vectors")
+LIBRARIAN_INDEX_PATH = str(GRACE_DATA_DIR / "librarian.idx")
+
+# Logging level
+LOG_LEVEL = os.getenv("GRACE_LOG_LEVEL", "INFO")
+
+# Feature flags
+ENABLE_CRYPTO_SIGNATURES = True  # Set to False if pynacl unavailable
+ENABLE_TRUST_LEDGER = True
+ENABLE_POLICY_ENGINE = True
+ENABLE_SELF_REFLECTION = True
+
+# Self-reflection schedule
+SELF_REFLECTION_INTERVAL_SECONDS = int(os.getenv("GRACE_REFLECTION_INTERVAL", "3600"))
+
+# API/Integration settings
+EXTERNAL_API_TIMEOUT = int(os.getenv("GRACE_API_TIMEOUT", "30"))
+
+# Development mode
+DEV_MODE = os.getenv("GRACE_DEV_MODE", "true").lower() == "true"
+
+# Create necessary directories
+Path(MEMORY_DIR).mkdir(exist_ok=True)
+Path(VECTOR_STORE_PATH).mkdir(exist_ok=True)
 
 
 class GraceConfig:

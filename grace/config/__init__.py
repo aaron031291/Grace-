@@ -34,3 +34,6 @@ def get_config():
         "WORKFLOW_DIR": WORKFLOW_DIR,
         "CHECKPOINT_EVERY_N": CHECKPOINT_EVERY_N,
     }
+
+# Development toggle used by subsystems
+DEV_MODE = bool(int(os.environ.get('GRACE_DEV_MODE', '0')))

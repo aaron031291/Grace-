@@ -4,6 +4,31 @@ Grace AI - Unified Launcher
 ==========================
 Single entry point for starting all Grace systems
 
+# --- BEGIN HOTFIX: Adaptive TrustLedger factory ---
+def _make_trust_ledger(cfg):
+    from inspect import signature
+    from grace.core.trust_ledger import TrustLedger
+    ledger_path = str(cfg.TRUST_LEDGER_PATH)
+    try:
+        sig = signature(TrustLedger.__init__)
+        params = sig.parameters
+        if "persistence_path" in params:
+            return TrustLedger(persistence_path=ledger_path)
+        elif "path" in params:
+            return TrustLedger(path=ledger_path)
+        elif "storage_path" in params:
+            return TrustLedger(storage_path=ledger_path)
+        elif "file_path" in params:
+            return TrustLedger(file_path=ledger_path)
+        else:
+            # try positional
+            return TrustLedger(ledger_path)
+    except Exception:
+        # last resort: positional
+        return TrustLedger(ledger_path)
+# --- END HOTFIX ---
+
+
 Usage:
   python -m grace.launcher
   python -m grace.launcher --debug
@@ -123,7 +148,7 @@ class GraceLauncher:
         )
         self.registry.register_factory(
             'trust_ledger',
-            lambda reg: TrustLedger(persistence_path=str(config.GRACE_DATA_DIR / "trust_ledger.jsonl"))
+            lambda reg: _make_trust_ledger(config)
         )
         self.registry.register_factory(
             'sandbox_manager',
@@ -196,7 +221,7 @@ class GraceLauncher:
         )
         self.registry.register_factory(
             'trust_ledger',
-            lambda reg: TrustLedger(persistence_path=str(config.GRACE_DATA_DIR / "trust_ledger.jsonl"))
+            lambda reg: _make_trust_ledger(config)
         )
         self.registry.register_factory(
             'sandbox_manager',

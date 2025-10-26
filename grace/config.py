@@ -1,36 +1,65 @@
+"""
+Grace AI - Central Configuration Module
+Manages all system paths, keys, and runtime settings.
+This module is designed to be self-contained and robust.
+"""
+from pathlib import Path
 import os
+import logging
 
-GRACE_HOME = os.getenv("GRACE_HOME", os.path.abspath("./"))
-GRACE_DATA_DIR = os.getenv("GRACE_DATA_DIR", os.path.join(GRACE_HOME, "grace_data"))
+# --- Path Configuration ---
 
-# Core dirs
-LOG_DIR        = os.getenv("GRACE_LOG_DIR",     os.path.join(GRACE_DATA_DIR, "logs"))
-AUDIT_LOG_DIR  = os.getenv("AUDIT_LOG_DIR",     os.path.join(GRACE_DATA_DIR, "audit"))
-VECTOR_DB_PATH = os.getenv("VECTOR_DB_PATH",    os.path.join(GRACE_DATA_DIR, "vector_db"))
-TMP_DIR        = os.getenv("GRACE_TMP_DIR",     os.path.join(GRACE_DATA_DIR, "tmp"))
-REPORTS_DIR    = os.getenv("REPORTS_DIR",       os.path.join(GRACE_DATA_DIR, "reports"))
-SYSTEM_DIR     = os.getenv("SYSTEM_DIR",        os.path.join(GRACE_DATA_DIR, "system"))
+# Use the location of this file to robustly find the project root
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Files (parents will be created by launcher)
-TRUST_LEDGER_PATH   = os.getenv("TRUST_LEDGER_PATH",   os.path.join(GRACE_DATA_DIR, "trust_ledger.jsonl"))
-IMMUTABLE_LOG_PATH  = os.getenv("IMMUTABLE_LOG_PATH",  os.path.join(AUDIT_LOG_DIR,  "immutable_logs.jsonl"))
-SYSTEM_STATUS_PATH  = os.getenv("SYSTEM_STATUS_PATH",  os.path.join(SYSTEM_DIR,     "status.json"))
-E2E_REPORT_PATH     = os.getenv("E2E_REPORT_PATH",     os.path.join(REPORTS_DIR,    "e2e_report.json"))
-HEALTHCHECK_REPORT  = os.getenv("HEALTHCHECK_REPORT",  os.path.join(REPORTS_DIR,    "healthcheck.json"))
-VERIFICATION_REPORT = os.getenv("VERIFICATION_REPORT", os.path.join(REPORTS_DIR,    "verification.json"))
+# Data directory (creates ./grace_data by default; override with GRACE_DATA_DIR env var)
+# This is the single source of truth for the data directory path.
+GRACE_DATA_DIR = Path(os.environ.get("GRACE_DATA_DIR", _PROJECT_ROOT / "grace_data"))
 
-# --- Crypto keys ---
-ED25519_SK_HEX      = os.getenv("GRACE_ED25519_SK", "").strip()  # required in non-dev
-ED25519_PUB_HEX     = os.getenv("GRACE_ED25519_PUB", "").strip()
+# Core subdirectories
+LOG_DIR = GRACE_DATA_DIR / "logs"
+AUDIT_LOG_DIR = GRACE_DATA_DIR / "audit"
+VECTOR_DB_PATH = GRACE_DATA_DIR / "vector_db"
+TMP_DIR = GRACE_DATA_DIR / "tmp"
+REPORTS_DIR = GRACE_DATA_DIR / "reports"
+SYSTEM_DIR = GRACE_DATA_DIR / "system"
+WORKFLOW_DIR = _PROJECT_ROOT / "grace" / "workflows"
 
-# --- Workflows ---
-WORKFLOW_DIR        = os.getenv("GRACE_WORKFLOW_DIR", "grace/workflows")
+# Canonical file paths
+# Services should import and use these constants directly.
+IMMUTABLE_LOG_PATH = AUDIT_LOG_DIR / "immutable_log.jsonl"
+TRUST_LEDGER_PATH = GRACE_DATA_DIR / "trust_ledger.jsonl"
+SYSTEM_STATUS_PATH = SYSTEM_DIR / "status.json"
+E2E_REPORT_PATH = REPORTS_DIR / "e2e_report.json"
 
-# --- Verification/checkpointing ---
-CHECKPOINT_EVERY_N  = int(os.getenv("GRACE_CHECKPOINT_EVERY_N", "100"))
+# --- Create all necessary directories and files on import ---
+# This ensures that any part of the system can import this module and be
+# confident that the necessary file structure exists.
+_ALL_DIRS = {
+    GRACE_DATA_DIR, LOG_DIR, AUDIT_LOG_DIR, VECTOR_DB_PATH,
+    TMP_DIR, REPORTS_DIR, SYSTEM_DIR, WORKFLOW_DIR
+}
+_ALL_FILES = {IMMUTABLE_LOG_PATH, TRUST_LEDGER_PATH, SYSTEM_STATUS_PATH, E2E_REPORT_PATH}
 
-# Optional external services (won’t crash if unset)
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://localhost:5432/grace")
-REDIS_URL    = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-OPENAI_KEY   = os.getenv("OPENAI_API_KEY", "")
-ANTHROPIC_KEY= os.getenv("ANTHROPIC_API_KEY", "")
+for directory in _ALL_DIRS:
+    directory.mkdir(parents=True, exist_ok=True)
+
+for file_path in _ALL_FILES:
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.touch(exist_ok=True)
+
+logging.getLogger(__name__).info(f"Grace config initialized. Data directory: {GRACE_DATA_DIR}")
+
+
+# --- Cryptographic Keys ---
+ED25519_SK_HEX = os.getenv("GRACE_ED25519_SK", "").strip()
+ED25519_PUB_HEX = os.getenv("GRACE_ED25519_PUB", "").strip()
+
+# --- Verification & Checkpointing ---
+CHECKPOINT_EVERY_N = int(os.getenv("GRACE_CHECKPOINT_EVERY_N", "100"))
+
+# --- Optional External Services ---
+POSTGRES_URL = os.getenv("POSTGRES_URL")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")

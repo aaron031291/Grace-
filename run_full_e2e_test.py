@@ -381,8 +381,12 @@ async def run_full_e2e_test():
     
     logger.info(f"\nTest completed at: {datetime.now().isoformat()}")
     logger.info(f"\nLog files:")
-    logger.info(f"  Immutable Log: {config.IMMUTABLE_LOG_PATH}")
-    logger.info(f"  Trust Ledger:  {config.TRUST_LEDGER_PATH}")
+    try:
+        from grace import config
+        logger.info(f"  Immutable Log: {config.IMMUTABLE_LOG_PATH}")
+        logger.info(f"  Trust Ledger:  {config.TRUST_LEDGER_PATH}")
+    except Exception as e:
+        logger.warning(f"  Could not load config paths: {e}")
     logger.info(f"\nVerify audit trail:")
     logger.info(f"  python tools/verify_immutable_log.py --all")
     

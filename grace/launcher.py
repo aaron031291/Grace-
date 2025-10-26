@@ -50,7 +50,10 @@ class GraceLauncher:
         self.kernels: List[BaseKernel] = []
         self.running = False
         self._setup_logging()
+        self.registry = initialize_global_registry()
         self._ensure_directories()
+        self._register_factories()
+        logger.info("Grace Launcher initialized")
     
     def _setup_logging(self):
         """Setup logging based on debug flag"""
@@ -59,17 +62,90 @@ class GraceLauncher:
             level=level,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
-        logger.info(f"Logging level: {logging.getLevelName(level)}")
+        self.logger = logging.getLogger("grace.launcher")
+        self.logger.info("Logging level: %s", logging.getLevelName(level))
     
     def _ensure_directories(self):
         """Ensure all required directories exist."""
-        # Create data directory
+        # --- add this guard block BEFORE using config.GRACE_DATA_DIR ---
+        if not hasattr(config, "GRACE_DATA_DIR") or not config.GRACE_DATA_DIR:
+            config.GRACE_DATA_DIR = os.path.abspath("./grace_data")
+        if not hasattr(config, "LOG_DIR") or not config.LOG_DIR:
+            config.LOG_DIR = os.path.join(config.GRACE_DATA_DIR, "logs")
+        if not hasattr(config, "VECTOR_DB_PATH") or not config.VECTOR_DB_PATH:
+            config.VECTOR_DB_PATH = os.path.join(config.GRACE_DATA_DIR, "vector_db")
+        if not hasattr(config, "AUDIT_LOG_DIR") or not config.AUDIT_LOG_DIR:
+            config.AUDIT_LOG_DIR = os.path.join(config.GRACE_DATA_DIR, "audit")
+        if not hasattr(config, "TMP_DIR") or not config.TMP_DIR:
+            config.TMP_DIR = os.path.join(config.GRACE_DATA_DIR, "tmp")
+        if not hasattr(config, "TRUST_LEDGER_PATH") or not config.TRUST_LEDGER_PATH:
+            config.TRUST_LEDGER_PATH = os.path.join(config.GRACE_DATA_DIR, "trust_ledger.jsonl")
+        if not hasattr(config, "WORKFLOW_DIR") or not config.WORKFLOW_DIR:
+            config.WORKFLOW_DIR = "grace/workflows"
+        # ---------------------------------------------------------------
+
         os.makedirs(config.GRACE_DATA_DIR, exist_ok=True)
-        logger.info(f"Data directory ensured: {config.GRACE_DATA_DIR}")
+        for d in (config.LOG_DIR, config.VECTOR_DB_PATH, config.AUDIT_LOG_DIR, config.TMP_DIR):
+            os.makedirs(d, exist_ok=True)
         
-        # Create workflow directory
-        os.makedirs(config.WORKFLOW_DIR, exist_ok=True)
-        logger.info(f"Workflow directory ensured: {config.WORKFLOW_DIR}")
+        # touch trust ledger
+        if not os.path.exists(config.TRUST_LEDGER_PATH):
+            open(config.TRUST_LEDGER_PATH, "a").close()
+
+        self.logger.info(f"Data directory ensured: {config.GRACE_DATA_DIR}")
+    
+    def _register_factories(self):
+        """Register all services in the registry"""
+        # Register core services
+        self.registry.register_factory(
+            'task_manager',
+            lambda reg: TaskManager()
+        )
+        self.registry.register_factory(
+            'communication_channel',
+            lambda reg: CommunicationChannel()
+        )
+        self.registry.register_factory(
+            'notification_service',
+            lambda reg: NotificationService()
+        )
+        self.registry.register_factory(
+            'llm_service',
+            lambda reg: LLMService()
+        )
+        self.registry.register_factory(
+            'websocket_service',
+            lambda reg: WebSocketService()
+        )
+        self.registry.register_factory(
+            'policy_engine',
+            lambda reg: PolicyEngine()
+        )
+        self.registry.register_factory(
+            'trust_ledger',
+            lambda reg: TrustLedger(persistence_path=str(config.GRACE_DATA_DIR / "trust_ledger.jsonl"))
+        )
+        self.registry.register_factory(
+            'sandbox_manager',
+            lambda reg: SandboxManager()
+        )
+        self.registry.register_factory(
+            'immune_system', # Registering the resilience service under 'immune_system'
+            lambda reg: ResilienceService(reg)
+        )
+        self.registry.register_factory(
+            'immutable_logger',
+            lambda reg: ImmutableLogger(log_file_path=config.IMMUTABLE_LOG_PATH)
+        )
+        from grace.orchestration.trigger_mesh import TriggerMesh
+        self.registry.register_factory(
+            "trigger_mesh",
+            lambda reg: TriggerMesh(
+                service_registry=reg,
+                workflow_dir=config.WORKFLOW_DIR
+            )
+        )
+        self.logger.info("Registered factory: trigger_mesh")
     
     async def initialize(self):
         """Initialize all services and registry"""
@@ -134,17 +210,15 @@ class GraceLauncher:
             'immutable_logger',
             lambda reg: ImmutableLogger(log_file_path=config.IMMUTABLE_LOG_PATH)
         )
+        from grace.orchestration.trigger_mesh import TriggerMesh
         self.registry.register_factory(
-            'trigger_mesh',
+            "trigger_mesh",
             lambda reg: TriggerMesh(
                 service_registry=reg,
                 workflow_dir=config.WORKFLOW_DIR
             )
         )
-        self.registry.register_factory(
-            'truth_layer',
-            lambda reg: CoreTruthLayer()
-        )
+        self.logger.info("Registered factory: trigger_mesh")
     
     async def create_kernels(self):
         """Create kernel instances"""

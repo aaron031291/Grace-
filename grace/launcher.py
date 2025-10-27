@@ -103,7 +103,10 @@ class GraceLauncher:
         self.registry.register_factory('communication_channel', lambda reg: CommunicationChannel())
         self.registry.register_factory('notification_service', lambda reg: NotificationService())
         self.registry.register_factory('llm_service', lambda reg: LLMService(api_key=config.OPENAI_KEY))
-        self.registry.register_factory('websocket_service', lambda reg: WebSocketService())
+        self.registry.register_factory(
+            'websocket_service', 
+            lambda reg: WebSocketService(service_registry=reg, host=config.WEBSOCKET_HOST, port=config.WEBSOCKET_PORT)
+        )
         self.registry.register_factory('policy_engine', lambda reg: PolicyEngine())
         self.registry.register_factory('workflow_registry', lambda reg: WorkflowRegistry(workflow_dir=config.WORKFLOW_DIR))
         self.registry.register_factory('workflow_engine', lambda reg: WorkflowEngine(reg))
@@ -162,17 +165,25 @@ class GraceLauncher:
         logger.info(f"✓ Created {len(self.kernels)} kernels")
     
     async def start_kernels(self):
-        """Start all kernels"""
-        logger.info(f"Starting {len(self.kernels)} kernels...")
+        """Start all kernels and long-running services"""
+        logger.info(f"Starting {len(self.kernels)} kernels and services...")
         
         tasks = []
+        
+        # Start kernels
         for kernel in self.kernels:
             task = asyncio.create_task(kernel.run_loop(interval=1.0))
             tasks.append(task)
+            
+        # Start long-running services like WebSocketService
+        websocket_service = self.registry.get('websocket_service')
+        if websocket_service:
+            task = asyncio.create_task(websocket_service.start())
+            tasks.append(task)
         
-        logger.info("✓ All kernels started")
+        logger.info("✓ All kernels and services started")
         
-        # Wait for all kernels to complete
+        # Wait for all tasks to complete
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
@@ -239,6 +250,11 @@ class GraceLauncher:
         for kernel in self.kernels:
             await kernel.stop()
         
+        # Shutdown long-running services
+        websocket_service = self.registry.get_optional('websocket_service')
+        if websocket_service:
+            await websocket_service.shutdown()
+            
         # Shutdown registry
         if self.registry:
             self.registry.shutdown()

@@ -14,6 +14,7 @@ import logging
 import hashlib
 import json
 from typing import Dict, Any
+from grace.core.service_registry import ServiceRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -62,21 +63,22 @@ class DataIngestionWorkflow:
         self._audit_commit(event, tagged_data, trust_score_hint)
         
         # Phase 5.5: Trust hint based on input quality (very light touch)
+        # Optional trust hint to keep sources warm in the ledger (delta 0.0)
         logger.info("  Phase 5.5: Trust Hint - updating trust score registry")
         try:
-            payload = event.payload or {}
+            payload = self._safe_payload(event)
             source = payload.get("source", "test_harness")
             registry = ServiceRegistry.get_instance()
-            ledger = registry.get_optional("trust_ledger")
+            ledger = registry.get_optional("trust_ledger") if registry else None
             if ledger:
-                rec = ledger.update_score(entity_id=source, delta=0.0, reason="INGEST_TRUST_HINT", context={"event_id": event.id})
-                logger.info("    TRUST_UPDATE: source=%s, delta=+0.00, event_id=%s (persisted, score_after=%.4f, seq=%d)", source, event.id, rec["score_after"], rec["seq"])
+                rec = ledger.update_score(entity_id=source, delta=0.0, reason="INGEST_TRUST_HINT", context={"event_id": getattr(event, "id", "unknown")})
+                logger.info("    TRUST_UPDATE: source=%s, delta=+0.00, event_id=%s (persisted, score_after=%.4f, seq=%d)", source, getattr(event, "id", "unknown"), rec["score_after"], rec["seq"])
             else:
-                logger.info("    TRUST_UPDATE: source=%s, delta=+0.00, event_id=%s (Trust Ledger not available)", source, event.id)
+                logger.info("    TRUST_UPDATE: source=%s, delta=+0.00, event_id=%s (Trust Ledger not available)", source, getattr(event, "id", "unknown"))
         except Exception as e:
             logger.info("    TRUST_UPDATE: skipped due to error: %s", e)
 
-        logger.info(f"  Phase 6: Signal Dispatch - emitting new_knowledge_available")
+        logger.info("  Phase 6: Signal Dispatch - emitting new_knowledge_available")
         
         logger.info(f"HANDLER_DONE {self.name} event_id={event_id}")
         
@@ -145,6 +147,14 @@ class DataIngestionWorkflow:
         audit_hash = tagged_data.get("integrity_hash")
         logger.info("  AUDIT_COMMIT: hash=%s, trust=%s", audit_hash, trust_score)
 
+    def _safe_payload(self, ev):
+        # Accept Event-like objects or raw dicts
+        if ev is None:
+            return {}
+        if isinstance(ev, dict):
+            # allow either {"payload": {...}} or a dict that's already the payload
+            return ev.get("payload", ev) or {}
+        return getattr(ev, "payload", {}) or {}
     
 # Export the workflow instance
 workflow = DataIngestionWorkflow()

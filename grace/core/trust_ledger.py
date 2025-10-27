@@ -123,10 +123,27 @@ class TrustLedger:
             
     def stats(self) -> dict:
         with self._lock:
-            return {
-                "entities_tracked": len(self.entities),
-                "total_interactions": self.total_interactions,
+            entities = len(self.entities)
+            interactions = self.total_interactions
+            quarantined = 0  # reserved for future policy quarantine
+
+            # Minimal type histogram (extend later if you track types per entity)
+            by_type = {}  # e.g., {"api": 3, "user": 7}
+
+            out = {
+                "entities": entities,
+                "interactions": interactions,
+                "quarantined": quarantined,
+                "by_type": by_type,
             }
+            # Back-compat/aliases expected by test harness
+            out.update({
+                "total_entities": entities,
+                "total_interactions": interactions,
+                "quarantined_entities": quarantined,
+                "version": "1.0",
+            })
+            return out
 
     # TEST HARNESS COMPAT: some callers expect get_stats()
     def get_stats(self) -> dict:

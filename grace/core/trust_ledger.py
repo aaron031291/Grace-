@@ -127,3 +127,10 @@ class TrustLedger:
                 "entities_tracked": len(self.entities),
                 "total_interactions": self.total_interactions,
             }
+
+    # TEST HARNESS COMPAT: some callers expect get_stats()
+    def get_stats(self) -> dict:
+        """
+        Back-compat wrapper for test harnesses that call get_stats().
+        """
+        return self.stats()

@@ -593,9 +593,10 @@ def handle(event, context=None):
         }
     
     # Phase 8: TRUST_UPDATE
-    logger.info(f"  Phase 8: TRUST_UPDATE")
-    source = event.payload.get("source", "unknown")
-    delta = float(event.payload.get("trust_delta", 0.05))
+    # Some events arrive with payload=None; guard access
+    payload = event.payload or {}
+    source = payload.get("source", "unknown")
+    delta = float(payload.get("trust_delta", 0.05))
     registry = ServiceRegistry.get_instance()
     ledger = registry.get_optional("trust_ledger")
     if ledger:
@@ -606,7 +607,10 @@ def handle(event, context=None):
         except Exception as e:
             logger.error("  TRUST_UPDATE: Failed to update trust for source=%s: %s", source, e)
     else:
-        logger.info("  TRUST_UPDATE: source=%s, delta=%+.2f, event_id=%s (Trust Ledger not available)", source, delta, event.id)
+        logger.info(
+            "  TRUST_UPDATE: source=%s, delta=%+.2f, event_id=%s (Trust Ledger not available)",
+            source, delta, event.id
+        )
 
     # Phase 9: OUTCOME_COMMIT
     logger.info(f"  Phase 9: OUTCOME_COMMIT - Generating Evidence Pack")

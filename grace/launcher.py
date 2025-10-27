@@ -76,6 +76,11 @@ class GraceLauncher:
         self._ensure_directories()
         self.registry = initialize_global_registry()
         self._register_factories()
+        
+        # HACK: Alias for older kernels still using get_service
+        self.registry.get_service = self.registry.get
+        self.registry.get_optional_service = self.registry.get_optional
+        
         logger.info("Grace Launcher initialized")
     
     def _setup_logging(self):

@@ -57,6 +57,8 @@ from grace.services import (
 )
 from grace.core.immutable_logs import ImmutableLogger
 from grace.orchestration.trigger_mesh import TriggerMesh
+from grace.orchestration.workflow_registry import WorkflowRegistry
+from grace.orchestration.workflow_engine import WorkflowEngine
 from grace.core.truth_layer import CoreTruthLayer
 from grace import config
 
@@ -103,6 +105,8 @@ class GraceLauncher:
         self.registry.register_factory('llm_service', lambda reg: LLMService(api_key=config.OPENAI_KEY))
         self.registry.register_factory('websocket_service', lambda reg: WebSocketService())
         self.registry.register_factory('policy_engine', lambda reg: PolicyEngine())
+        self.registry.register_factory('workflow_registry', lambda reg: WorkflowRegistry(workflow_dir=config.WORKFLOW_DIR))
+        self.registry.register_factory('workflow_engine', lambda reg: WorkflowEngine(reg))
         self.registry.register_factory('trust_ledger', lambda reg: _make_trust_ledger(config))
         self.registry.register_factory('sandbox_manager', lambda reg: SandboxManager())
         self.registry.register_factory('immune_system', lambda reg: ResilienceService(reg))

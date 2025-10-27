@@ -34,6 +34,8 @@ from typing import Dict, Any, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
 
+from grace.core.service_registry import ServiceRegistry
+
 logger = logging.getLogger(__name__)
 
 WORKFLOW_NAME = "veracity_continuity_kernel"
@@ -229,7 +231,13 @@ class VeracityContinuityKernel:
         # Phase 8: TRUST_UPDATE
         logger.info(f"  Phase 8: TRUST_UPDATE")
         trust_delta = self._compute_trust_delta(veracity_vector, policy_result)
-        self._update_trust_ledger(source_attestation["source"], trust_delta, event_id)
+        self._safe_trust_update(
+            registry=service_registry,
+            source=source_attestation["source"],
+            delta=trust_delta,
+            event_id=event_id,
+            reason="VWX v2 veracity-based adjustment"
+        )
         
         # Phase 9: OUTCOME_COMMIT
         logger.info(f"  Phase 9: OUTCOME_COMMIT - Generating Evidence Pack")
@@ -439,6 +447,28 @@ class VeracityContinuityKernel:
         
         return base_delta
     
+    def _safe_trust_update(self, registry, source: str, delta: float, event_id: str, reason: str):
+        """
+        Try to persist a trust update. Never crash the workflow if trust is unavailable.
+        """
+        try:
+            trust = registry.get("trust_ledger")  # lazy-init via ServiceRegistry
+            trust.update_score(
+                entity_id=source or "unknown",
+                delta=delta,
+                reason=reason,
+                context={"event_id": event_id, "origin": "VWX_v2"}
+            )
+            logger.info(
+                f"    TRUST_UPDATE: source={source or 'unknown'}, delta={delta:+.2f}, "
+                f"event_id={event_id} (Persisted)"
+            )
+        except Exception as e:
+            logger.info(
+                f"    TRUST_UPDATE: source={source or 'unknown'}, delta={delta:+.2f}, "
+                f"event_id={event_id} (Trust Ledger not available: {e})"
+            )
+    
     def _update_trust_ledger(self, source: str, delta: float, event_id: str):
         """
         Phase 8: TRUST_UPDATE
@@ -507,3 +537,102 @@ class VeracityContinuityKernel:
 
 # Export the workflow instance
 workflow = VeracityContinuityKernel()
+
+def handle(event, context=None):
+    """
+    veracity_continuity_kernel
+    """
+    ctx = context or {}
+    logger.info("VWX_START veracity_continuity_kernel event_id=%s", event.id)
+    ctx["event_id"] = event.id
+
+    # Phase 1: VERIFICATION_STARTED
+    logger.info(f"  Phase 1: VERIFICATION_STARTED")
+    verification_id = workflow._generate_verification_id(event.id)
+    start_time = time.time()
+    
+    # Phase 2: SOURCE_ATTESTATION
+    logger.info(f"  Phase 2: SOURCE_ATTESTATION")
+    source_attestation = workflow._attest_source(event.payload)
+    if not source_attestation["valid"]:
+        logger.warning(f"  Source attestation FAILED: {source_attestation['reason']}")
+        return {
+            "status": "rejected",
+            "reason": "source_attestation_failed",
+            "details": source_attestation
+        }
+    
+    # Phase 3: CLAIM_SET_BUILT
+    logger.info(f"  Phase 3: CLAIM_SET_BUILT")
+    claims = workflow._extract_claims(event.payload, source_attestation["source_hash"])
+    logger.info(f"    Extracted {len(claims)} claims")
+    
+    # Phase 4: SEMANTIC_ALIGNMENT
+    logger.info(f"  Phase 4: SEMANTIC_ALIGNMENT")
+    alignment_result = workflow._align_semantics(claims)
+    logger.info(f"    Alignment score: {alignment_result['score']:.2f}")
+    
+    # Phase 5: VERACITY_VECTOR
+    logger.info(f"  Phase 5: VERACITY_VECTOR - Five-dimensional scoring")
+    veracity_vector = workflow._compute_veracity_vector(claims, event.payload, alignment_result)
+    logger.info(f"    Aggregate veracity: {veracity_vector.aggregate_score:.2f} ({veracity_vector.trust_level})")
+    
+    # Phase 6: CONSISTENCY_CHECK
+    logger.info(f"  Phase 6: CONSISTENCY_CHECK")
+    consistency_result = workflow._check_consistency(event.payload, veracity_vector)
+    
+    # Phase 7: POLICY_GUARDRAILS
+    logger.info(f"  Phase 7: POLICY_GUARDRAILS")
+    policy_result = workflow._check_policy_guardrails(claims, veracity_vector)
+    if not policy_result["passed"]:
+        logger.warning(f"  Policy guardrail VIOLATION: {policy_result['violation']}")
+        return {
+            "status": "rejected",
+            "reason": "policy_violation",
+            "details": policy_result
+        }
+    
+    # Phase 8: TRUST_UPDATE
+    logger.info(f"  Phase 8: TRUST_UPDATE")
+    source = event.payload.get("source", "unknown")
+    delta = float(event.payload.get("trust_delta", 0.05))
+    registry = ServiceRegistry.get_instance()
+    ledger = registry.get_optional("trust_ledger")
+    if ledger:
+        try:
+            rec = ledger.update_score(entity_id=source, delta=delta, reason="VWX_VERIFICATION", context={"event_id": event.id})
+            logger.info("  TRUST_UPDATE: source=%s, delta=%+.2f, event_id=%s (persisted, score_after=%.4f, seq=%d)",
+                        source, delta, event.id, rec["score_after"], rec["seq"])
+        except Exception as e:
+            logger.error("  TRUST_UPDATE: Failed to update trust for source=%s: %s", source, e)
+    else:
+        logger.info("  TRUST_UPDATE: source=%s, delta=%+.2f, event_id=%s (Trust Ledger not available)", source, delta, event.id)
+
+    # Phase 9: OUTCOME_COMMIT
+    logger.info(f"  Phase 9: OUTCOME_COMMIT - Generating Evidence Pack")
+    epk = workflow._generate_evidence_pack(
+        verification_id, event.id, claims, veracity_vector,
+        veracity_vector.trust_level, source_attestation
+    )
+
+    # Phase 10: CHECKPOINT_COMMIT
+    workflow.checkpoint_counter += 1
+    if workflow.checkpoint_counter % workflow.checkpoint_interval == 0:
+        logger.info(f"  Phase 10: CHECKPOINT_COMMIT - Merkle root checkpoint")
+        merkle_root = workflow._commit_checkpoint(epk)
+        workflow.merkle_roots.append(merkle_root)
+    
+    logger.info("VWX_DONE veracity_continuity_kernel event_id=%s elapsed=%.1fms", event.id, (time.time() - start_time) * 1000)
+    return {
+        "status": "verified",
+        "workflow": workflow.name,
+        "verification_id": verification_id,
+        "veracity_vector": veracity_vector.to_dict() if hasattr(veracity_vector, 'to_dict') else {
+            "aggregate": veracity_vector.aggregate_score,
+            "trust_level": veracity_vector.trust_level
+        },
+        "trust_delta": delta,
+        "evidence_pack": epk.to_dict(),
+        "claims_count": len(claims),
+        "elapsed_ms": (time.time() - start_time) * 1000
+    }

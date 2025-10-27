@@ -59,6 +59,16 @@ class DataIngestionWorkflow:
         logger.info(f"  Phase 5: Governance Audit - immutable logging")
         self._audit_commit(event, tagged_data, trust_score)
         
+        # Phase 5.5: Trust hint based on input quality (very light touch)
+        logger.info(f"  Phase 5.5: Trust Hint - updating trust score registry")
+        delta = (trust_score - 0.5) * 0.1  # ±0.05 max adjustment
+        self._safe_trust_update(
+            source=tagged_data.get("source", "unknown"),
+            delta=delta,
+            event_id=event_id,
+            reason="Ingestion quality hint"
+        )
+        
         # Phase 6: Signal Dispatch
         logger.info(f"  Phase 6: Signal Dispatch - emitting new_knowledge_available")
         
@@ -127,6 +137,25 @@ class DataIngestionWorkflow:
         """Commit to immutable audit log."""
         # Placeholder: In production, this would write to ImmutableLogger
         logger.info(f"  AUDIT_COMMIT: hash={tagged_data['integrity_hash']}, trust={trust_score}")
+    
+    def _safe_trust_update(self, source: str, delta: float, event_id: str, reason: str):
+        """Safely update trust score, logging any issues."""
+        try:
+            trust = registry.get("trust_ledger")
+            trust.update_score(
+                entity_id=source or "unknown",
+                delta=delta,
+                reason=reason,
+                context={"event_id": event_id, "origin": "ingestion_pipeline"}
+            )
+            logger.info(
+                f"    TRUST_UPDATE: source={source or 'unknown'}, delta={delta:+.2f}, event_id={event_id} (Persisted)"
+            )
+        except Exception as e:
+            logger.info(
+                f"    TRUST_UPDATE: source={source or 'unknown'}, delta={delta:+.2f}, "
+                f"event_id={event_id} (Trust Ledger not available: {e})"
+            )
 
 
 # Export the workflow instance

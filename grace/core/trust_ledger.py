@@ -17,137 +17,119 @@ Trust scores are adjusted based on:
 """
 import json
 import logging
-import os
-from datetime import datetime, timezone
-from threading import RLock
+from collections import defaultdict
+from pathlib import Path
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
 class TrustLedger:
-    """
-    Simple append-only JSONL trust ledger with in-memory rollups per entity.
-    """
-    def __init__(self, path: str):
-        self.path = path
-        self.entities: dict[str, dict] = {}
-        self.total_interactions: int = 0
-        self._lock = RLock()
-        # ensure directory
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        # entity_id -> {score: float, interactions: int, level: str, meta: dict}
+        self._entities: Dict[str, Dict[str, Any]] = {}
+        self._seq: int = 0
+        # rollups (kept in-memory; rebuilt on load)
+        self._total_interactions: int = 0
+        self._by_type = defaultdict(int)   # e.g. {"ingestion": 10, "verification": 3}
+        self._by_level = defaultdict(int)  # e.g. {"low": 2, "medium": 5, "high": 1}
         self._load()
-        logger.info("Trust Ledger initialized with %d entities from %s", len(self.entities), self.path)
 
     def _load(self):
-        lines = []
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            self.path.write_text("", encoding="utf-8")
+            logger.info("Loaded 0 trust records, tracking 0 entities.")
+            return
+
+        # naive line-by-line load (jsonl)
+        cnt = 0
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            pass
-        
-        interactions = 0
-        for line in lines:
-            try:
-                rec = json.loads(line)
-                interactions += 1
-                ent = rec.get("entity")
-                if not ent:
-                    continue
-                # roll-up
-                slot = self.entities.setdefault(ent, {"score": 0.0, "interactions": 0, "last_update": None})
-                slot["score"] = rec.get("score_after", slot["score"])
-                slot["interactions"] = rec.get("seq", slot["interactions"])
-                slot["last_update"] = rec.get("ts")
-            except json.JSONDecodeError:
-                logger.warning("Skipping malformed line in trust ledger: %s", line.strip())
-                continue
-        self.total_interactions = interactions
-        logger.info("Loaded %d trust records, tracking %d entities.", interactions, len(self.entities))
+            with self.path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        cnt += 1
+                        # minimal rebuild: entity + last score/level + counters
+                        ent = rec.get("entity_id") or rec.get("entity") or "unknown"
+                        score = rec.get("score_after", 0.0)
+                        level = rec.get("level", rec.get("trust_level", "unknown"))
+                        etype = rec.get("type", rec.get("event_type", "unknown"))
+                        ecount = self._entities.get(ent, {}).get("interactions", 0) + 1
+                        self._entities[ent] = {
+                            "score": score,
+                            "interactions": ecount,
+                            "level": level,
+                            "meta": rec.get("meta", {}),
+                        }
+                        self._total_interactions += 1
+                        self._by_type[etype] += 1
+                        self._by_level[level] += 1
+                        self._seq = max(self._seq, int(rec.get("seq", 0)))
+                    except Exception:
+                        # keep loading even if a line is borked
+                        continue
+            logger.info(f"Trust Ledger initialized with {len(self._entities)} entities from {self.path}")
+        except Exception as e:
+            logger.exception("Failed loading trust ledger: %s", e)
+            logger.info("Trust Ledger initialized with 0 entities from %s", self.path)
 
-    def _current_score(self, entity_id: str) -> float:
-        return self.entities.get(entity_id, {}).get("score", 0.0)
-
-    def update_score(
-        self,
-        entity_id: str,
-        delta: float,
-        reason: str,
-        context: dict | None = None,
-    ) -> dict:
+    def record(self, entity_id: str, delta: float, *, level: str = "unknown", etype: str = "generic", meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Append an interaction to the JSONL ledger and update in-memory rollups.
-        Returns the record written.
+        Atomically append a JSONL record and update in-memory aggregates.
         """
-        if not entity_id:
-            raise ValueError("entity_id cannot be empty")
+        meta = meta or {}
+        ent = self._entities.get(entity_id, {"score": 0.0, "interactions": 0, "level": "unknown", "meta": {}})
+        score_before = float(ent["score"])
+        score_after = score_before + float(delta)
+        ent["score"] = score_after
+        ent["interactions"] = int(ent["interactions"]) + 1
+        ent["level"] = level
+        ent["meta"] = {**ent.get("meta", {}), **meta}
+        self._entities[entity_id] = ent
+        self._seq += 1
+        # rollups
+        self._total_interactions += 1
+        self._by_type[etype] += 1
+        self._by_level[level] += 1
 
-        ts = datetime.now(timezone.utc).isoformat()
-        with self._lock:
-            prev_score = self._current_score(entity_id)
-            new_score = round(prev_score + float(delta), 6)
-            
-            self.total_interactions += 1
-            seq = self.entities.get(entity_id, {}).get("interactions", 0) + 1
-            
-            record = {
-                "ts": ts,
-                "entity": entity_id,
-                "delta": delta,
-                "score_before": prev_score,
-                "score_after": new_score,
-                "seq": seq,
-                "reason": reason,
-                "context": context or {},
-            }
-            
-            try:
-                with open(self.path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            except IOError as e:
-                logger.error("Failed to write to trust ledger at %s: %s", self.path, e)
-                # If write fails, we should not update the in-memory state
-                self.total_interactions -= 1 # Decrement because the write failed
-                raise
-            
-            # update rollup
-            self.entities[entity_id] = {"score": new_score, "interactions": seq, "last_update": ts}
-        return record
+        rec = {
+            "seq": self._seq,
+            "entity_id": entity_id,
+            "delta": float(delta),
+            "score_before": score_before,
+            "score_after": score_after,
+            "level": level,
+            "type": etype,
+            "meta": meta,
+        }
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        return rec
 
-    def get_entity_stats(self, entity_id: str) -> dict | None:
-        with self._lock:
-            return self.entities.get(entity_id)
+    def get(self, entity_id: str) -> Optional[Dict[str, Any]]:
+        return self._entities.get(entity_id)
 
-    def total_entities(self) -> int:
-        with self._lock:
-            return len(self.entities)
-            
-    def stats(self) -> dict:
-        with self._lock:
-            entities = len(self.entities)
-            interactions = self.total_interactions
-            quarantined = 0  # reserved for future policy quarantine
-
-            # Minimal type histogram (extend later if you track types per entity)
-            by_type = {}  # e.g., {"api": 3, "user": 7}
-
-            out = {
-                "entities": entities,
-                "interactions": interactions,
-                "quarantined": quarantined,
-                "by_type": by_type,
-            }
-            # Back-compat/aliases expected by test harness
-            out.update({
-                "total_entities": entities,
-                "total_interactions": interactions,
-                "quarantined_entities": quarantined,
-                "version": "1.0",
-            })
-            return out
-
-    # TEST HARNESS COMPAT: some callers expect get_stats()
-    def get_stats(self) -> dict:
+    def stats(self) -> Dict[str, Any]:
         """
-        Back-compat wrapper for test harnesses that call get_stats().
+        Return a stable schema expected by tests/consumers.
+        Keys are always present.
         """
-        return self.stats()
+        # compute top_entities (sorted by score desc)
+        top = sorted(
+            ({"entity_id": k, "score": v["score"], "interactions": v["interactions"], "level": v.get("level", "unknown")}
+             for k, v in self._entities.items()),
+            key=lambda x: (x["score"], x["interactions"]),
+            reverse=True,
+        )[:10]
+        return {
+            "total_entities": len(self._entities),
+            "total_interactions": int(self._total_interactions),
+            "by_type": dict(self._by_type),     # may be {}
+            "by_level": dict(self._by_level),   # may be {}
+            "top_entities": top,                # [] when none
+            "last_seq": int(self._seq),
+        }

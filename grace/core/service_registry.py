@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
-
+__all__ = ["ServiceRegistry", "initialize_global_registry", "get_global_registry"]
 
 @dataclass
 class ServiceConfig:
@@ -78,6 +78,37 @@ class ServiceRegistry:
         except KeyError:
             return None
 
-# Ensure the launcher-created instance becomes the singleton
-# (Importing this module elsewhere will share the same instance.)
-ServiceRegistry._instance = ServiceRegistry()
+    # --- Back-compat lifecycle shims ------------------------------------------
+    def initialize(self):
+        """
+        Legacy launcher used registry.initialize().
+        Newer design auto-inits on first use; this remains as a safe no-op that
+        marks the registry as ready and emits a helpful log line.
+        """
+        if not getattr(self, "_initialized", False):
+            self._initialized = True
+            logger.info("Service registry is now marked as initialized.")
+        logger.info("✓ All services are ready to be loaded on demand.")
+
+    def is_initialized(self) -> bool:
+        """Back-compat convenience accessor."""
+        return getattr(self, "_initialized", False)
+
+# --- Back-compat / global accessors ------------------------------------------------
+# Some callers (e.g., launcher) import initialize_global_registry / get_global_registry.
+# Provide no-op shims that return the singleton.
+def initialize_global_registry():
+    """
+    Back-compat: historically set up a process-global registry.
+    Now the class is a singleton; this function simply returns it.
+    """
+    return ServiceRegistry.get_instance()
+
+def get_global_registry():
+    """Back-compat alias for ServiceRegistry.get_instance()."""
+    return ServiceRegistry.get_instance()
+
+# Ensure a singleton exists as soon as the module loads so that imports
+# across modules always share the same instance (and same factory table).
+if ServiceRegistry._instance is None:
+    ServiceRegistry._instance = ServiceRegistry()

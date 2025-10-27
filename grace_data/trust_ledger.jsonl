@@ -1,1 +1,2 @@
 {"ts": "2025-10-27T19:21:23.948523+00:00", "entity": "test_harness", "delta": 0.0, "score_before": 0.0, "score_after": 0.0, "seq": 1, "reason": "INGEST_TRUST_HINT", "context": {"event_id": "unknown"}}
+{"ts": 1761593874.4735808, "type": "score_adjust", "entity_id": "test_harness", "delta": 0.0, "score_after": 0.0, "seq": 1, "reason": "INGEST_TRUST_HINT", "event_id": "", "source_type": "", "context": {"event_id": "unknown"}}

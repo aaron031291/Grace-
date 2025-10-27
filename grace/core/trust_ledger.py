@@ -34,7 +34,17 @@ class TrustLedger:
 
     # ---------- public API ----------
 
-    def adjust_score(self, entity_id: str, delta: float, *, reason: str = "", event_id: str = "", source_type: str = "") -> Dict[str, Any]:
+    def adjust_score(
+        self,
+        entity_id: str,
+        delta: float,
+        *,
+        reason: str = "",
+        event_id: str = "",
+        source_type: str = "",
+        context: dict | None = None,   # <— NEW: accept context explicitly
+        **_ignore,                     # <— NEW: ignore any other legacy kwargs safely
+    ) -> Dict[str, Any]:
         """Primary mutator. Returns dict with new score/seq."""
         with self._lock:
             ent = self._ensure_entity(entity_id)
@@ -53,6 +63,7 @@ class TrustLedger:
                 "reason": reason,
                 "event_id": event_id,
                 "source_type": source_type,
+                "context": context or {},    # <— persist if provided
             }
             self._append(rec)
             return {"score_after": ent["score"], "seq": ent["seq"]}
@@ -82,16 +93,36 @@ class TrustLedger:
     def get_stats(self) -> Dict[str, Any]:
         """Tests expect keys: by_level, by_type. Always present, even if empty."""
         with self._lock:
-            return {
+            stats = {
                 "entities": len(self._entities),
+                "total_entities": len(self._entities),      # <— NEW for your test
                 "interactions": self._interactions_total,
+                "total_interactions": self._interactions_total,  # <— friendly alias
                 "by_level": dict(self._by_level),
                 "by_type": dict(self._by_type),
             }
+            return stats
 
     def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             return self._entities.get(entity_id)
+
+    def get_trusted_entities(
+        self,
+        min_trust: float = 0.7,
+        limit: int | None = None,
+        include_scores: bool = False,
+    ) -> list:
+        """Return entities with score >= min_trust, sorted desc by score."""
+        with self._lock:
+            items = [(eid, e.get("score", 0.0)) for eid, e in self._entities.items()]
+            items.sort(key=lambda x: x[1], reverse=True)
+            filtered = [it for it in items if it[1] >= float(min_trust)]
+            if limit is not None:
+                filtered = filtered[: int(limit)]
+            if include_scores:
+                return filtered
+            return [eid for eid, _ in filtered]
 
     # ---------- internals ----------
 

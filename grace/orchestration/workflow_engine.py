@@ -149,7 +149,14 @@ class WorkflowEngine:
             )
         
         try:
-            result = await execute_fn(event_context)
+            handler = workflow_module.handle
+            # Ensure the service registry is available to the workflow
+            context = {
+                "event_id": event_context.get("id"),
+                "event_type": event_context.get("type"),
+                "service_registry": self.service_registry,
+            }
+            await handler(event=event_context, context=context, service_registry=self.service_registry)
             
             # Phase: HANDLER_COMMITTED
             logger.info(f"Workflow {workflow_name} done event_id={event_id}")
@@ -158,10 +165,9 @@ class WorkflowEngine:
                     event=event_context,
                     phase="HANDLER_COMMITTED",
                     status="ok",
-                    metadata={"workflow": workflow_name, "result": str(result)[:200]}
+                    metadata={"workflow": workflow_name}
                 )
             
-            return result
         except Exception as e:
             # Phase: FAILED
             logger.exception(f"Workflow {workflow_name} failed event_id={event_id}: {e}")

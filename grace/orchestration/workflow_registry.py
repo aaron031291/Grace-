@@ -144,17 +144,9 @@ class WorkflowRegistry:
         if names:
             self.logger.info("Workflows available: %s", names)
 
-    def find_workflows_for_event(self, event_type: str, payload: dict):
-        matches = []
-        for wf in self.workflows:
-            events = getattr(wf, "EVENTS", [])
-            if event_type in events:
-                matches.append(wf)
-        if matches:
-            self.logger.info(
-                "find_workflows_for_event: event_type=%s -> %s",
-                event_type, [getattr(wf, "name", wf.__class__.__name__) for wf in matches]
-            )
-        else:
-            self.logger.info("find_workflows_for_event: event_type=%s -> NONE", event_type)
-        return matches
+    def find_workflows_for_event(self, event_type: str) -> list[str]:
+        return self.event_to_workflow_map.get(event_type, [])
+
+# --- Hotfix helper: expose module lookup for engine ---
+    def get_module(self, workflow_name: str):
+        return getattr(self, 'modules', {}).get(workflow_name)

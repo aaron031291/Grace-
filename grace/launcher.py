@@ -44,6 +44,23 @@ import signal
 import os
 from typing import Optional, List
 
+def _make_trust_ledger(config):
+    import inspect
+    from grace.core.trust_ledger import TrustLedger
+    ledger_path = str(config.TRUST_LEDGER_PATH)
+    try:
+        params = inspect.signature(TrustLedger.__init__).parameters
+    except (ValueError, TypeError):
+        params = {}
+    for kw in ("persistence_path","path","file_path","storage_file","ledger_path"):
+        if kw in params: return TrustLedger(**{kw: ledger_path})
+    try: return TrustLedger(ledger_path)
+    except TypeError: pass
+    for factory in ("from_path","from_file","from_persistence"):
+        if hasattr(TrustLedger, factory):
+            return getattr(TrustLedger, factory)(ledger_path)
+    raise TypeError("Could not construct TrustLedger; unknown constructor signature.")
+
 # Add workspace to path
 sys.path.insert(0, '/workspaces/Grace-')
 
@@ -136,7 +153,7 @@ class GraceLauncher:
         )
         self.registry.register_factory(
             'llm_service',
-            lambda reg: LLMService()
+            lambda reg: LLMService(api_key=config.OPENAI_KEY)
         )
         self.registry.register_factory(
             'websocket_service',
@@ -182,68 +199,14 @@ class GraceLauncher:
         self.registry = initialize_global_registry()
         logger.info("✓ Service registry initialized")
         
-        # Register services
-        self._register_services()
-        logger.info("✓ All services registered")
+        # Note: _register_factories() is already called in __init__
+        # No need to register services again.
         
         # Initialize registry (lazy-loads services)
         self.registry.initialize()
         logger.info("✓ All services initialized")
         
         logger.info("✓ System initialization complete")
-    
-    def _register_services(self):
-        """Register all services in the registry"""
-        # Register core services
-        self.registry.register_factory(
-            'task_manager',
-            lambda reg: TaskManager()
-        )
-        self.registry.register_factory(
-            'communication_channel',
-            lambda reg: CommunicationChannel()
-        )
-        self.registry.register_factory(
-            'notification_service',
-            lambda reg: NotificationService()
-        )
-        self.registry.register_factory(
-            'llm_service',
-            lambda reg: LLMService()
-        )
-        self.registry.register_factory(
-            'websocket_service',
-            lambda reg: WebSocketService()
-        )
-        self.registry.register_factory(
-            'policy_engine',
-            lambda reg: PolicyEngine()
-        )
-        self.registry.register_factory(
-            'trust_ledger',
-            lambda reg: _make_trust_ledger(config)
-        )
-        self.registry.register_factory(
-            'sandbox_manager',
-            lambda reg: SandboxManager()
-        )
-        self.registry.register_factory(
-            'immune_system', # Registering the resilience service under 'immune_system'
-            lambda reg: ResilienceService(reg)
-        )
-        self.registry.register_factory(
-            'immutable_logger',
-            lambda reg: ImmutableLogger(log_file_path=config.IMMUTABLE_LOG_PATH)
-        )
-        from grace.orchestration.trigger_mesh import TriggerMesh
-        self.registry.register_factory(
-            "trigger_mesh",
-            lambda reg: TriggerMesh(
-                service_registry=reg,
-                workflow_dir=config.WORKFLOW_DIR
-            )
-        )
-        self.logger.info("Registered factory: trigger_mesh")
     
     async def create_kernels(self):
         """Create kernel instances"""

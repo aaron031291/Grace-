@@ -21,6 +21,7 @@ ED25519_SK_HEX = os.getenv("GRACE_ED25519_SK", "").strip()
 ED25519_PUB_HEX = os.getenv("GRACE_ED25519_PUB", "").strip()
 WORKFLOW_DIR = os.getenv("GRACE_WORKFLOW_DIR", "grace/workflows")
 CHECKPOINT_EVERY_N = int(os.getenv("GRACE_CHECKPOINT_EVERY_N", "100"))
+OPENAI_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
 
 def get_config():
@@ -33,6 +34,7 @@ def get_config():
         "ED25519_PUB_HEX": ED25519_PUB_HEX,
         "WORKFLOW_DIR": WORKFLOW_DIR,
         "CHECKPOINT_EVERY_N": CHECKPOINT_EVERY_N,
+        "OPENAI_KEY": OPENAI_KEY,
     }
 
 # Development toggle used by subsystems

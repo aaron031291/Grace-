@@ -2,72 +2,85 @@
 Grace AI LLM Service - Interface to local Large Language Models
 """
 import logging
-import requests
-from typing import Dict, Any, Optional
+from openai import OpenAI, APIError
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
-    """Interface to a local LLM (e.g., Ollama) for reasoning and code generation."""
-    
-    def __init__(self, llm_url: str = "http://localhost:11434", model: str = "mistral"):
-        self.llm_url = llm_url
-        self.model = model
-    
-    async def generate_text(self, prompt: str) -> str:
-        """Generate text using the LLM."""
-        logger.info(f"LLM: Generating text with prompt length {len(prompt)}")
-        
+    """
+    A service for interacting with Large Language Models.
+    Currently supports OpenAI.
+    """
+    def __init__(self, api_key: str = None):
+        """
+        Initializes the LLMService.
+
+        Args:
+            api_key (str, optional): The OpenAI API key. If not provided,
+                                     the service will run in a disabled (dummy) mode.
+        """
+        if not api_key:
+            logger.warning("OpenAI API key not provided. LLMService will run in dummy mode.")
+            self.client = None
+            self.enabled = False
+        else:
+            try:
+                self.client = OpenAI(api_key=api_key)
+                self.enabled = True
+                logger.info("LLMService initialized with OpenAI client.")
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI client: {e}")
+                self.client = None
+                self.enabled = False
+
+    async def generate_response(
+        self,
+        prompt: str,
+        model: str = "gpt-3.5-turbo",
+        max_tokens: int = 1500,
+        temperature: float = 0.7,
+    ) -> str:
+        """
+        Generates a response from the language model.
+
+        Args:
+            prompt (str): The input prompt for the model.
+            model (str): The model to use for generation.
+            max_tokens (int): The maximum number of tokens to generate.
+            temperature (float): The sampling temperature.
+
+        Returns:
+            str: The generated text response, or a dummy response if disabled/failed.
+        """
+        if not self.enabled or not self.client:
+            logger.debug("LLMService is disabled. Returning dummy response.")
+            return "LLM service is not configured. This is a placeholder response."
+
         try:
-            response = requests.post(
-                f"{self.llm_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=30
+            # In the new OpenAI library, async calls are the default for the base client
+            # but are made on the specific endpoints.
+            # The library handles the async operations internally when used in an async context.
+            completion = self.client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
             )
-            
-            if response.status_code == 200:
-                result = response.json().get("response", "")
-                logger.info(f"LLM: Generated response of length {len(result)}")
-                return result
-            else:
-                logger.error(f"LLM error: {response.status_code}")
-                return ""
-                
+            response_text = completion.choices[0].message.content
+            logger.info("Successfully generated LLM response.")
+            return response_text.strip() if response_text else ""
+        except APIError as e:
+            logger.error(f"OpenAI API error: {e}")
+            return f"Error: Could not get a response from the LLM. API Error: {e}"
         except Exception as e:
-            logger.error(f"Error calling LLM: {str(e)}")
-            return ""
-    
-    async def generate_code(self, problem_description: str, context: str = "") -> str:
-        """Generate code to solve a specific problem."""
-        prompt = f"""You are an expert Python developer. Generate clean, well-documented code to solve the following problem:
+            logger.error(f"An unexpected error occurred in LLMService: {e}")
+            return f"Error: An unexpected error occurred. {e}"
 
-Problem: {problem_description}
-
-Context: {context}
-
-Provide only the Python code, with no explanation."""
-        
-        return await self.generate_text(prompt)
-    
-    async def analyze_code(self, code: str) -> Dict[str, Any]:
-        """Analyze code for issues and provide suggestions."""
-        prompt = f"""You are an expert code reviewer. Analyze the following Python code and identify:
-1. Any bugs or potential issues
-2. Style or clarity problems
-3. Performance improvements
-4. Security concerns
-
-Code:
-{code}
-
-Provide your analysis in a structured format."""
-        
-        analysis = await self.generate_text(prompt)
-        return {
-            "analysis": analysis,
-            "code": code
-        }
+    def is_enabled(self) -> bool:
+        """Returns True if the service is configured and enabled, False otherwise."""
+        return self.enabled

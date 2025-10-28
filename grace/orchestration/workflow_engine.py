@@ -78,40 +78,32 @@ class ParameterSubstitutor:
 
 class WorkflowEngine:
     """
-    Executes workflow handler coroutines registered in WorkflowRegistry.
+    Tolerant engine that correctly initializes and executes workflows.
+    - __init__(registry, *args, **kwargs)
+    - Resolves modules via WorkflowRegistry.get_module(name)
+    - Runs async handlers directly; sync via default executor
     """
-    def __init__(self, service_registry, registry):
-        self.service_registry = service_registry
+    def __init__(self, registry, *args, **kwargs):
+        if registry is None:
+            raise TypeError("WorkflowEngine requires a 'registry' instance.")
         self.registry = registry
+        self.workflow_registry = registry.get('workflow_registry')
 
-    async def execute_workflow(self, workflow_name: str, event: dict) -> Any:
+    async def execute_workflow(self, workflow_name: str, event: dict):
         """
-        Resolve workflow module -> handler and execute.
-        Provides defensive errors instead of NameError.
+        Executes a single workflow handler.
         """
-        # Resolve module via helper if present, else fallback to .modules dict
-        module = None
-        get_module = getattr(self.registry, "get_module", None)
-        if callable(get_module):
-            module = get_module(workflow_name)
-        if module is None:
-            module = getattr(self.registry, "modules", {}).get(workflow_name)
-
-        if module is None:
-            raise RuntimeError(f"Workflow module not found: {workflow_name}")
-
+        module = self.workflow_registry.get_module(workflow_name)
+        if not module:
+            raise RuntimeError(f"Workflow '{workflow_name}' not registered or loaded")
+        
         handler = getattr(module, "handle", None)
         if not callable(handler):
-            raise RuntimeError(f"Workflow '{workflow_name}' has no callable 'handle'")
-
-        try:
-            # Pass the service registry to the handler
-            context = {
-                "event_id": event.get("id", "unknown"),
-                "service_registry": self.service_registry,
-            }
-            return await handler(event, context=context, services=self.service_registry)
-        except Exception as e:
-            logger.exception("Workflow %s failed event_id=%s: %s",
-                             workflow_name, event.get("id", "unknown"), e)
-            raise
+            raise RuntimeError(f"Workflow '{workflow_name}' has no callable 'handle' function")
+        
+        # Execute handler, supporting both sync and async functions
+        if asyncio.iscoroutinefunction(handler):
+            return await handler(event, self.registry)
+        else:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, handler, event, self.registry)

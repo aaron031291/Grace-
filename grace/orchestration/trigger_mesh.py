@@ -73,7 +73,7 @@ class TriggerMesh:
             self.logger.info("Workflow Registry initialized (no service registry).")
         
         self.workflow_registry = workflow_registry_instance
-        self.workflow_engine = WorkflowEngine(service_registry)
+        self.workflow_engine = WorkflowEngine(registry=service_registry)
         
         # Get optional services
         immutable_logger = service_registry.get('immutable_logger') if service_registry else None

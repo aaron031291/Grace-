@@ -8,6 +8,7 @@ import inspect
 import asyncio
 from types import ModuleType
 from typing import List, Any, Dict, Callable
+from collections import defaultdict
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -64,34 +65,18 @@ class DictWorkflowAdapter:
 
 class WorkflowRegistry:
     """
-    Manages the loading and retrieval of workflow definitions.
+    Discovers and registers all available workflows from the filesystem.
     """
-    
     def __init__(self, workflow_dir: str = "grace/workflows"):
-        self.logger = logging.getLogger(__name__)
         self.workflow_dir = workflow_dir
-        self.workflows: List[Any] = []
-        self.logger.info(f"Workflow Registry initializing from directory: {self.workflow_dir}")
-        self._load_workflows()
+        self.event_to_workflow_map: Dict[str, List[str]] = defaultdict(list)
+        self.modules: Dict[str, Any] = {}
+        self.load_workflows()
 
-    def _load_module_from_path(self, path: str) -> ModuleType | None:
-        mod_name = os.path.splitext(os.path.basename(path))[0]
-        spec = importlib.util.spec_from_file_location(f"grace.workflows.{mod_name}", path)
-        if not spec or not spec.loader:
-            self.logger.warning("Skipping module (no spec): %s", path)
-            return None
-        mod = importlib.util.module_from_spec(spec)
-        try:
-            spec.loader.exec_module(mod)
-            return mod
-        except Exception as e:
-            self.logger.exception("Failed to import workflow module %s: %s", path, e)
-            return None
-
-    def _load_workflows(self):
+    def load_workflows(self):
         base = os.path.abspath(self.workflow_dir)
         if not os.path.isdir(base):
-            self.logger.warning("Workflow directory not found: %s", base)
+            logger.warning("Workflow directory not found: %s", base)
             os.makedirs(base, exist_ok=True)
             return
 
@@ -110,16 +95,16 @@ class WorkflowRegistry:
 
             wf = getattr(mod, "workflow", None)
             if wf is None:
-                self.logger.warning("Module %s has no `workflow` symbol; skipping", fname)
+                logger.warning("Module %s has no `workflow` symbol; skipping", fname)
                 continue
 
             # Normalize: dict -> adapter; object -> validate
             try:
                 if isinstance(wf, dict):
-                    adapter = DictWorkflowAdapter(wf, logger=self.logger)
-                    self.workflows.append(adapter)
+                    adapter = DictWorkflowAdapter(wf, logger=logger)
+                    self.modules[adapter.name] = adapter
                     names.append(adapter.name)
-                    self.logger.info("Registered workflow: %s", adapter.name)
+                    logger.info("Registered workflow: %s", adapter.name)
                 else:
                     # object must have .name and .execute
                     wname = getattr(wf, "name", wf.__class__.__name__)
@@ -127,26 +112,45 @@ class WorkflowRegistry:
                     if not callable(wexec):
                         raise TypeError(f"Workflow {wname} missing callable 'execute'")
                     # EVENTS optional but recommended
-                    self.workflows.append(wf)
+                    self.modules[wname] = wf
                     names.append(wname)
                     # Optional: show events if present
                     wevents = getattr(wf, "EVENTS", None)
                     if wevents:
-                        self.logger.info("Registered workflow: %s (events: %s)", wname, wevents)
+                        logger.info("Registered workflow: %s (events: %s)", wname, wevents)
                     else:
-                        self.logger.info("Registered workflow: %s", wname)
+                        logger.info("Registered workflow: %s", wname)
             except Exception as e:
-                self.logger.exception("Skipping workflow in %s due to error: %s", fname, e)
+                logger.exception("Skipping workflow in %s due to error: %s", fname, e)
                 continue
             loaded += 1
 
-        self.logger.info("WorkflowRegistry loaded %d/%d workflow modules.", loaded, found)
-        if names:
-            self.logger.info("Workflows available: %s", names)
+        logger.info("WorkflowRegistry loaded %d/%d workflow modules.", loaded, found)
+        logger.info("Workflows available: %s", names)
+
+    def register(self, name: str, module: Any, events: List[str]):
+        self.modules[name] = module
+        for event_type in events:
+            self.event_to_workflow_map[event_type].append(name)
+        logger.info(f"Registered workflow: {name} (events: {events})")
 
     def find_workflows_for_event(self, event_type: str) -> list[str]:
         return self.event_to_workflow_map.get(event_type, [])
 
-# --- Hotfix helper: expose module lookup for engine ---
-    def get_module(self, workflow_name: str):
-        return getattr(self, 'modules', {}).get(workflow_name)
+    def get_module(self, workflow_name: str) -> Any | None:
+        """Safely retrieves a loaded workflow module."""
+        return self.modules.get(workflow_name)
+
+    def _load_module_from_path(self, path: str) -> ModuleType | None:
+        mod_name = os.path.splitext(os.path.basename(path))[0]
+        spec = importlib.util.spec_from_file_location(f"grace.workflows.{mod_name}", path)
+        if not spec or not spec.loader:
+            logger.warning("Skipping module (no spec): %s", path)
+            return None
+        mod = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(mod)
+            return mod
+        except Exception as e:
+            logger.exception("Failed to import workflow module %s: %s", path, e)
+            return None

@@ -98,6 +98,26 @@ class ServiceRegistry:
         """Back-compat convenience accessor."""
         return getattr(self, "_initialized", False)
 
+    def shutdown(self):
+        """
+        Shutdown all created service instances that have a 'shutdown' method.
+        """
+        logger.info("Shutting down all services...")
+        for name, instance in self._services.items():
+            if hasattr(instance, "shutdown") and callable(instance.shutdown):
+                try:
+                    # Check if it's an async or sync shutdown
+                    if asyncio.iscoroutinefunction(instance.shutdown):
+                        # This is tricky to run from a sync context, best effort
+                        asyncio.run(instance.shutdown())
+                    else:
+                        instance.shutdown()
+                    logger.info(f"✓ Service '{name}' shut down.")
+                except Exception as e:
+                    logger.error(f"✗ Error shutting down service '{name}': {e}", exc_info=True)
+        self._services.clear()
+        logger.info("All services shut down.")
+
 # --- Back-compat / global accessors ------------------------------------------------
 # Some callers (e.g., launcher) import initialize_global_registry / get_global_registry.
 # Provide no-op shims that return the singleton.

@@ -72,6 +72,10 @@ class ServiceRegistry:
         self._services[name] = svc
         return svc
 
+    def get_service(self, name: str):
+        """Back-compat alias for get()."""
+        return self.get(name)
+
     def get_optional(self, name: str):
         try:
             return self.get(name)

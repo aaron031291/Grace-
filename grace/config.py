@@ -9,6 +9,8 @@ CONFIG_DIR = BASE_DIR / "config"
 
 # --- Configuration ----------------------------------------------------------------
 # LLM Configuration
+# The API key is loaded from the OPENAI_API_KEY environment variable.
+# Set this in your shell or in a .env file.
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
 # WebSocket Configuration

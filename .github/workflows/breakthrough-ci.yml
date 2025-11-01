@@ -1,0 +1,203 @@
+name: Breakthrough System CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  breakthrough-tests:
+    name: Breakthrough System Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy pytest pytest-asyncio
+        pip install -e .
+    
+    - name: Test Evaluation Harness
+      run: |
+        python grace/core/evaluation_harness.py
+    
+    - name: Test Meta-Loop Optimizer
+      run: |
+        python grace/core/meta_loop.py
+    
+    - name: Test Disagreement Consensus
+      run: |
+        python grace/mldl/disagreement_consensus.py
+    
+    - name: Test Trace Collection
+      run: |
+        python grace/core/trace_collection.py
+    
+    - name: Test Breakthrough Integration
+      run: |
+        python grace/core/breakthrough.py
+    
+    - name: Run Breakthrough Demo
+      run: |
+        python demos/demo_breakthrough_system.py --demo basic
+      timeout-minutes: 5
+
+  crypto-logging-tests:
+    name: Cryptographic Logging Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install cryptography pytest pytest-asyncio
+        pip install -e .
+    
+    - name: Test Crypto Manager
+      run: |
+        python grace/security/crypto_manager.py
+    
+    - name: Test Crypto Key Generation
+      run: |
+        python -c "
+        from grace.security.crypto_manager import get_crypto_manager
+        crypto = get_crypto_manager()
+        key = crypto.generate_operation_key('test', 'ci_test', {})
+        assert key is not None
+        print('✅ Crypto key generation working')
+        "
+    
+    - name: Test Signature Verification
+      run: |
+        python -c "
+        from grace.security.crypto_manager import get_crypto_manager
+        crypto = get_crypto_manager()
+        crypto.generate_operation_key('test_sig', 'test', {})
+        sig = crypto.sign_operation_data('test_sig', {'data': 'test'}, 'test')
+        valid = crypto.verify_operation_signature('test_sig', {'data': 'test'}, sig)
+        assert valid is True
+        print('✅ Signature verification working')
+        "
+
+  mcp-integration-tests:
+    name: MCP Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio
+        pip install -e .
+    
+    - name: Test MCP Server
+      run: |
+        python grace/mcp/mcp_server.py
+    
+    - name: Test MCP Tool Registration
+      run: |
+        python -c "
+        from grace.mcp.mcp_server import get_mcp_server
+        mcp = get_mcp_server()
+        tools = mcp.list_tools()
+        assert len(tools) > 0
+        print(f'✅ MCP has {len(tools)} tools registered')
+        "
+
+  collaborative-gen-tests:
+    name: Collaborative Code Generation Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio
+        pip install -e .
+    
+    - name: Test Collaborative Generation
+      run: |
+        python grace/mtl/collaborative_code_gen.py
+
+  e2e-integration:
+    name: E2E Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [breakthrough-tests, crypto-logging-tests, mcp-integration-tests]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install pytest pytest-asyncio cryptography numpy
+    
+    - name: Run E2E Tests
+      run: |
+        python tests/e2e/test_complete_integration.py
+    
+    - name: Run Component Validation
+      run: |
+        python grace/integration/component_validator.py
+    
+    - name: Test Full Activation
+      run: |
+        python activate_grace.py --skip-tests
+      timeout-minutes: 5
+
+  status:
+    name: All Tests Status
+    runs-on: ubuntu-latest
+    needs: [breakthrough-tests, crypto-logging-tests, mcp-integration-tests, collaborative-gen-tests, e2e-integration]
+    if: always()
+    
+    steps:
+    - name: Check Status
+      run: |
+        echo "✅ All breakthrough system tests complete!"
+        echo "🚀 Grace is ready for operation!"

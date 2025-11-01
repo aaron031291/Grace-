@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  grace-dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    
+    volumes:
+      - ..:/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    
+    command: sleep infinity
+    
+    environment:
+      - DATABASE_URL=postgresql://grace:grace_pass@postgres:5432/grace_dev
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PYTHONPATH=/workspace
+    
+    depends_on:
+      - postgres
+      - redis
+    
+    networks:
+      - grace-network
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grace
+      POSTGRES_PASSWORD: grace_pass
+      POSTGRES_DB: grace_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - grace-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - grace-network
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  grace-network:
+    driver: bridge

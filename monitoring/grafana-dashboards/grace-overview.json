@@ -1,0 +1,71 @@
+{
+  "dashboard": {
+    "title": "Grace Complete Overview",
+    "panels": [
+      {
+        "title": "Autonomy Rate Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "grace_autonomy_rate",
+            "legendFormat": "Autonomy %"
+          }
+        ]
+      },
+      {
+        "title": "Tasks Per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(grace_tasks_completed_total[5m])",
+            "legendFormat": "Tasks/sec"
+          }
+        ]
+      },
+      {
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "grace_response_time_ms",
+            "legendFormat": "Response time (ms)"
+          }
+        ]
+      },
+      {
+        "title": "Knowledge Base Growth",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "grace_knowledge_items_total",
+            "legendFormat": "Knowledge items"
+          }
+        ]
+      },
+      {
+        "title": "System Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "grace_system_health",
+            "legendFormat": "Health %"
+          }
+        ]
+      },
+      {
+        "title": "LLM vs Brain Usage",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "grace_brain_operations_total",
+            "legendFormat": "Brain"
+          },
+          {
+            "expr": "grace_llm_operations_total",
+            "legendFormat": "LLM"
+          }
+        ]
+      }
+    ]
+  }
+}

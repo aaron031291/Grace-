@@ -1,0 +1,56 @@
+# Complete Prometheus Configuration for Grace
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'grace-production'
+    environment: 'production'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Rules for alerts
+rule_files:
+  - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Grace Backend API
+  - job_name: 'grace-backend'
+    static_configs:
+      - targets: ['grace-backend:8000']
+    metrics_path: '/api/metrics'
+    
+  # Grace Brain (MTL, Memory, etc.)
+  - job_name: 'grace-brain'
+    static_configs:
+      - targets: ['grace-brain:9090']
+    
+  # PostgreSQL
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    
+  # Redis Cluster
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    
+  # Node metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    
+  # Kubernetes metrics
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: grace.*

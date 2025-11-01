@@ -190,6 +190,20 @@ class HealthCheckResponse(BaseModel):
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan management."""
     logger.info("🚀 Starting Grace Backend...")
+    
+    # Initialize Grace autonomous system
+    try:
+        from backend.grace_integration import initialize_grace_for_backend
+        grace = await initialize_grace_for_backend(app)
+        
+        if grace:
+            logger.info("✅ Grace autonomous system integrated")
+        else:
+            logger.info("⚠️  Grace running in basic mode (advanced features require dependencies)")
+    except Exception as e:
+        logger.warning(f"⚠️  Grace autonomous integration failed: {e}")
+        logger.warning("   Backend will work with basic features")
+    
     logger.info("✅ Grace Backend startup complete")
 
     yield

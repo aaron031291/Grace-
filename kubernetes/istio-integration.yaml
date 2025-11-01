@@ -1,0 +1,126 @@
+# Istio Service Mesh Configuration for Grace
+# Provides: Traffic management, security (mTLS), observability
+
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: grace-gateway
+  namespace: grace-ai
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: grace-tls-cert
+    hosts:
+    - "grace.yourdomain.com"
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: grace-backend
+  namespace: grace-ai
+spec:
+  hosts:
+  - "grace.yourdomain.com"
+  gateways:
+  - grace-gateway
+  http:
+  # Canary deployment (90% v1, 10% v2)
+  - match:
+    - headers:
+        x-canary:
+          exact: "true"
+    route:
+    - destination:
+        host: grace-backend
+        subset: v2
+  - route:
+    - destination:
+        host: grace-backend
+        subset: v1
+      weight: 90
+    - destination:
+        host: grace-backend
+        subset: v2
+      weight: 10
+  timeout: 30s
+  retries:
+    attempts: 3
+    perTryTimeout: 10s
+    retryOn: 5xx,reset,connect-failure
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: grace-backend
+  namespace: grace-ai
+spec:
+  host: grace-backend
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 2
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: grace-mtls
+  namespace: grace-ai
+spec:
+  mtls:
+    mode: STRICT  # Enforce mTLS between all services
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: grace-authz
+  namespace: grace-ai
+spec:
+  selector:
+    matchLabels:
+      app: grace
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/grace-ai/sa/grace-backend"]
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/*"]

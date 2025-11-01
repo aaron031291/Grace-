@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Primary (Write)
+  postgres-primary:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: grace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: grace
+      POSTGRES_INITDB_ARGS: "-c max_connections=200"
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+    command: >
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=3
+      -c max_replication_slots=3
+    networks:
+      - grace-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # PostgreSQL Read Replica 1
+  postgres-replica-1:
+    image: postgres:15-alpine
+    environment:
+      PGUSER: grace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      bash -c "
+      until pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U grace -v -P --wal-method=stream; do
+        sleep 1
+      done
+      && postgres -c hot_standby=on"
+    depends_on:
+      - postgres-primary
+    networks:
+      - grace-network
+
+  # Redis Cluster Node 1
+  redis-node-1:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - redis-1-data:/data
+    networks:
+      - grace-network
+
+  # Redis Cluster Node 2
+  redis-node-2:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - redis-2-data:/data
+    networks:
+      - grace-network
+
+  # Redis Cluster Node 3
+  redis-node-3:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - redis-3-data:/data
+    networks:
+      - grace-network
+
+  # Kafka (Event Bus)
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    depends_on:
+      - zookeeper
+    networks:
+      - grace-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - grace-network
+
+  # Grace Backend (3 instances for HA)
+  grace-backend-1:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://grace:${POSTGRES_PASSWORD}@postgres-primary:5432/grace
+      DATABASE_REPLICA_URLS: >
+        postgresql+asyncpg://grace:${POSTGRES_PASSWORD}@postgres-replica-1:5432/grace
+      REDIS_URL: redis://redis-node-1:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ENVIRONMENT: production
+    depends_on:
+      - postgres-primary
+      - kafka
+      - redis-node-1
+    networks:
+      - grace-network
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # Grace Frontend
+  grace-frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    environment:
+      REACT_APP_API_URL: http://grace-backend-1:8000
+      REACT_APP_WS_URL: ws://grace-backend-1:8000
+    ports:
+      - "80:80"
+    depends_on:
+      - grace-backend-1
+    networks:
+      - grace-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus-complete.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - grace-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: redis-datasource
+    volumes:
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - grace-network
+
+  # Jaeger Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"  # UI
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    networks:
+      - grace-network
+
+volumes:
+  postgres-primary-data:
+  redis-1-data:
+  redis-2-data:
+  redis-3-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  grace-network:
+    driver: bridge

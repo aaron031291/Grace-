@@ -262,6 +262,7 @@ def create_app() -> FastAPI:
     from backend.api.tasks import router as tasks_router
     from backend.api.governance import router as governance_router
     from backend.api.websocket import router as websocket_router
+    from backend.api.hunter import router as hunter_router
     
     app.include_router(orb_router, prefix="/api/orb", tags=["orb"])
     app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
@@ -270,6 +271,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
     app.include_router(governance_router, prefix="/api/governance", tags=["governance"])
     app.include_router(websocket_router, prefix="/api/ws", tags=["websocket"])
+    app.include_router(hunter_router, prefix="/api/hunter", tags=["hunter"])
 
     from backend.auth import create_access_token, create_refresh_token, verify_token
     from pydantic import BaseModel
